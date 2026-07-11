@@ -11,3 +11,6 @@ githooks/
 
 # transient AI-project inbox
 inbox/
+
+# coverage artifacts
+.coverage/

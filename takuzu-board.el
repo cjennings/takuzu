@@ -43,7 +43,7 @@ nil/0/1, GIVENS holds non-nil for locked cells.  Both default to all-nil."
    :givens (copy-sequence (takuzu-board-givens board))))
 
 (defsubst takuzu--index (size row col)
-  "Row-major index of ROW, COL in a SIZE-wide grid."
+  "Row-major index of ROW, COL in a grid SIZE cells wide."
   (+ (* row size) col))
 
 (defun takuzu-board-ref (board row col)
@@ -110,7 +110,7 @@ nil/0/1, GIVENS holds non-nil for locked cells.  Both default to all-nil."
   (not (memq nil line)))
 
 (defun takuzu--line-complete-valid-p (line size)
-  "Non-nil if LINE is complete, evenly split, and triple-free."
+  "Non-nil if LINE of width SIZE is complete, evenly split, and triple-free."
   (and (takuzu--line-complete-p line)
        (= (cl-count 0 line) (/ size 2))
        (not (takuzu--line-has-triple-p line))))

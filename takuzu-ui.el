@@ -6,11 +6,11 @@
 ;;; Commentary:
 ;; `takuzu-mode' renders the whole game as one state-to-SVG faceplate image,
 ;; regenerated on every state change, in the Dupré instrument-console style
-;; (design of record: docs/prototypes/2026-07-11-takuzu-prototype-hifi.html).
+;; (design of record: docs/prototypes/takuzu-hifi.html).
 ;; The board is a panel of recessed lamp-sockets: empty cells are dark wells,
 ;; placed cells are matte colour discs, givens wear a silver bezel, the cursor
-;; lights a gold ring.  A right instrument panel carries an analogue clock, the
-;; grade and cells-left readouts, and a vertical VU meter for fill progress.
+;; lights a gold ring.  A right instrument panel carries an analogue clock, lit
+;; size and grade selectors, and a cells-left gauge with a status LED.
 ;;
 ;; Interaction is by keymap; the image regenerates per state change and once a
 ;; second (for the clock and the win pulse).  A plain-text board renders as a
@@ -68,7 +68,7 @@ The SVG is vector, so this just rasterizes larger; 1.0 is edge-to-edge.")
   "Seconds between scale-animation frames.")
 
 (defun takuzu--cell-size (n)
-  "Pixel size of a cell for an N-wide board."
+  "Pixel size of a cell on a board N cells wide."
   (cond ((<= n 6) 50) ((<= n 8) 44) ((<= n 10) 38) (t 34)))
 
 ;; --- buffer-local state ---
@@ -113,7 +113,7 @@ The SVG is vector, so this just rasterizes larger; 1.0 is edge-to-edge.")
   (< (mod (float-time) takuzu-flash-period) (* 0.5 takuzu-flash-period)))
 
 (defun takuzu--refresh-interval ()
-  "Redraw interval that keeps flashing visible without over-drawing."
+  "Redraw interval fast enough to show flashing without over-drawing."
   (max 0.2 (min 1.0 (/ takuzu-flash-period 2.0))))
 
 (defun takuzu--fmt-time (s)
@@ -176,14 +176,18 @@ ANCHOR is start/middle/end; WEIGHT normal/bold."
     (takuzu--txt svg ax (+ y 28) "TOHU WA-VOHU" 10 (takuzu--c :dim))
     (takuzu--txt svg ax (+ y 42) "BINARY LOGIC" 10 (takuzu--c :dim))))
 
+(defun takuzu--empty-count ()
+  "Number of still-empty cells on the current board."
+  (cl-count nil (append (takuzu-board-cells takuzu--board) nil)))
+
 (defun takuzu--fill-pct ()
   "Percent of the board that is filled, 0-100."
-  (let* ((n takuzu--size) (total (* n n))
-         (filled (- total (cl-count nil (append (takuzu-board-cells takuzu--board) nil)))))
+  (let* ((total (* takuzu--size takuzu--size))
+         (filled (- total (takuzu--empty-count))))
     (* 100 (/ filled (float total)))))
 
 (defun takuzu--draw-led (svg cx cy r color)
-  "Draw an LED at CX,CY radius R.  COLOR is the lit colour, nil for unlit.
+  "Draw an LED on SVG at CX,CY radius R.  COLOR is the lit colour, nil for unlit.
 Unlit reads as a dark recessed dome with a faint rim; lit gets a glossy cap."
   (svg-circle svg cx cy (+ r 1.5) :fill "#08070a"
               :stroke (takuzu--c :plate-edge) :stroke-width 1)
@@ -193,7 +197,7 @@ Unlit reads as a dark recessed dome with a faint rim; lit gets a glossy cap."
               :fill "#ffffff" :fill-opacity (if color 0.55 0.14)))
 
 (defun takuzu--draw-lamp (svg cx cy r)
-  "Draw the status LED at CX,CY radius R, reflecting progress and win state.
+  "Draw the status LED on SVG at CX,CY radius R, reflecting progress and win state.
 Off under 50%, amber to 80%, green above; flashing green on a solve, red on a
 reveal."
   (let* ((pct (takuzu--fill-pct))
@@ -207,8 +211,9 @@ reveal."
     (takuzu--draw-led svg cx cy r (and on color))))
 
 (defun takuzu--draw-ring (svg cx cy r pct value)
-  "Draw the LEFT gauge on SVG at CX,CY radius R: arc fills by PCT (0-100),
-VALUE centred with a LEFT label beneath it.  Arc red under 50%, amber to 80%,
+  "Draw the LEFT gauge on SVG at CX,CY radius R.
+The arc fills by PCT (0-100) with VALUE centred and a LEFT label beneath it;
+the arc is red under 50%, amber to 80%,
 green above."
   (let* ((sw 7) (circ (* 2 float-pi r))
          (filled (* (/ pct 100.0) circ))
@@ -327,14 +332,10 @@ peeking out from behind the hands."
               :stroke (takuzu--c :steel) :stroke-width 1 :stroke-linecap "round"))
   (svg-circle svg cx cy 2.6 :fill (takuzu--c :gold) :stroke "#0a0908" :stroke-width 0.6))
 
-(defun takuzu--draw-readout (svg cx y value unit)
-  "Draw a readout on SVG centred at CX, baseline Y: big VALUE, small UNIT below."
-  (takuzu--txt svg cx y value 20 (takuzu--c :cream) "middle" "bold")
-  (takuzu--txt svg cx (+ y 12) unit 9 (takuzu--c :steel) "middle"))
-
 (defun takuzu--draw-tag (svg x y w h lit-col off-col lit label)
-  "Draw one grade tag rect at X,Y size W,H with LABEL centred in bold black.
-Lit: bright LIT-COL with a soft glow and sheen; unlit: the dark OFF-COL."
+  "Draw one grade tag on SVG at X,Y size W,H with LABEL centred in bold black.
+When LIT, a bright LIT-COL with a soft glow and sheen; otherwise the dark
+OFF-COL."
   (if lit
       (progn
         (svg-rectangle svg (- x 3) (- y 3) (+ w 6) (+ h 6) :rx 6
@@ -347,7 +348,7 @@ Lit: bright LIT-COL with a soft glow and sheen; unlit: the dark OFF-COL."
   (takuzu--txt svg (+ x (/ w 2)) (+ y (round (* h 0.5)) 3) label 10 "#000000" "middle" "bold"))
 
 (defun takuzu--draw-grade (svg cx cy)
-  "Draw the stacked red/amber/green grade tags centred vertically at CY.
+  "Draw the stacked red/amber/green grade tags on SVG, centred at CX,CY.
 The tag matching the current grade (or armed difficulty) lights up.  An engraved
 frame surrounds the stack, broken at the bottom by the GRADE label."
   (let* ((tw 64) (th 14) (g 6) (pad 7)
@@ -371,7 +372,8 @@ frame surrounds the stack, broken at the bottom by the GRADE label."
       (takuzu--txt svg cx (+ ly 3) "GRADE" 9 (takuzu--c :steel) "middle"))))
 
 (defun takuzu--draw-size-cell (svg x y w h num lit)
-  "Draw a digital size cell at X,Y size W,H showing NUM; lit glows gold, else dim."
+  "Draw a digital size cell on SVG at X,Y size W,H showing NUM.
+When LIT the cell glows gold; otherwise it is dim."
   (if lit
       (progn
         (svg-rectangle svg (- x 2) (- y 2) (+ w 4) (+ h 4) :rx 5
@@ -386,7 +388,7 @@ frame surrounds the stack, broken at the bottom by the GRADE label."
                    (number-to-string num) 13 (takuzu--c :slate) "middle" "bold"))))
 
 (defun takuzu--draw-size (svg cx cy)
-  "Draw the even sizes 4-12 as a framed digital grid centred at CX,CY.
+  "Draw the even sizes 4-12 as a framed digital grid on SVG centred at CX,CY.
 The current board size lights up; the rest are dark.  Layout: 4 6 / 8 10 / 12.
 An engraved frame surrounds the grid, broken at the bottom by the SIZE label."
   (let* ((cw 26) (ch 15) (hgap 10) (vgap 5) (pad 7)
@@ -415,7 +417,7 @@ An engraved frame surrounds the grid, broken at the bottom by the SIZE label."
 Clock, size, grade, and the LEFT gauge (a ring carrying its own status LED in
 the upper-left corner) spread evenly down the panel."
   (let* ((w takuzu--panel-w) (cx (+ x (/ w 2)))
-         (empty (cl-count nil (append (takuzu-board-cells takuzu--board) nil)))
+         (empty (takuzu--empty-count))
          (m 44) (step (/ (- h (* 2 m)) 3.0)) (ringr 30))
     (svg-rectangle svg x y w h :rx 10 :fill (takuzu--c :well) :stroke "#201d17")
     (takuzu--draw-clock svg cx (+ y m) 28)
@@ -451,7 +453,7 @@ the upper-left corner) spread evenly down the panel."
 (defun takuzu--draw-legend-line (svg x y width size items)
   "Draw legend ITEMS justified across WIDTH on SVG from X at baseline Y.
 Each item is (word WORD) -- word with its first letter gold-underlined -- or
-(keyed KEY LABEL) -- KEY gold-underlined then LABEL dim."
+\\(keyed KEY LABEL) -- KEY gold-underlined then LABEL dim."
   (let* ((charw (* size 0.62)) (kgap (* size 0.4))
          (widths (mapcar (lambda (it) (takuzu--legend-item-width it charw kgap)) items))
          (n (length items))
@@ -740,21 +742,27 @@ Clears any transient status message; the win/reveal note persists."
         (takuzu--set-status ""))))
   (takuzu--redraw)))
 
+(defun takuzu--forced-cell ()
+  "First empty cell whose value is forced to a single legal option.
+Return (ROW COL VALUE) or nil when no cell is forced."
+  (let ((n takuzu--size) (found nil))
+    (cl-block scan
+      (dotimes (r n)
+        (dotimes (c n)
+          (when (null (takuzu-board-ref takuzu--board r c))
+            (let ((vals (takuzu--legal-values takuzu--board r c)))
+              (when (and vals (null (cdr vals)))
+                (setq found (list r c (car vals)))
+                (cl-return-from scan)))))))
+    found))
+
 (defun takuzu-hint ()
-  "Fill one cell that current logic forces."
+  "Fill the first cell whose value current logic pins down."
   (interactive)
   (takuzu--playing-only
   (if (or takuzu--won takuzu--proven)
       (takuzu--set-status "The puzzle is finished.")
-    (let ((n takuzu--size) (found nil))
-      (cl-block scan
-        (dotimes (r n)
-          (dotimes (c n)
-            (when (null (takuzu-board-ref takuzu--board r c))
-              (let ((vals (takuzu--legal-values takuzu--board r c)))
-                (when (and vals (null (cdr vals)))
-                  (setq found (list r c (car vals)))
-                  (cl-return-from scan)))))))
+    (let ((found (takuzu--forced-cell)))
       (if (not found)
           (takuzu--set-status "No cell is forced right now -- reason further.")
         (setq takuzu--cursor (cons (nth 0 found) (nth 1 found)))
@@ -771,8 +779,7 @@ Clears any transient status message; the win/reveal note persists."
     (takuzu--set-status
      (if (takuzu-board-full-p takuzu--board)
          "The board is full but a rule is broken."
-       (format "Not finished -- %d cells left."
-               (cl-count nil (append (takuzu-board-cells takuzu--board) nil))))))
+       (format "Not finished -- %d cells left." (takuzu--empty-count)))))
   (takuzu--redraw)))
 
 (defun takuzu-prove ()
@@ -863,7 +870,7 @@ Clears any transient status message; the win/reveal note persists."
   (setq takuzu--timer nil))
 
 (defun takuzu--cleanup ()
-  "Cancel timers and any in-flight generation when the buffer goes away."
+  "Cancel timers and any in-flight generation when the buffer is killed."
   (takuzu--stop-timer)
   (takuzu--stop-spinner)
   (when (timerp takuzu--scale-timer) (cancel-timer takuzu--scale-timer))

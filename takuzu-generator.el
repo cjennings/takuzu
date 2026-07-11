@@ -42,9 +42,9 @@
 
 (defun takuzu--carve-keep-p (board tier)
   "Non-nil if BOARD is still an acceptable puzzle for TIER after a removal.
-For \\='easy, propagation alone must still solve it (which also proves it unique).
-For \\='medium, it must be unique and grade no harder than medium.  For \\='hard or
-nil, uniqueness alone bounds it (a minimal clue set)."
+For \\='easy, propagation alone must still solve it (which also proves it
+unique).  For \\='medium, it must be unique and grade no harder than medium.
+For \\='hard or nil, uniqueness alone bounds it (a minimal clue set)."
   (pcase tier
     ('easy (takuzu--propagation-solves-p board))
     ('medium (and (takuzu-unique-p board)
@@ -52,7 +52,8 @@ nil, uniqueness alone bounds it (a minimal clue set)."
     (_ (takuzu-unique-p board))))
 
 (defun takuzu--carve (board tier)
-  "Remove givens from full BOARD in random order, keeping each removal only while
+  "Carve clues from full BOARD, keeping each removal that suits TIER.
+Cells are cleared in random order and a removal is kept only while
 `takuzu--carve-keep-p' holds for TIER.  BOARD is mutated in place and returned."
   (let ((n (takuzu-board-size board)))
     (dolist (idx (takuzu--shuffle (number-sequence 0 (1- (* n n)))))
@@ -68,7 +69,7 @@ nil, uniqueness alone bounds it (a minimal clue set)."
     board))
 
 (defun takuzu-generate (size &optional difficulty)
-  "Generate a uniquely-solvable SIZE-by-SIZE Takuzu puzzle.
+  "Generate a uniquely-solvable Takuzu puzzle SIZE cells on a side.
 Return a plist (:board B :solution S :grade G).  DIFFICULTY, when \\='easy,
 \\='medium, or \\='hard, bounds how far the carve removes clues so the puzzle
 grades near that tier; the reported :grade is the puzzle's actual grade."

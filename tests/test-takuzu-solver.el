@@ -96,5 +96,13 @@
             4 (test-takuzu-solver--blank test-takuzu-solver--solved-4 0))))
     (should (eq (takuzu-grade b) 'easy))))
 
+(ert-deftest test-takuzu-hypothesis-step-contradiction ()
+  "Error: hypothesis-step gives up (returns nil) on a contradictory board.
+The first empty cell sits in a row that already holds a triple, so neither
+colour survives -- exercising the contradiction branch of the grader step."
+  (let ((board (takuzu-make-board 4 (vector 0 0 0 nil  nil nil nil nil
+                                            nil nil nil nil  nil nil nil nil))))
+    (should (null (takuzu--hypothesis-step board)))))
+
 (provide 'test-takuzu-solver)
 ;;; test-takuzu-solver.el ends here

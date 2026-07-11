@@ -36,7 +36,7 @@ Used by the generator to draw a random full solution.")
                     lines)))
 
 (defun takuzu--placement-ok-p (board row col)
-  "Non-nil if the value now at ROW,COL keeps its row and column legal."
+  "Non-nil when the value now at ROW,COL of BOARD is legal in its row and column."
   (let* ((n (takuzu-board-size board))
          (r (takuzu-board-row board row))
          (c (takuzu-board-col board col)))
@@ -124,7 +124,7 @@ returning."
 ;; --- difficulty grader ---
 
 (defun takuzu--forced-by-hypothesis (board row col)
-  "The value forced at empty ROW,COL by depth-1 hypothesis, or nil if none.
+  "The value forced at empty ROW,COL of BOARD by depth-1 hypothesis, or nil.
 Return \\='contradiction when neither color survives propagation."
   (let (survivors)
     (dolist (v '(0 1))

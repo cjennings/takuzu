@@ -65,5 +65,12 @@ This is the wire format the async generator ships from the child process."
                    (takuzu-board-cells (plist-get back :solution))))
     (should (eq (plist-get g :grade) (plist-get back :grade)))))
 
+(ert-deftest test-takuzu-carve-keep-p-medium ()
+  "Normal: the medium tier keeps a board that is unique and grades no harder.
+Exercises the medium branch of `takuzu--carve-keep-p' without a full carve."
+  (let ((board (plist-get (takuzu-generate 6 'easy) :board)))
+    ;; an easy puzzle is unique and grades easy, so the medium tier accepts it
+    (should (takuzu--carve-keep-p board 'medium))))
+
 (provide 'test-takuzu-generator)
 ;;; test-takuzu-generator.el ends here
