@@ -43,13 +43,6 @@
   :type '(choice (const easy) (const medium) (const hard))
   :group 'takuzu)
 
-(defcustom takuzu-show-glyphs t
-  "Non-nil to draw a glyph inside each cell (○ for 0, ● for 1, · for empty).
-Glyphs are the reliable signal in terminals and for color-blind play; colors
-enhance them.  Toggle in a game with \\`g'."
-  :type 'boolean
-  :group 'takuzu)
-
 (defcustom takuzu-flash-period 1.0
   "Seconds for one on/off cycle of the slow flashing indicators.
 Governs the status LED (win/reveal) and the flashing New prompt.  Increase for

@@ -25,7 +25,6 @@
 (require 'takuzu-async)
 
 ;; Config knobs live in takuzu.el; forward-declare so this compiles clean.
-(defvar takuzu-default-size)
 (defvar takuzu-default-difficulty)
 (defvar takuzu-sizes)
 (defvar takuzu-flash-period)
@@ -100,6 +99,12 @@ The SVG is vector, so this just rasterizes larger; 1.0 is edge-to-edge.")
 (defvar-local takuzu--clock-flash-timer nil "Timer for the quick clock-ring cue.")
 
 ;; --- helpers ---
+
+(defmacro takuzu--cancel-timer (var)
+  "Cancel the timer held in VAR if it is running, and set VAR to nil."
+  `(progn
+     (when (timerp ,var) (cancel-timer ,var))
+     (setq ,var nil)))
 
 (defun takuzu--elapsed ()
   "Elapsed seconds since the puzzle began (0 until started, frozen once finished)."
@@ -176,9 +181,17 @@ ANCHOR is start/middle/end; WEIGHT normal/bold."
     (takuzu--txt svg ax (+ y 28) "TOHU WA-VOHU" 10 (takuzu--c :dim))
     (takuzu--txt svg ax (+ y 42) "BINARY LOGIC" 10 (takuzu--c :dim))))
 
+(defun takuzu--draw-faceplate-shell (svg w h)
+  "Draw the plate background, corner screws, and title on SVG sized W by H."
+  (svg-rectangle svg 0 0 w h :rx 16 :fill (takuzu--c :plate) :stroke (takuzu--c :plate-edge))
+  (dolist (p (list (cons 12 12) (cons (- w 12) 12)
+                   (cons 12 (- h 12)) (cons (- w 12) (- h 12))))
+    (takuzu--draw-screw svg (car p) (cdr p)))
+  (takuzu--draw-title svg takuzu--ppad takuzu--ppad))
+
 (defun takuzu--empty-count ()
   "Number of still-empty cells on the current board."
-  (cl-count nil (append (takuzu-board-cells takuzu--board) nil)))
+  (seq-count #'null (takuzu-board-cells takuzu--board)))
 
 (defun takuzu--fill-pct ()
   "Percent of the board that is filled, 0-100."
@@ -274,7 +287,7 @@ own colour."
   "Flash the clock ring twice quickly in BUF as a start/stop cue."
   (with-current-buffer buf
     (setq takuzu--clock-flash 4)
-    (when (timerp takuzu--clock-flash-timer) (cancel-timer takuzu--clock-flash-timer))
+    (takuzu--cancel-timer takuzu--clock-flash-timer)
     (setq takuzu--clock-flash-timer
           (run-at-time
            0.11 0.11
@@ -284,9 +297,7 @@ own colour."
                  (setq takuzu--clock-flash (1- takuzu--clock-flash))
                  (when (<= takuzu--clock-flash 0)
                    (setq takuzu--clock-flash 0)
-                   (when (timerp takuzu--clock-flash-timer)
-                     (cancel-timer takuzu--clock-flash-timer))
-                   (setq takuzu--clock-flash-timer nil))
+                   (takuzu--cancel-timer takuzu--clock-flash-timer))
                  (takuzu--redraw buf))))))))
 
 (defun takuzu--dial-glow (br)
@@ -534,11 +545,7 @@ below.  While armed, the New key flashes to prompt the start."
          (stagey (+ ppad takuzu--title-h))
          (h (takuzu--faceplate-height))
          (svg (svg-create w h)))
-    (svg-rectangle svg 0 0 w h :rx 16 :fill (takuzu--c :plate) :stroke (takuzu--c :plate-edge))
-    (dolist (p (list (cons 12 12) (cons (- w 12) 12)
-                     (cons 12 (- h 12)) (cons (- w 12) (- h 12))))
-      (takuzu--draw-screw svg (car p) (cdr p)))
-    (takuzu--draw-title svg ppad ppad)
+    (takuzu--draw-faceplate-shell svg w h)
     (takuzu--draw-board svg ppad stagey)
     (let* ((px (+ ppad boardw takuzu--stage-gap))
            (ptop (+ ppad 6))
@@ -577,8 +584,7 @@ below.  While armed, the New key flashes to prompt the start."
 
 (defun takuzu--stop-spinner ()
   "Cancel the generating spinner timer if running."
-  (when (timerp takuzu--spinner-timer) (cancel-timer takuzu--spinner-timer))
-  (setq takuzu--spinner-timer nil))
+  (takuzu--cancel-timer takuzu--spinner-timer))
 
 (defun takuzu--spin (buffer)
   "Advance the spinner frame and redraw BUFFER."
@@ -595,11 +601,7 @@ below.  While armed, the New key flashes to prompt the start."
          (n (plist-get takuzu--generating :size))
          (frame (aref takuzu--spinner-frames
                       (mod takuzu--spinner (length takuzu--spinner-frames)))))
-    (svg-rectangle svg 0 0 w h :rx 16 :fill (takuzu--c :plate) :stroke (takuzu--c :plate-edge))
-    (dolist (p (list (cons 12 12) (cons (- w 12) 12)
-                     (cons 12 (- h 12)) (cons (- w 12) (- h 12))))
-      (takuzu--draw-screw svg (car p) (cdr p)))
-    (takuzu--draw-title svg takuzu--ppad takuzu--ppad)
+    (takuzu--draw-faceplate-shell svg w h)
     (takuzu--txt svg (/ w 2) (- (/ h 2) 4) frame 48 (takuzu--c :gold) "middle")
     (takuzu--txt svg (/ w 2) (+ (/ h 2) 36)
                  (format "generating a %s %d×%d puzzle…" diff n n)
@@ -620,14 +622,12 @@ below.  While armed, the New key flashes to prompt the start."
     (with-current-buffer buffer
       (let ((win (get-buffer-window buffer t)))
         (if (null win)
-            (progn (when (timerp takuzu--scale-timer) (cancel-timer takuzu--scale-timer))
-                   (setq takuzu--scale-timer nil))
+            (takuzu--cancel-timer takuzu--scale-timer)
           (let* ((target (takuzu--fit-scale win))
                  (cur (or takuzu--scale target)))
             (if (< (abs (- target cur)) 0.01)
                 (progn (setq takuzu--scale target)
-                       (when (timerp takuzu--scale-timer) (cancel-timer takuzu--scale-timer))
-                       (setq takuzu--scale-timer nil))
+                       (takuzu--cancel-timer takuzu--scale-timer))
               (setq takuzu--scale (+ cur (* takuzu--scale-step (- target cur)))))
             (takuzu--redraw buffer)))))))
 
@@ -866,17 +866,19 @@ Return (ROW COL VALUE) or nil when no cell is forced."
 
 (defun takuzu--stop-timer ()
   "Cancel the refresh timer if running."
-  (when (timerp takuzu--timer) (cancel-timer takuzu--timer))
-  (setq takuzu--timer nil))
+  (takuzu--cancel-timer takuzu--timer))
+
+(defun takuzu--start-refresh-timer (buf)
+  "Start the per-redraw-interval refresh timer for BUF."
+  (let ((iv (takuzu--refresh-interval)))
+    (setq takuzu--timer (run-at-time iv iv (lambda () (takuzu--redraw buf))))))
 
 (defun takuzu--cleanup ()
   "Cancel timers and any in-flight generation when the buffer is killed."
   (takuzu--stop-timer)
   (takuzu--stop-spinner)
-  (when (timerp takuzu--scale-timer) (cancel-timer takuzu--scale-timer))
-  (setq takuzu--scale-timer nil)
-  (when (timerp takuzu--clock-flash-timer) (cancel-timer takuzu--clock-flash-timer))
-  (setq takuzu--clock-flash-timer nil)
+  (takuzu--cancel-timer takuzu--scale-timer)
+  (takuzu--cancel-timer takuzu--clock-flash-timer)
   (when (process-live-p takuzu--gen-process) (delete-process takuzu--gen-process)))
 
 (defun takuzu--on-window-change (&rest _)
@@ -904,8 +906,7 @@ Return (ROW COL VALUE) or nil when no cell is forced."
             takuzu--won nil takuzu--proven nil takuzu--won-elapsed 0 takuzu--status ""))
     (takuzu--stop-spinner)
     (takuzu--stop-timer)
-    (let ((iv (takuzu--refresh-interval)))
-      (setq takuzu--timer (run-at-time iv iv (lambda () (takuzu--redraw buf)))))
+    (takuzu--start-refresh-timer buf)
     (takuzu--start-clock-flash buf)
     (takuzu--redraw buf)))
 
@@ -927,8 +928,7 @@ puzzle pre-generates in the background so starting is instant."
             takuzu--cursor '(0 . 0) takuzu--assist nil takuzu--history nil
             takuzu--start-time nil takuzu--won nil takuzu--proven nil
             takuzu--won-elapsed 0 takuzu--status "")
-      (let ((iv (takuzu--refresh-interval)))
-        (setq takuzu--timer (run-at-time iv iv (lambda () (takuzu--redraw buf)))))
+      (takuzu--start-refresh-timer buf)
       (setq takuzu--gen-process
             (takuzu-generate-async
              size difficulty
