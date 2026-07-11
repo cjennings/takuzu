@@ -121,6 +121,29 @@
       (should (cl-every (lambda (l) (equal (dom-attr l 'stroke) (takuzu--c :gold)))
                         lines)))))
 
+(ert-deftest test-takuzu-ui-help-toggle ()
+  "Normal: help toggles the overlay flag and the help SVG renders."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (should-not takuzu--help)
+    (takuzu-help)
+    (should takuzu--help)
+    (should (eq (car (takuzu--svg-help)) 'svg))
+    (takuzu-help)
+    (should-not takuzu--help)))
+
+(ert-deftest test-takuzu-ui-help-dismissed-by-key ()
+  "Normal: with help up, a game key dismisses it instead of acting."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (setq takuzu--help t takuzu--cursor '(1 . 1))
+    (takuzu-right)
+    (should-not takuzu--help)
+    (should (equal takuzu--cursor '(1 . 1)))
+    (setq takuzu--help t)
+    (takuzu-cycle)
+    (should-not takuzu--help)))
+
 (ert-deftest test-takuzu-ui-render-text ()
   "Normal: the text fallback marks the cursor cell with brackets."
   (with-temp-buffer

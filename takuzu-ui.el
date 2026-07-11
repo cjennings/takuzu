@@ -97,6 +97,7 @@ The SVG is vector, so this just rasterizes larger; 1.0 is edge-to-edge.")
 (defvar-local takuzu--difficulty nil "The requested difficulty of the current or next puzzle.")
 (defvar-local takuzu--clock-flash 0 "Remaining half-flashes for the quick clock-ring cue.")
 (defvar-local takuzu--clock-flash-timer nil "Timer for the quick clock-ring cue.")
+(defvar-local takuzu--help nil "Non-nil while the rules/help overlay is shown.")
 
 ;; --- helpers ---
 
@@ -529,7 +530,7 @@ below.  While armed, the New key flashes to prompt the start."
     (takuzu--draw-legend-line
      svg x (+ y 16) width 11
      `(,new-item (word "reset") (word "size") (word "diff")
-       (word "prove") (word "quit")))
+       (word "prove") (word "instructions") (word "quit")))
     (takuzu--draw-engrave svg x (+ y 36) width "PLAY")
     (takuzu--draw-legend-line
      svg x (+ y 52) width 11
@@ -626,9 +627,139 @@ below.  While armed, the New key flashes to prompt the start."
                  13 (takuzu--c :dim) "middle")
     svg))
 
+(defconst takuzu--rules
+  '(("No three cells of the same colour"
+     "may sit adjacent in a row or column.")
+    ("Each row and each column must hold"
+     "an equal number of both colours.")
+    ("No two rows may be identical, and"
+     "no two columns may be identical."))
+  "The three Takuzu rules, each a list of two wrapped lines, for the overlay.")
+
+(defconst takuzu--help-w 520 "Fixed width of the instructions overlay, board-independent.")
+(defconst takuzu--help-h 564 "Fixed height of the instructions overlay, board-independent.")
+
+(defun takuzu--help-etch (svg x y str size anchor ink hi &optional weight)
+  "Draw etched STR on SVG at X,Y: a light lower highlight then dark INK on top.
+ANCHOR is the text anchor, HI the emboss highlight, WEIGHT the font weight."
+  (svg-text svg str :x x :y (1+ y) :font-family "monospace" :font-size size
+            :fill hi :fill-opacity 0.5 :text-anchor anchor :font-weight (or weight "normal"))
+  (svg-text svg str :x x :y y :font-family "monospace" :font-size size
+            :fill ink :text-anchor anchor :font-weight (or weight "normal")))
+
+(defun takuzu--help-divider (svg x1 x2 y ink hi)
+  "Draw an engraved divider on SVG from X1 to X2 at Y, dark INK over highlight HI."
+  (svg-line svg x1 (1+ y) x2 (1+ y) :stroke hi :stroke-opacity 0.5)
+  (svg-line svg x1 y x2 y :stroke ink :stroke-opacity 0.55))
+
+(defun takuzu--help-plate (svg x y w h)
+  "Draw a brushed-silver spec plate on SVG at X,Y size W,H, with sheen and rivets."
+  (let ((base "#c4c9cf") (light "#e9ecef") (dark "#8f959d") (edge "#6b7178"))
+    (svg-rectangle svg x y w h :rx 9 :fill base :stroke edge :stroke-width 1.4)
+    (svg-rectangle svg x y w (* h 0.3) :rx 9 :fill light :fill-opacity 0.5)
+    (svg-rectangle svg x (+ y (* h 0.4)) w (* h 0.07) :fill "#ffffff" :fill-opacity 0.22)
+    (svg-rectangle svg x (+ y (* h 0.76)) w (* h 0.24) :fill dark :fill-opacity 0.4)
+    (cl-loop for yy from (+ y 6) to (- (+ y h) 6) by 2 do
+             (svg-line svg (+ x 6) yy (- (+ x w) 6) yy :stroke "#ffffff" :stroke-opacity 0.04))
+    (svg-rectangle svg (+ x 8) (+ y 8) (- w 16) (- h 16) :rx 6 :fill "none"
+                   :stroke edge :stroke-opacity 0.4)
+    (dolist (p (list (cons (+ x 16) (+ y 16)) (cons (- (+ x w) 16) (+ y 16))
+                     (cons (+ x 16) (- (+ y h) 16)) (cons (- (+ x w) 16) (- (+ y h) 16))))
+      (svg-circle svg (car p) (cdr p) 3.4 :fill light :stroke edge :stroke-width 0.9)
+      (svg-circle svg (- (car p) 1) (- (cdr p) 1) 1.2 :fill "#ffffff" :fill-opacity 0.7))))
+
+(defun takuzu--help-emblem (svg cx cy kind ink hi)
+  "Draw a small faux-compliance emblem of KIND centred at CX,CY, etched in INK/HI."
+  (pcase kind
+    ('ce (takuzu--help-etch svg cx (+ cy 4) "CE" 13 "middle" ink hi "bold"))
+    ('class2
+     (svg-rectangle svg (- cx 9) (- cy 9) 18 18 :fill "none" :stroke ink :stroke-opacity 0.7)
+     (svg-rectangle svg (- cx 6) (- cy 6) 12 12 :fill "none" :stroke ink :stroke-opacity 0.7)
+     (takuzu--help-etch svg cx (+ cy 4) "II" 10 "middle" ink hi "bold"))
+    ('warn
+     (svg-polygon svg (list (cons cx (- cy 9)) (cons (+ cx 9) (+ cy 7)) (cons (- cx 9) (+ cy 7)))
+                  :fill "none" :stroke ink :stroke-opacity 0.7 :stroke-linejoin "round")
+     (takuzu--help-etch svg cx (+ cy 6) "!" 11 "middle" ink hi "bold"))))
+
+(defun takuzu--help-disc (svg cx cy r fill)
+  "Draw a small filled disc on SVG at CX,CY radius R in FILL."
+  (svg-circle svg cx cy r :fill fill :stroke "#00000055" :stroke-width 0.8))
+
+(defun takuzu--help-rule-widget (svg x y kind d0 d1 fail)
+  "Draw the diagram for rule KIND at left edge X, vertical centre Y.
+D0, D1 and FAIL are the two disc colours and the strike colour.  The widget
+stays in a narrow left column so it never overlaps the rule text."
+  (let ((r 5) (g 13))
+    (pcase kind
+      (1 (dotimes (i 3) (takuzu--help-disc svg (+ x (* i g)) y r d1))
+         (svg-line svg (- x 7) (+ y 7) (+ x (* 2 g) 7) (- y 7)
+                   :stroke fail :stroke-width 2.4 :stroke-linecap "round"))
+      (2 (dotimes (i 3) (takuzu--help-disc svg (+ x (* i g)) (- y 7) r d0))
+         (dotimes (i 3) (takuzu--help-disc svg (+ x (* i g)) (+ y 7) r d1)))
+      (3 (let ((top (list d1 d0 d1)) (bot (list d0 d1 d0)))
+           (dotimes (i 3) (takuzu--help-disc svg (+ x (* i g)) (- y 7) r (nth i top)))
+           (dotimes (i 3) (takuzu--help-disc svg (+ x (* i g)) (+ y 7) r (nth i bot))))))))
+
+(defun takuzu--svg-help ()
+  "Build the instructions overlay: a brushed-silver spec plate on the console.
+A large riveted plate, framed into the faceplate, carries the model and serial,
+the three rules each with a small diagram, faux compliance marks, and the
+dedication.  Rendered at a fixed board-independent size so it always fits."
+  (let* ((w takuzu--help-w) (h takuzu--help-h)
+         (svg (svg-create w h))
+         (px (+ takuzu--ppad 10)) (py (+ takuzu--ppad takuzu--title-h -6))
+         (pw (- w (* 2 px))) (ph (- h py takuzu--ppad 6))
+         (ink "#2f3338") (hi "#ffffff")
+         (d0 (takuzu--c :disc0)) (d1 (takuzu--c :disc1)) (fail (takuzu--c :fail))
+         (lx (+ px 26)) (rx (- (+ px pw) 26)) (cx (/ w 2))
+         (wx (+ lx 20)) (tx (+ lx 80)))
+    (takuzu--draw-faceplate-shell svg w h)
+    ;; faceplating: an engraved frame the plate is set into
+    (svg-rectangle svg (- px 6) (- py 6) (+ pw 12) (+ ph 12) :rx 13 :fill "none"
+                   :stroke (takuzu--c :plate-edge) :stroke-width 1.2)
+    (takuzu--help-plate svg px py pw ph)
+    ;; header
+    (takuzu--help-etch svg lx (+ py 40) "TAKUZU" 26 "start" ink hi "bold")
+    (takuzu--help-etch svg rx (+ py 30) "MODEL TKZ-06" 11 "end" ink hi)
+    (takuzu--help-etch svg rx (+ py 45) "SERIAL 2026-0711-CJ" 10 "end" ink hi)
+    (takuzu--help-etch svg lx (+ py 60) "BINAIRO  -  TOHU WA-VOHU  -  BINARY LOGIC" 10 "start" ink hi)
+    (takuzu--help-divider svg lx rx (+ py 76) ink hi)
+    ;; footer, anchored to the bottom
+    (takuzu--help-divider svg lx rx (+ py ph -100) ink hi)
+    (let ((ey (+ py ph -78)))
+      (takuzu--help-emblem svg (+ lx 12) ey 'ce ink hi)
+      (takuzu--help-emblem svg (+ lx 52) ey 'class2 ink hi)
+      (takuzu--help-emblem svg (+ lx 92) ey 'warn ink hi)
+      (takuzu--help-etch svg rx (- ey 4) "CONFORMS TO BINARY-LOGIC STANDARD 3" 10 "end" ink hi)
+      (takuzu--help-etch svg rx (+ ey 10) "CLASS II  -  SIZES 4 TO 12  -  ONE SOLUTION" 10 "end" ink hi))
+    (takuzu--help-etch svg lx (+ py ph -50) "MADE IN NEW ORLEANS, LA, USA  -  (c) CRAIG JENNINGS 2026" 10 "start" ink hi)
+    (takuzu--help-etch svg cx (+ py ph -26)
+                       "Dedicated to Christine, with thanks for the inspiration."
+                       12 "middle" ink hi)
+    ;; rules block, centred between the two dividers
+    (let* ((rtop (+ py 92)) (rbot (+ py ph -112)) (blockh 165)
+           (y0 (+ rtop (max 0 (/ (- (- rbot rtop) blockh) 2)))))
+      (takuzu--help-etch svg lx y0 "HOW TO PLAY" 12 "start" ink hi "bold")
+      (takuzu--help-etch svg lx (+ y0 18) "Fill the grid with two colours so that:" 11 "start" ink hi)
+      (let ((ry (+ y0 50)))
+        (cl-loop for rule in takuzu--rules for n from 1 do
+                 (takuzu--help-rule-widget svg wx (+ ry 5) n d0 d1 fail)
+                 (takuzu--help-etch svg tx ry (nth 0 rule) 12 "start" ink hi)
+                 (takuzu--help-etch svg tx (+ ry 17) (nth 1 rule) 12 "start" ink hi)
+                 (setq ry (+ ry 48)))))
+    svg))
+
+(defun takuzu--view-width ()
+  "Pixel width of what is currently displayed: the help overlay or the board."
+  (if takuzu--help takuzu--help-w (takuzu--faceplate-width)))
+
+(defun takuzu--view-height ()
+  "Pixel height of what is currently displayed: the help overlay or the board."
+  (if takuzu--help takuzu--help-h (takuzu--faceplate-height)))
+
 (defun takuzu--fit-scale (win)
-  "Image scale that fits the faceplate into WIN at `takuzu--fill'."
-  (let ((fw (takuzu--faceplate-width)) (fh (takuzu--faceplate-height)))
+  "Image scale that fits the current view into WIN at `takuzu--fill'."
+  (let ((fw (takuzu--view-width)) (fh (takuzu--view-height)))
     (if (and win (> (window-body-width win t) 0) (> (window-body-height win t) 0))
         (max 0.4 (* takuzu--fill (min (/ (float (window-body-width win t)) fw)
                                       (/ (float (window-body-height win t)) fh))))
@@ -661,8 +792,8 @@ below.  While armed, the New key flashes to prompt the start."
                    (ch (max 1 (frame-char-height)))
                    (winw (if win (window-body-width win t) 0))
                    (winh (if win (window-body-height win t) 0))
-                   (fw (takuzu--faceplate-width))
-                   (fh (takuzu--faceplate-height))
+                   (fw (takuzu--view-width))
+                   (fh (takuzu--view-height))
                    (target (takuzu--fit-scale win))
                    (scale (or takuzu--scale (setq takuzu--scale target)))
                    (sw (* fw scale)) (sh (* fh scale))
@@ -674,29 +805,43 @@ below.  While armed, the New key flashes to prompt the start."
                       (run-at-time 0 takuzu--scale-interval #'takuzu--ease-scale (current-buffer))))
               (insert (make-string toplines ?\n))
               (insert (make-string hpad ?\s))
-              (insert-image (svg-image (if takuzu--generating
-                                           (takuzu--svg-generating)
-                                         (takuzu--svg))
+              (insert-image (svg-image (cond (takuzu--help (takuzu--svg-help))
+                                             (takuzu--generating (takuzu--svg-generating))
+                                             (t (takuzu--svg)))
                                        :scale scale)))
-          (if takuzu--generating
-              (insert (format "Generating a %s %dx%d puzzle…\n"
-                              (plist-get takuzu--generating :difficulty)
-                              takuzu--size takuzu--size))
+          (cond
+           (takuzu--help
+            (insert "TAKUZU -- HOW TO PLAY\n\nFill the grid with two colours so that:\n\n")
+            (cl-loop for rule in takuzu--rules for n from 1 do
+                     (insert (format "  %d. %s\n" n (string-join rule " "))))
+            (insert "\n(c) Craig Jennings, 2026\nDedicated to Christine, with thanks for the inspiration.\n"))
+           (takuzu--generating
+            (insert (format "Generating a %s %dx%d puzzle…\n"
+                            (plist-get takuzu--generating :difficulty)
+                            takuzu--size takuzu--size)))
+           (t
             (insert (format "Takuzu  %dx%d  %s\n\n" takuzu--size takuzu--size takuzu--grade)
                     (takuzu--render-text)
                     (format "\n%s\n\nhjkl move  SPC cycle  U undo  N new  R reset  C check  P prove  q quit\n"
-                            takuzu--status))))
+                            takuzu--status)))))
         (goto-char (min pt (point-max)))))))
 
 ;; --- game actions ---
 
 (defun takuzu--set-status (msg) "Set the status line to MSG." (setq takuzu--status msg))
 
+(defun takuzu--close-help ()
+  "Dismiss the help overlay and redraw."
+  (setq takuzu--help nil)
+  (takuzu--redraw))
+
 (defmacro takuzu--playing-only (&rest body)
   "Run BODY unless a puzzle is generating; otherwise nudge and do nothing.
-Guards board-dereferencing commands so a mid-generation keypress is inert."
+Guards board-dereferencing commands so a mid-generation keypress is inert.
+While the help overlay is up, a game key just dismisses it."
   (declare (indent 0))
-  `(cond (takuzu--armed (message "Press n to begin."))
+  `(cond (takuzu--help (takuzu--close-help))
+         (takuzu--armed (message "Press n to begin."))
          (takuzu--generating (message "Still generating a puzzle…"))
          (t ,@body)))
 
@@ -726,13 +871,16 @@ Guards board-dereferencing commands so a mid-generation keypress is inert."
 
 (defun takuzu--move (dr dc)
   "Move the cursor by DR rows and DC columns, clamped.
-Clears any transient status message; the win/reveal note persists."
-  (let ((n takuzu--size))
-    (setq takuzu--cursor
-          (cons (max 0 (min (1- n) (+ (car takuzu--cursor) dr)))
-                (max 0 (min (1- n) (+ (cdr takuzu--cursor) dc)))))
-    (unless (or takuzu--won takuzu--proven) (setq takuzu--status ""))
-    (takuzu--redraw)))
+Clears any transient status message; the win/reveal note persists.
+While the help overlay is up, a movement key dismisses it instead of moving."
+  (if takuzu--help
+      (takuzu--close-help)
+    (let ((n takuzu--size))
+      (setq takuzu--cursor
+            (cons (max 0 (min (1- n) (+ (car takuzu--cursor) dr)))
+                  (max 0 (min (1- n) (+ (cdr takuzu--cursor) dc)))))
+      (unless (or takuzu--won takuzu--proven) (setq takuzu--status ""))
+      (takuzu--redraw))))
 
 (defun takuzu-up ()    "Move up."    (interactive) (takuzu--move -1 0))
 (defun takuzu-down ()  "Move down."  (interactive) (takuzu--move 1 0))
@@ -833,6 +981,13 @@ Return (ROW COL VALUE) or nil when no cell is forced."
   (takuzu--set-status (if takuzu--assist "Assist on -- rule breaks highlight." "Assist off."))
   (takuzu--redraw))
 
+(defun takuzu-help ()
+  "Toggle the rules/help overlay.
+Shows the three rules over the console shell; any key returns to the game."
+  (interactive)
+  (setq takuzu--help (not takuzu--help))
+  (takuzu--redraw))
+
 (defun takuzu-new ()
   "Start the armed puzzle, or arm a fresh game (blank board, flashing New)."
   (interactive)
@@ -880,7 +1035,8 @@ Return (ROW COL VALUE) or nil when no cell is forced."
   "a" #'takuzu-toggle-assist
   "s" #'takuzu-cycle-size
   "d" #'takuzu-cycle-difficulty
-  "n" #'takuzu-new)
+  "n" #'takuzu-new
+  "i" #'takuzu-help)
 
 (defun takuzu--stop-timer ()
   "Cancel the refresh timer if running."
@@ -921,7 +1077,8 @@ Return (ROW COL VALUE) or nil when no cell is forced."
             takuzu--armed nil takuzu--pending nil takuzu--pending-start nil
             takuzu--generating nil takuzu--cursor '(0 . 0) takuzu--assist nil
             takuzu--history nil takuzu--start-time (current-time)
-            takuzu--won nil takuzu--proven nil takuzu--won-elapsed 0 takuzu--status ""))
+            takuzu--won nil takuzu--proven nil takuzu--won-elapsed 0 takuzu--status ""
+            takuzu--help nil))
     (takuzu--stop-spinner)
     (takuzu--stop-timer)
     (takuzu--start-refresh-timer buf)
@@ -945,7 +1102,7 @@ puzzle pre-generates in the background so starting is instant."
             takuzu--pending nil takuzu--pending-start nil takuzu--generating nil
             takuzu--cursor '(0 . 0) takuzu--assist nil takuzu--history nil
             takuzu--start-time nil takuzu--won nil takuzu--proven nil
-            takuzu--won-elapsed 0 takuzu--status "")
+            takuzu--won-elapsed 0 takuzu--status "" takuzu--help nil)
       (takuzu--start-refresh-timer buf)
       (setq takuzu--gen-process
             (takuzu-generate-async
