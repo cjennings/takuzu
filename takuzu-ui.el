@@ -255,6 +255,25 @@ own colour."
           (svg-circle svg cx cy r :fill fill :stroke (takuzu--c :bezel) :stroke-width 1.2))
       (svg-circle svg cx cy r :fill fill :stroke edge :stroke-width 1.2))))
 
+(defun takuzu--draw-cursor (svg sx sy cell)
+  "Draw the cursor as four corner brackets on the cell at SX,SY of size CELL.
+Only the corners of the ring are drawn -- half the perimeter -- so the cursor
+reads clearly with far fewer pixels than a full ring."
+  (let* ((m 3)                          ; inset from the cell edge
+         (a (round (* cell 0.3)))       ; arm length
+         (gold (takuzu--c :gold))
+         (x0 (+ sx m)) (y0 (+ sy m))
+         (x1 (- (+ sx cell) m)) (y1 (- (+ sy cell) m)))
+    (dolist (corner (list (list x0 y0 1 1)      ; top-left
+                          (list x1 y0 -1 1)     ; top-right
+                          (list x0 y1 1 -1)     ; bottom-left
+                          (list x1 y1 -1 -1)))  ; bottom-right
+      (pcase-let ((`(,cx ,cy ,dx ,dy) corner))
+        (svg-line svg cx cy (+ cx (* dx a)) cy
+                  :stroke gold :stroke-width 2 :stroke-linecap "round")
+        (svg-line svg cx cy cx (+ cy (* dy a))
+                  :stroke gold :stroke-width 2 :stroke-linecap "round")))))
+
 (defun takuzu--draw-board (svg x y)
   "Draw the board on SVG with its top-left at X,Y."
   (let* ((n takuzu--size) (cell (takuzu--cell-size n))
@@ -279,8 +298,7 @@ own colour."
             (takuzu--draw-disc svg (+ sx (/ cell 2)) (+ sy (/ cell 2))
                                (round (* cell 0.28)) val given))
           (when (takuzu--curp r c)
-            (svg-rectangle svg (+ sx 2) (+ sy 2) (- cell 4) (- cell 4) :rx 7
-                           :fill "none" :stroke (takuzu--c :gold) :stroke-width 2)))))
+            (takuzu--draw-cursor svg sx sy cell)))))
     span))
 
 (defun takuzu--start-clock-flash (buf)

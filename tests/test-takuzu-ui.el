@@ -111,6 +111,16 @@
   (should (equal (takuzu--glyph 1) "X"))
   (should (equal (takuzu--glyph nil) ".")))
 
+(ert-deftest test-takuzu-ui-draw-cursor-corner-brackets ()
+  "Normal: the cursor draws four corner brackets (eight line segments)."
+  (let ((svg (svg-create 100 100)))
+    (takuzu--draw-cursor svg 0 0 40)
+    ;; four corners, two arms each -> eight line elements, all gold
+    (let ((lines (dom-by-tag svg 'line)))
+      (should (= (length lines) 8))
+      (should (cl-every (lambda (l) (equal (dom-attr l 'stroke) (takuzu--c :gold)))
+                        lines)))))
+
 (ert-deftest test-takuzu-ui-render-text ()
   "Normal: the text fallback marks the cursor cell with brackets."
   (with-temp-buffer
