@@ -12,5 +12,8 @@ githooks/
 # transient AI-project inbox
 inbox/
 
+# local task backlog (kept out of the public repo)
+todo.org
+
 # coverage artifacts
 .coverage/
