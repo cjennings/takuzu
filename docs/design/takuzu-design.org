@@ -1,0 +1,240 @@
+#+TITLE: Takuzu — Design & Initial Spec
+#+AUTHOR: Craig Jennings
+#+DATE: 2026-07-11
+
+* Status
+
+Draft. Designed and initially built in a =.emacs.d= session (2026-07-11) at
+Craig's direction ("build as much as we can"). The engine (board rules, grading
+solver, uniqueness-guaranteeing generator) is pure and built test-first; the
+buffer UI follows and needs live daemon verification.
+
+Process: spec → prototype with live adjustments → revise spec → build to match.
+The engine is being built directly since it is headless-verifiable.
+
+* Problem
+
+Takuzu (also called Binairo or Binary Puzzle) is a two-symbol logic puzzle on an
+even-sized square grid. Fill every cell with one of two colors so that:
+
+1. no three cells of the same color are adjacent in any row or column;
+2. every row and every column holds an equal count of each color;
+3. no two rows are identical, and no two columns are identical.
+
+A puzzle ships with some cells pre-colored (givens) and has exactly one solution
+reachable by logic. Build it as a standalone Emacs package: pick an even size,
+get a uniquely-solvable puzzle graded to a difficulty, solve it in a buffer.
+
+Source: [[https://en.wikipedia.org/wiki/Takuzu][Takuzu — Wikipedia]].
+
+* Non-Goals (v1)
+
+- No multiplayer, no puzzle sharing/import, no daily-puzzle server.
+- No non-square or odd grids (equal-counts requires even).
+- No puzzle editor.
+- v1 need not ship every difficulty-grading technique; the tier ladder can grow.
+
+* Assumptions
+
+- *Researched fact* — the three rules above are the canonical Takuzu ruleset;
+  well-formed puzzles have exactly one solution, verified by a solver before
+  publishing. Grids are even; common sizes 4–20. [[https://en.wikipedia.org/wiki/Takuzu][Source]].
+- *Assumption (validate in build)* — a backtracking uniqueness solver and a
+  human-technique grader run fast enough in Elisp for sizes up to 12×12 to
+  generate puzzles interactively (sub-second to low-seconds). Larger sizes may
+  need a precompute or async generation; confirm timings during the build.
+
+* Design decisions (made to proceed; documented here)
+
+- *Internal cell values are 0 and 1*, empty is nil. The two on-screen colors map
+  to 0/1 in the UI only; the engine is color-agnostic.
+- *Standard Emacs package naming* — =takuzu-= public prefix, =takuzu--= for
+  internals (this is a MELPA-shaped package, not config, so not the =cj/=
+  prefix). =lexical-binding: t= everywhere.
+- *Two solvers, distinct jobs.* A backtracking *uniqueness solver* counts
+  solutions (short-circuits at 2) — the generator's guarantee. A *technique
+  grader* solves by a ladder of human deduction techniques and reports the top
+  rung needed — the difficulty rating.
+- *Difficulty is hybrid* — tier by the top technique the grader required, then
+  tune clue-count within the tier.
+- *Cell rendering* — colored tiles by default, an optional glyph overlay
+  (filled/hollow) toggle for tty and color-blind play.
+- *Four feedback modes, selectable per game* — purist (solved/not on submit);
+  live rule-flagging (offending cells highlight the instant a rule breaks);
+  clear-wrong-on-submit (submitting empties the wrong-colored cells, keep going);
+  active assist (live flagging plus hints).
+- *Hints are one forced cell at a time* — never bulk auto-fill, which would
+  collapse into "solve it for me." A separate full-solve reveal is the explicit
+  give-up.
+- *Generation runs off-thread in a child Emacs* (2026-07-11). Generation is
+  CPU-bound and, on a large hard board, runs for many seconds; doing it inline
+  froze the editor. =M-x takuzu= now spawns =emacs -Q --batch= to generate,
+  prints the result as a =read=-able plist (=takuzu--encode-result=), and reads
+  it back in the process sentinel while a spinner animates. Emacs stays
+  responsive throughout, and the child loads the byte-compiled package so
+  generation itself is fast. Cross-boundary detail: the wire format ships raw
+  cell/given vectors, not board structs, so it survives =prin1=/=read=.
+- *Faceplate scales to fill the window, and resizes ease* (2026-07-11). The SVG
+  is vector, so the rendered image is scaled to =takuzu--fill= (0.85) of the
+  window rather than drawn at a fixed intrinsic size. On any window or board-size
+  change the displayed scale eases toward the new fit target over a few frames
+  (=takuzu--scale-step= per 0.03s) instead of snapping, so a pane resize glides.
+  Byte-compilation is the dominant speed lever — same puzzles run 10-20x faster
+  compiled than interpreted (10x10 medium 30.5s → 2.3s). A most-constrained-cell
+  branching heuristic (branch on the empty cell with the most-filled row+column)
+  was tried to cut the 12x12 tail and *measured worse* on identical seeds, so it
+  was reverted; the search still branches on the first empty cell.
+
+* Architecture — files/layers
+
+- =takuzu-board.el= — board struct, accessors, row/column extraction, and the
+  rule predicates: triple-free, count-legal, line-complete-valid, board legal
+  (partial, for pruning/live feedback), board solved. Pure.
+- =takuzu-solver.el= — the uniqueness solver (count ≤2 solutions via
+  backtracking with constraint propagation) and the technique grader (the
+  deduction ladder + top-tier report). Pure.
+- =takuzu-generator.el= — random full solution (randomized solver on empty
+  grid), carve to a unique puzzle (remove cells while uniqueness holds, to a
+  clue-count target), grade the result. Pure.
+- =takuzu.el= — entry: autoloads, defcustoms (wired by =takuzu-config.el= in
+  =.emacs.d=), interactive commands (=takuzu-new= etc.), =provide=.
+- =takuzu-ui.el= — =takuzu-mode= major mode: rendering (faces + glyph toggle),
+  point navigation, cell-cycle, the feedback modes, hints, solve, new/reset,
+  undo. The only interactive layer; live-verified.
+
+Boundary: board/solver/generator are pure and batch-tested; UI is the interactive
+shell (pure helper + thin wrapper convention).
+
+* The deduction techniques (grader ladder)
+
+- *T1 avoid-triple* — a cell is forced when either color would make three in a
+  row: patterns =X_X= (middle is Y), =XX_= / =_XX= (blank is Y).
+- *T2 line-count* — a line already holding n/2 of a color forces its remaining
+  cells to the other color.
+- *T3 uniqueness / completion* — forced fills from "no duplicate line" and from
+  the only legal completion of a nearly-full line.
+- *T4 hypothesis* — assume a color for a cell, propagate T1–T3; a contradiction
+  forces the other color. The hardest tier; only hard puzzles need it.
+
+Grade = the highest tier the grader had to use to finish by propagation. A puzzle
+that needs T4 (or the uniqueness backtracker) is "hard".
+
+* Data flow
+
+New game: user picks size + difficulty → generator produces (solution grid,
+givens mask, graded tier) → UI renders givens locked, blanks empty → user
+navigates and cycles cell colors → feedback per the chosen mode → on solve
+(board complete + valid + matches uniqueness), win.
+
+Generation internally: random full solution → carve (remove-and-uniqueness-check
+loop to the tier's clue target) → grade → accept if tier matches the request,
+else adjust clue-count / retry.
+
+* Persistence
+
+Optional and later: best-times per (size, difficulty) in a small stats file in
+emacs-home (atomic write). Everything else is in-memory session state.
+
+* Testing
+
+- Board rules: Normal/Boundary/Error — triple detection at line ends and middle,
+  count-legal at n/2 boundary, complete-line validity, duplicate-line detection,
+  partial-legal vs solved.
+- Uniqueness solver: known single-solution boards return exactly 1; an
+  under-constrained board returns ≥2 (short-circuit); a contradictory board
+  returns 0.
+- Technique grader: crafted boards each solvable at exactly one tier assert the
+  reported grade; a T4-only board asserts it needs hypothesis.
+- Generator: every generated puzzle is uniquely solvable (re-check with the
+  solver), has the requested size, an even split, and grades to the requested
+  tier; givens are a subset of the solution. Seeded RNG for reproducibility.
+- All pure layers run headless under ERT in a sandboxed user-emacs-directory.
+
+* Observability
+
+Optional solver debug log (technique applied per step, cells filled) behind a
+debug flag — useful for validating the grader and for tuning difficulty.
+
+* Packaging
+
+Standalone GitHub repo at =~/code/takuzu=, developed as a checkout. Internal
+files as above. Wired into =.emacs.d= via =modules/takuzu-config.el= (use-package
+=:load-path= during dev, =:vc= once published), keybindings + difficulty/size
+defaults + rendering toggle set there. Own Makefile / CI / README. The =.ai/=
+tooling is gitignored (public repo).
+
+* Implementation Phases
+
+** Phase v1 (building now)
+
+The engine: board rules, uniqueness solver, technique grader, generator producing
+uniquely-solvable graded puzzles (sizes 4–12). Then =takuzu-mode=: render, cell
+navigation + cycle, at least the purist and live-flagging feedback modes,
+new/reset/undo, win detection. A complete, playable puzzle.
+
+** Phase 2
+
+The remaining feedback modes (clear-wrong-on-submit, active assist), one-cell
+hints and full-solve reveal, difficulty tuning (hybrid clue-count within tier),
+the glyph-overlay toggle, best-times stats.
+
+** Phase 3
+
+Polish: larger sizes if timings allow, richer grading techniques, animation/theme
+options, and any UX affordances that surface in play.
+
+* Prototype & deviations from spec
+
+This feature has a UI, so it goes through a prototype UI/UX phase: several
+feedback loops driving the look and feel in Craig's real environment, then the
+spec is updated and the build targets the prototype (behaves and looks as close
+to it as possible). Deviations from the spec's original decisions are logged
+here as they are settled.
+
+- *Rendering: glyphs are the primary signal, not an optional overlay* (2026-07-11).
+  The spec chose "colored tiles by default, glyph overlay optional (off)." First
+  launch in a terminal frame was all black — dark background-color faces read as
+  black and the cursor was a GUI-only =:box=, so the grid was invisible. Changed:
+  glyphs (○ / ● / ·) default ON as the readable signal, colors enhance them, and
+  the cursor is =:inverse-video= (terminal-safe) rather than a box. The glyph
+  toggle remains for a colors-only look in a capable GUI.
+
+- *Prototype medium: HTML, then port to SVG* (2026-07-11). The UI is being
+  prototyped as a self-contained HTML artifact (frontend-design), fully playable
+  (JS port of the engine), because iterating look-and-feel in Emacs was slow and
+  the build is X11 (no safe off-screen capture). The settled HTML prototype is
+  the build target; the Emacs board then renders as a pure state-to-SVG image via
+  =svg.el= (GUI-only; theme colors pulled from faces by hand; librsvg-safe subset
+  only — no SMIL, no JS-in-SVG, conservative filters). Interaction stays on
+  keymaps; the image regenerates per state change. Pipeline validated by jotto's
+  librsvg spike on Emacs 30.2.
+
+- *Aesthetic direction is an open pair, still exploring* (2026-07-11). v1 clean
+  skin shipped in the Dupré palette (dark faceplate, blue/terracotta discs, gold
+  cursor, amber readout, tactile buttons). Craig wants two directions explored
+  next: (a) retro stereo hi-fi — VU meters, knobs, dials, gauges, the
+  instrument-console kit; reference =~/code/archsetup/docs/prototypes/2026-07-03-panel-widget-gallery-prototype.html=
+  (Controls, Indicators & readouts, Meters & gauges). (b) a 1950s period look.
+  Treat these as an open pair to compare in HTML before settling.
+
+- *Assist is opt-in; no help by default* (2026-07-11). Live rule-break
+  highlighting is a selectable help, not the default. A new game shows no
+  assistance; the player opts into live flagging (Assist toggle), and Hint (?)
+  is the on-demand guide. Hint is observation-only — it states the fact to notice
+  ("this column already has 3 blue"), not the conclusion; a second press flashes
+  the forcing cells, a third places the move.
+
+* Open Questions
+
+- [ ] Exact color pair for the two tiles (theme-aware faces).
+- [ ] Cell-cycle order (empty → color-0 → color-1 → empty) and the toggle keys.
+- [ ] Clue-count targets per (size, tier).
+- [ ] Whether to generate async for 12×12 if timings warrant.
+- [ ] Best-times persistence file name/location under emacs-home.
+
+* Next Steps
+
+- Build the engine test-first (board → solver → generator), then the UI.
+- Add =modules/takuzu-config.el= wiring in =.emacs.d= once the package loads.
+- Formalize this into =docs/specs/takuzu-spec.org= if/when the project runs
+  spec-create.

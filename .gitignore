@@ -1,0 +1,13 @@
+# Claude Code per-project tooling
+.ai/
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# --- elisp ruleset ---
+githooks/
+*.elc
+*.eln
+
+# transient AI-project inbox
+inbox/

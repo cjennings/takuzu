@@ -1,0 +1,30 @@
+#+TITLE: takuzu.el — Binairo / Takuzu logic puzzle for Emacs
+
+Takuzu (also called Binairo or Binary Puzzle) is a two-color logic puzzle on an
+even-sized square grid. Fill every cell with one of two colors so that:
+
+1. no three cells of the same color are adjacent in any row or column;
+2. every row and every column holds an equal count of each color;
+3. no two rows are identical, and no two columns are identical.
+
+Every puzzle ships with some cells pre-colored and has exactly one solution
+reachable by logic alone.
+
+* Status
+
+Early development. The engine (board rules, grading solver, uniqueness-guaranteeing
+generator) is built first and tested headless; the interactive =takuzu-mode= buffer
+follows. Design notes: [[file:docs/design/takuzu-design.org][docs/design/takuzu-design.org]].
+
+* Play
+
+: M-x takuzu
+
+Pick a board size (4, 6, 8, 10, or 12) and a difficulty. Navigate cells and cycle
+a cell's color; givens are locked.
+
+* Develop
+
+: make test        # run the ERT suite
+: make compile      # byte-compile, warnings as errors
+: make lint         # checkdoc

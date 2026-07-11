@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Takuzu — Prototype</title>
+<style>
+  :root {
+    /* Dupré palette */
+    --blue:#67809c; --gold:#e8bd30; --regal:#9b5fd0; --sage:#5d9b86;
+    --terracotta:#cb6b4d; --tan:#998162; --white:#ffffff; --silver:#a9b2bb;
+    --steel:#838d97; --pewter:#5e6770; --gunmetal:#2f343a; --navy:#264364;
+    --ground:#000000; --bgdim:#1a1714;
+
+    /* semantic */
+    --room:#0d0b09;
+    --faceplate:#1a1714;
+    --plate-edge:#3a352e;
+    --tile:#2f343a;
+    --tile-given:#264364;
+    --tile-err:#5a2d24;
+    --c0:var(--blue);
+    --c1:var(--terracotta);
+    --ring:var(--silver);
+    --sel:var(--gold);
+    --text:var(--silver);
+    --text-dim:var(--steel);
+    --text-strong:#eef1f4;
+    --readout:#e8bd30;
+    --readout-bg:#0a0908;
+    --keycap:#efe6cf;
+
+    --cell:56px;
+    --radius:12px;
+  }
+
+  * { box-sizing:border-box; }
+
+  body {
+    margin:0; min-height:100vh;
+    background:
+      radial-gradient(1200px 700px at 50% -10%, #1c1b19 0%, var(--room) 60%),
+      var(--room);
+    color:var(--text);
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:32px 16px;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace; }
+
+  /* keycap chip */
+  .kc {
+    display:inline-grid; place-items:center; min-width:1.7em; height:1.7em; padding:0 .45em;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size:1em; font-weight:700; line-height:1;
+    color:#120d02; background:linear-gradient(180deg,#f7efda,#e2d5b4);
+    border:1px solid #b09d6d; border-radius:5px;
+    box-shadow:0 1px 0 rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.6) inset;
+  }
+  /* mnemonic accelerator letter inside a label */
+  .mn { color:var(--gold); font-weight:800; text-decoration:underline; text-decoration-thickness:2px;
+    text-underline-offset:3px; }
+  @keyframes tk-flash { 0%{ filter:brightness(1.9); } 100%{ filter:brightness(1); } }
+  .flash { animation:tk-flash .35s ease-out; }
+  @media (prefers-reduced-motion: reduce){ .flash{ animation:none; } }
+
+  /* ---- faceplate ---- */
+  .plate {
+    background:linear-gradient(180deg, #211d18 0%, var(--faceplate) 55%, #161310 100%);
+    border:1px solid var(--plate-edge); border-radius:18px;
+    box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 30px 60px -20px rgba(0,0,0,.8), 0 2px 0 rgba(0,0,0,.6);
+    padding:22px; max-width:100%;
+  }
+
+  /* ---- header ---- */
+  .head { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:18px; flex-wrap:wrap; }
+  .brand { display:flex; align-items:baseline; gap:10px; }
+  .brand h1 { margin:0; font-size:26px; font-weight:800; letter-spacing:.22em; color:var(--text-strong); text-transform:uppercase; }
+  .brand .sub { font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:var(--text-dim); }
+
+  .display { display:flex; gap:2px; background:var(--readout-bg); border:1px solid #000; border-radius:8px; padding:8px 12px;
+    box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 4px 10px rgba(0,0,0,.5) inset; }
+  .readout { text-align:center; padding:0 10px; }
+  .readout + .readout { border-left:1px solid #211d16; }
+  .readout .val { font-size:20px; font-weight:600; letter-spacing:.06em; color:var(--readout);
+    text-shadow:0 0 8px rgba(232,189,48,.35); font-variant-numeric:tabular-nums; }
+  .readout .cap { font-size:9px; letter-spacing:.22em; text-transform:uppercase; color:#6b5b2e; margin-top:2px; }
+
+  /* ---- selectors ---- */
+  .selectors { display:flex; gap:18px; margin-bottom:16px; flex-wrap:wrap; }
+  .seg-group { display:flex; flex-direction:column; gap:5px; }
+  .seg-label { font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--text-dim); padding-left:2px;
+    display:flex; align-items:center; gap:6px; }
+  .seg-label .mn { text-decoration-thickness:2px; }
+  .seg { display:inline-flex; background:#15120f; border:1px solid #322c25; border-radius:8px; padding:3px; gap:2px; }
+  .seg button { font:inherit; font-size:12px; letter-spacing:.04em; color:var(--text-dim); background:transparent; border:0;
+    padding:5px 11px; border-radius:6px; cursor:pointer; min-height:26px; transition:color .15s, background .15s; }
+  .seg button[aria-pressed="true"] { color:#241d05; background:linear-gradient(180deg,#f3cf4b,#d9ab24);
+    box-shadow:0 1px 2px rgba(0,0,0,.4); font-weight:700; }
+  .seg button:hover:not([aria-pressed="true"]) { color:var(--silver); }
+
+  /* ---- board ---- */
+  .board-wrap { display:flex; justify-content:center; }
+  .board { display:grid; gap:6px; padding:14px; background:var(--bgdim); border-radius:var(--radius);
+    border:1px solid #0c0a08; box-shadow:0 2px 8px rgba(0,0,0,.5) inset; }
+  .board:focus-visible { outline:none; }
+  .board.busy { opacity:.5; pointer-events:none; }
+
+  .cell { width:var(--cell); height:var(--cell); background:var(--tile); border:0; border-radius:10px; padding:0;
+    cursor:pointer; position:relative; display:grid; place-items:center; transition:background .15s, box-shadow .15s; }
+  .cell.given { background:var(--tile-given); cursor:default; }
+  .cell.err { background:var(--tile-err); }
+  .cell.sel { box-shadow:0 0 0 3px var(--sel), 0 0 14px -2px rgba(232,189,48,.6); z-index:2; }
+
+  .disc { width:66%; height:66%; border-radius:50%; transform:scale(0); opacity:0;
+    transition:transform .13s ease, opacity .13s ease; }
+  .cell.filled .disc { transform:scale(1); opacity:1; }
+  .disc.v0 { background:radial-gradient(circle at 35% 30%, #86a0bd, var(--c0) 70%); }
+  .disc.v1 { background:radial-gradient(circle at 35% 30%, #e08a63, var(--c1) 72%); }
+  .cell.given .disc { box-shadow:0 0 0 2px var(--ring), 0 2px 5px rgba(0,0,0,.35); }
+  .cell:not(.given) .disc { box-shadow:0 2px 5px rgba(0,0,0,.35); }
+
+  .board.solved { box-shadow:0 0 0 2px var(--sel), 0 0 30px -4px rgba(232,189,48,.5); }
+
+  /* progressive hint */
+  @keyframes tk-pulse { 0%,100%{ box-shadow:0 0 0 3px rgba(93,155,134,.95); } 50%{ box-shadow:0 0 0 3px rgba(93,155,134,.3); } }
+  .cell.hint-line::after { content:''; position:absolute; inset:0; border-radius:10px; background:rgba(232,189,48,.16); pointer-events:none; }
+  .cell.hint-src { animation:tk-pulse .9s ease-in-out infinite; z-index:2; }
+  .cell.hint-dst { box-shadow:0 0 0 3px var(--gold), 0 0 16px -2px rgba(232,189,48,.75) !important; z-index:3; }
+  @media (prefers-reduced-motion: reduce){ .cell.hint-src{ animation:none; box-shadow:0 0 0 3px rgba(93,155,134,.9); } }
+
+  /* ---- action buttons ---- */
+  .actions { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; justify-content:center; }
+  .btn { display:inline-flex; align-items:center; gap:8px; font:inherit; font-size:13.5px; letter-spacing:.1em;
+    text-transform:uppercase; font-weight:600; color:var(--silver);
+    background:linear-gradient(180deg,#2c2822,#211d18); border:1px solid #3a342c; border-radius:9px;
+    padding:9px 14px; min-height:40px; cursor:pointer;
+    box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 2px 5px rgba(0,0,0,.4);
+    transition:transform .08s, color .15s, border-color .15s; }
+  .btn:hover { color:var(--white); border-color:var(--pewter); }
+  .btn:active { transform:translateY(1px); }
+  .btn:focus-visible { outline:2px solid var(--sel); outline-offset:2px; }
+  .btn.primary { color:#241d05; background:linear-gradient(180deg,#f3cf4b,#d9ab24); border-color:#b7911d; }
+  .btn.primary:hover { color:#241d05; }
+  .btn.primary .kc { background:linear-gradient(180deg,#fff,#e7dcc2); }
+  .btn.primary .mn { color:#3a2900; text-decoration-color:#3a2900; }
+
+  .status { margin-top:14px; text-align:center; font-size:13px; letter-spacing:.05em; min-height:18px; color:var(--text); }
+  .status.good { color:var(--sage); }
+  .status.win { color:var(--gold); font-weight:600; letter-spacing:.1em; }
+
+  /* ---- how-to strip ---- */
+  .howto { margin-top:18px; border-top:1px solid #2a2620; padding-top:14px;
+    display:flex; flex-wrap:wrap; gap:10px 22px; justify-content:center;
+    font-size:13.5px; letter-spacing:.03em; color:var(--text); }
+  .howto .item { display:inline-flex; align-items:center; gap:7px; white-space:nowrap; }
+  .howto .item span { color:var(--text-dim); }
+
+  @media (prefers-reduced-motion: reduce) { *, .disc { transition:none !important; } }
+  @media (max-width:560px) { :root { --cell:44px; } .brand h1 { font-size:22px; } .howto { font-size:11px; gap:8px 14px; } }
+</style>
+</head>
+<body>
+<main class="plate" aria-label="Takuzu puzzle">
+  <div class="head">
+    <div class="brand">
+      <h1>Takuzu</h1>
+      <span class="sub">Binairo</span>
+    </div>
+    <div class="display" aria-hidden="true">
+      <div class="readout"><div class="val mono" id="r-time">0:00</div><div class="cap">Time</div></div>
+      <div class="readout"><div class="val mono" id="r-left">–</div><div class="cap">Left</div></div>
+      <div class="readout"><div class="val mono" id="r-grade">easy</div><div class="cap">Grade</div></div>
+    </div>
+  </div>
+
+  <div class="selectors">
+    <div class="seg-group">
+      <span class="seg-label" id="size-lbl"><span class="mn">S</span>ize</span>
+      <div class="seg" role="group" aria-labelledby="size-lbl" id="size-seg"></div>
+    </div>
+    <div class="seg-group">
+      <span class="seg-label" id="diff-lbl"><span class="mn">D</span>ifficulty</span>
+      <div class="seg" role="group" aria-labelledby="diff-lbl" id="diff-seg"></div>
+    </div>
+    <div class="seg-group">
+      <span class="seg-label" id="assist-lbl"><span class="mn">A</span>ssist</span>
+      <div class="seg" role="group" aria-labelledby="assist-lbl" id="assist-seg"></div>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board" id="board" role="grid" aria-label="Takuzu board" tabindex="0"></div>
+  </div>
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+
+  <div class="actions">
+    <button class="btn primary" id="b-new"><span class="mn">N</span>ew</button>
+    <button class="btn" id="b-reset"><span class="mn">R</span>eset</button>
+    <button class="btn" id="b-hint">Hint <span class="mn">?</span></button>
+    <button class="btn" id="b-check"><span class="mn">C</span>heck</button>
+    <button class="btn" id="b-reveal">Re<span class="mn">v</span>eal</button>
+  </div>
+
+  <div class="howto" aria-hidden="true">
+    <span class="item"><span class="kc">←↑→↓</span> / <span class="kc">h</span><span class="kc">j</span><span class="kc">k</span><span class="kc">l</span> <span>move</span></span>
+    <span class="item"><span class="kc">Space</span> <span>cycle color</span></span>
+    <span class="item"><span class="kc">0</span><span class="kc">1</span> <span>set</span></span>
+    <span class="item"><span class="kc">⌫</span> <span>clear</span></span>
+    <span class="item"><span>or click a cell</span></span>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ============================ engine (JS port) ============================ */
+const idx = (n,r,c) => r*n + c;
+const rowOf = (b,n,r) => { const a=[]; for(let c=0;c<n;c++) a.push(b[idx(n,r,c)]); return a; };
+const colOf = (b,n,c) => { const a=[]; for(let r=0;r<n;r++) a.push(b[idx(n,r,c)]); return a; };
+const eqArr = (a,b) => a.length===b.length && a.every((v,i)=>v===b[i]);
+
+function hasTriple(line){
+  for(let i=0;i+2<line.length;i++){ const a=line[i]; if(a!=null && a===line[i+1] && a===line[i+2]) return true; }
+  return false;
+}
+function countLegal(line,n){ const h=n/2; let z=0,o=0; for(const v of line){ if(v===0)z++; else if(v===1)o++; } return z<=h && o<=h; }
+const lineComplete = line => line.every(v => v!=null);
+function completeValid(line,n){ return lineComplete(line) && line.filter(v=>v===0).length===n/2 && !hasTriple(line); }
+function uniqueAmong(line,lines){ let c=0; for(const l of lines){ if(lineComplete(l) && eqArr(l,line)) c++; } return c===1; }
+function allRows(b,n){ const a=[]; for(let r=0;r<n;r++) a.push(rowOf(b,n,r)); return a; }
+function allCols(b,n){ const a=[]; for(let c=0;c<n;c++) a.push(colOf(b,n,c)); return a; }
+
+function placementOk(b,n,r,c){
+  const rr=rowOf(b,n,r), cc=colOf(b,n,c);
+  if(hasTriple(rr)||!countLegal(rr,n)||hasTriple(cc)||!countLegal(cc,n)) return false;
+  if(lineComplete(rr) && !uniqueAmong(rr, allRows(b,n))) return false;
+  if(lineComplete(cc) && !uniqueAmong(cc, allCols(b,n))) return false;
+  return true;
+}
+function uniqueLines(lines){ const s=new Set(); for(const l of lines){ const k=l.join(''); if(s.has(k))return false; s.add(k); } return true; }
+function boardSolved(b,n){
+  if(b.some(v=>v==null)) return false;
+  const rows=allRows(b,n), cols=allCols(b,n);
+  return rows.every(l=>completeValid(l,n)) && cols.every(l=>completeValid(l,n)) && uniqueLines(rows) && uniqueLines(cols);
+}
+function legalValues(b,n,r,c){ const out=[]; const i=idx(n,r,c); for(const v of [0,1]){ b[i]=v; if(placementOk(b,n,r,c)) out.push(v); b[i]=null; } return out; }
+function propagate(b,n){
+  let filled=0, changed=true;
+  while(changed){ changed=false;
+    for(let r=0;r<n;r++) for(let c=0;c<n;c++){ const i=idx(n,r,c);
+      if(b[i]==null){ const vals=legalValues(b,n,r,c);
+        if(vals.length===0) return 'contradiction';
+        if(vals.length===1){ b[i]=vals[0]; filled++; changed=true; } } } }
+  return filled;
+}
+function solutions(b,n,limit,rand){
+  if(limit<=0) return [];
+  const rows=allRows(b,n), cols=allCols(b,n);
+  if(!rows.every(l=>!hasTriple(l)&&countLegal(l,n)&&(!lineComplete(l)||uniqueAmong(l,rows)))) return [];
+  if(!cols.every(l=>!hasTriple(l)&&countLegal(l,n)&&(!lineComplete(l)||uniqueAmong(l,cols)))) return [];
+  const snap=b.slice(); let res=[];
+  if(propagate(b,n)!=='contradiction'){
+    const i=b.indexOf(null);
+    if(i<0){ if(boardSolved(b,n)) res=[b.slice()]; }
+    else { const r=Math.floor(i/n), c=i%n; const order = rand && Math.random()<0.5 ? [1,0] : [0,1];
+      for(const v of order){ b[i]=v; if(placementOk(b,n,r,c)) res=res.concat(solutions(b,n,limit-res.length,rand)); b[i]=null; if(res.length>=limit) break; } }
+  }
+  for(let k=0;k<snap.length;k++) b[k]=snap[k];
+  return res;
+}
+const countSolutions = (b,n,limit=2) => solutions(b.slice(),n,limit,false).length;
+const isUnique = (b,n) => countSolutions(b,n,2)===1;
+function fullSolution(n){ return solutions(new Array(n*n).fill(null),n,1,true)[0]; }
+function propagationSolves(b,n){ const w=b.slice(); propagate(w,n); return w.every(v=>v!=null); }
+function forcedByHypothesis(b,n,r,c){
+  const s=[]; for(const v of [0,1]){ const t=b.slice(); t[idx(n,r,c)]=v; if(placementOk(t,n,r,c) && propagate(t,n)!=='contradiction') s.push(v); }
+  if(s.length===0) return 'contradiction'; if(s.length===1) return s[0]; return null;
+}
+function grade(b,n){
+  const w=b.slice(); propagate(w,n);
+  if(w.every(v=>v!=null)) return 'easy';
+  let progress=true;
+  while(progress && w.some(v=>v==null)){ progress=false;
+    outer: for(let r=0;r<n;r++) for(let c=0;c<n;c++){ if(w[idx(n,r,c)]==null){
+      const f=forcedByHypothesis(w,n,r,c);
+      if(f==='contradiction') break outer;
+      if(f!=null){ w[idx(n,r,c)]=f; propagate(w,n); progress=true; break outer; } } } }
+  return w.every(v=>v!=null) ? 'medium' : 'hard';
+}
+function carveKeep(b,n,tier){
+  if(tier==='easy') return propagationSolves(b,n);
+  if(tier==='medium') return isUnique(b,n) && ['easy','medium'].includes(grade(b,n));
+  return isUnique(b,n);
+}
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function generate(n,tier){
+  const sol=fullSolution(n); const b=sol.slice(); const givens=new Array(n*n).fill(true);
+  for(const i of shuffle([...Array(n*n).keys()])){ const v=b[i]; b[i]=null; givens[i]=false;
+    if(!carveKeep(b,n,tier)){ b[i]=v; givens[i]=true; } }
+  return { size:n, solution:sol, cells:b.slice(), givens, grade:grade(b,n) };
+}
+
+const SEED6 = {
+  size:6, grade:'easy',
+  cells:[1,null,null,null,null,null, 1,null,null,null,0,null, null,0,null,null,0,null,
+         null,null,null,null,null,null, null,0,0,null,null,null, null,0,null,null,null,null],
+  solution:[1,1,0,0,1,0, 1,1,0,1,0,0, 0,0,1,1,0,1, 0,1,1,0,1,0, 1,0,0,1,0,1, 0,0,1,0,1,1],
+  givens:null
+};
+SEED6.givens = SEED6.cells.map(v=>v!=null);
+
+/* ============================ UI ============================ */
+const SIZES=[4,6,8,10,12], DIFFS=['easy','medium','hard'];
+const boardEl=document.getElementById('board'), statusEl=document.getElementById('status');
+const rTime=document.getElementById('r-time'), rLeft=document.getElementById('r-left'), rGrade=document.getElementById('r-grade');
+
+let G=null, sel=0, startTs=null, timer=null, won=false, size=6, diff='easy', hint=null, assist=false;
+
+function buildSeg(id, values, current, onPick){
+  const el=document.getElementById(id); el.innerHTML='';
+  for(const v of values){ const b=document.createElement('button');
+    b.textContent=String(v); b.setAttribute('aria-pressed', v===current?'true':'false');
+    b.addEventListener('click', ()=>onPick(v)); el.appendChild(b); }
+}
+function refreshSeg(id, current){ for(const b of document.getElementById(id).children) b.setAttribute('aria-pressed', b.textContent===String(current)?'true':'false'); }
+
+function startGame(game){
+  G=game; won=false; hint=null;
+  boardEl.style.gridTemplateColumns=`repeat(${G.size}, var(--cell))`;
+  boardEl.classList.remove('solved');
+  const firstOpen=G.givens.findIndex(g=>!g); sel = firstOpen<0?0:firstOpen;
+  renderBoard();
+  rGrade.textContent=G.grade; refreshSeg('size-seg',G.size); refreshSeg('diff-seg',diff);
+  startTs=Date.now(); if(timer)clearInterval(timer); timer=setInterval(tick,250); tick();
+  setStatus('');
+}
+function newGame(){
+  setStatus('Generating…'); boardEl.classList.add('busy');
+  setTimeout(()=>{ let g; try{ g=generate(size,diff); }catch(e){ g=SEED6; }
+    boardEl.classList.remove('busy'); startGame(g); }, 20);
+}
+function renderBoard(){
+  boardEl.innerHTML=''; const n=G.size;
+  for(let i=0;i<n*n;i++){ const cell=document.createElement('div');
+    cell.className='cell'; cell.dataset.i=i; cell.id='tk-'+i; cell.setAttribute('role','gridcell');
+    const disc=document.createElement('span'); disc.className='disc'; cell.appendChild(disc);
+    boardEl.appendChild(cell); }
+  paint();
+}
+function paint(){
+  const n=G.size, errs=errorSet(), cells=boardEl.children;
+  for(let i=0;i<n*n;i++){ const el=cells[i], v=G.cells[i], given=G.givens[i];
+    el.classList.toggle('given',given); el.classList.toggle('filled',v!=null);
+    el.classList.toggle('err',errs.has(i)); el.classList.toggle('sel',i===sel);
+    el.classList.remove('hint-line','hint-src','hint-dst');
+    el.firstChild.className='disc'+(v===0?' v0':v===1?' v1':'');
+    const r=Math.floor(i/n)+1,c=(i%n)+1;
+    el.setAttribute('aria-label',`Row ${r} column ${c}, ${v==null?'empty':(v===0?'blue':'orange')}${given?', given':''}`);
+  }
+  if(hint){
+    hint.line.forEach(k=>{ if(cells[k]) cells[k].classList.add('hint-line'); });
+    if(hint.stage>=2){
+      hint.cells.forEach(k=>{ if(cells[k]) cells[k].classList.add('hint-src'); });
+      if(cells[hint.i]) cells[hint.i].classList.add('hint-dst');
+    }
+  }
+  boardEl.setAttribute('aria-activedescendant','tk-'+sel);
+  rLeft.textContent=G.cells.filter(v=>v==null).length;
+}
+function errorSet(){
+  if(!assist) return new Set();
+  const n=G.size, bad=new Set(), rows=allRows(G.cells,n), cols=allCols(G.cells,n);
+  const mark=(isBad,cells)=>{ if(isBad) cells.forEach(i=>bad.add(i)); };
+  for(let r=0;r<n;r++){ const line=rows[r]; const dup=lineComplete(line)&&!uniqueAmong(line,rows);
+    mark(hasTriple(line)||!countLegal(line,n)||dup, [...Array(n).keys()].map(c=>idx(n,r,c))); }
+  for(let c=0;c<n;c++){ const line=cols[c]; const dup=lineComplete(line)&&!uniqueAmong(line,cols);
+    mark(hasTriple(line)||!countLegal(line,n)||dup, [...Array(n).keys()].map(r=>idx(n,r,c))); }
+  return bad;
+}
+function setCell(i,v){
+  if(G.givens[i]){ setStatus('That cell is a given — it can’t change.'); return; }
+  if(won) return;
+  hint=null;
+  G.cells[i]=v; paint(); setStatus('');
+  if(boardSolved(G.cells,G.size)) win();
+}
+function cycleCell(i){ const v=G.cells[i]; setCell(i, v==null?0:v===0?1:null); }
+function win(){ won=true; clearInterval(timer); boardEl.classList.add('solved');
+  statusEl.className='status win'; statusEl.textContent=`Solved in ${fmt(elapsed())} · nicely done`; }
+function setStatus(msg,cls){ statusEl.className='status'+(cls?' '+cls:''); statusEl.textContent=msg; }
+const elapsed=()=>Math.floor((Date.now()-startTs)/1000);
+const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+function tick(){ if(!won) rTime.textContent=fmt(elapsed()); }
+
+/* selection is state, not DOM focus — arrows always work */
+function moveSel(dr,dc){ const n=G.size; let r=Math.floor(sel/n)+dr, c=sel%n+dc;
+  r=Math.max(0,Math.min(n-1,r)); c=Math.max(0,Math.min(n-1,c)); sel=idx(n,r,c); paint(); }
+
+boardEl.addEventListener('click', e => {
+  const cell=e.target.closest('.cell'); if(!cell) return;
+  sel=+cell.dataset.i; boardEl.focus(); paint(); cycleCell(sel);
+});
+
+/* aids */
+const cname = v => v===0?'blue':'orange';
+const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+
+/* Observation for why B is blocked at (r,c) — states what to notice, not the answer.
+   Returns {text, cells:[constraining indices], line:Set}. */
+function whyForced(r,c,b,n){
+  const rowIdx=[...Array(n).keys()].map(cc=>idx(n,r,cc));
+  if(rowIdx.filter(k=>G.cells[k]===b).length >= n/2)
+    return {text:`this row already has ${n/2} ${cname(b)}`,
+            cells:rowIdx.filter(k=>G.cells[k]===b), line:new Set(rowIdx)};
+  for(const w of [[c-2,c-1,c],[c-1,c,c+1],[c,c+1,c+2]])
+    if(w[0]>=0 && w[2]<n){
+      const others=w.filter(x=>x!==c);
+      if(others.every(x=>G.cells[idx(n,r,x)]===b))
+        return {text:`two ${cname(b)} already sit together in this row`,
+                cells:others.map(x=>idx(n,r,x)), line:new Set(rowIdx)};
+    }
+  const colIdx=[...Array(n).keys()].map(rr=>idx(n,rr,c));
+  if(colIdx.filter(k=>G.cells[k]===b).length >= n/2)
+    return {text:`this column already has ${n/2} ${cname(b)}`,
+            cells:colIdx.filter(k=>G.cells[k]===b), line:new Set(colIdx)};
+  for(const w of [[r-2,r-1,r],[r-1,r,r+1],[r,r+1,r+2]])
+    if(w[0]>=0 && w[2]<n){
+      const others=w.filter(x=>x!==r);
+      if(others.every(x=>G.cells[idx(n,x,c)]===b))
+        return {text:`two ${cname(b)} already sit together in this column`,
+                cells:others.map(x=>idx(n,x,c)), line:new Set(colIdx)};
+    }
+  return {text:`this cell is pinned by its row and column`, cells:[], line:new Set(rowIdx)};
+}
+function findHint(){
+  const n=G.size;
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++){ const i=idx(n,r,c);
+    if(G.cells[i]==null){ const vals=legalValues(G.cells,n,r,c);
+      if(vals.length===1){ const v=vals[0], w=whyForced(r,c,1-v,n); return {i,v,text:w.text,cells:w.cells,line:w.line,stage:0}; } } }
+  return null;
+}
+/* three presses: 1 = name the rule, 2 = flash the forcing cells, 3 = place it */
+function doHint(){
+  if(won) return;
+  if(!hint){
+    hint=findHint();
+    if(!hint){ setStatus('No cell is forced right now — reason further.','good'); return; }
+    hint.stage=1; paint();
+    setStatus(cap(hint.text)+'.','good');
+    return;
+  }
+  if(hint.stage===1){ hint.stage=2; paint(); return; }
+  const {i,v}=hint; hint=null; sel=i; setCell(i,v);
+}
+function reveal(){ clearInterval(timer); G.cells=G.solution.slice(); won=true; paint();
+  boardEl.classList.add('solved'); setStatus('Solution revealed.'); }
+function reset(){ won=false; hint=null; boardEl.classList.remove('solved');
+  for(let i=0;i<G.cells.length;i++) if(!G.givens[i]) G.cells[i]=null;
+  startTs=Date.now(); if(timer)clearInterval(timer); timer=setInterval(tick,250); tick(); paint(); setStatus(''); }
+function check(){ if(boardSolved(G.cells,G.size)) win();
+  else if(G.cells.every(v=>v!=null)) setStatus('Full, but a rule is broken.');
+  else setStatus(`Not finished — ${G.cells.filter(v=>v==null).length} cells left.`); }
+function cycleSize(){ size=SIZES[(SIZES.indexOf(size)+1)%SIZES.length]; refreshSeg('size-seg',size); newGame(); }
+function cycleDiff(){ diff=DIFFS[(DIFFS.indexOf(diff)+1)%DIFFS.length]; refreshSeg('diff-seg',diff); newGame(); }
+function toggleAssist(){ assist=!assist; refreshSeg('assist-seg', assist?'on':'off'); paint();
+  setStatus(assist?'Assist on — rule breaks will highlight.':'Assist off.','good'); }
+
+const bNew=document.getElementById('b-new'), bReset=document.getElementById('b-reset'),
+      bHint=document.getElementById('b-hint'), bCheck=document.getElementById('b-check'),
+      bReveal=document.getElementById('b-reveal'),
+      sizeSeg=document.getElementById('size-seg'), diffSeg=document.getElementById('diff-seg'),
+      assistSeg=document.getElementById('assist-seg');
+const flash = el => { if(!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); };
+
+/* global keys — work no matter where focus is, except inside a control (let it activate natively) */
+document.addEventListener('keydown', e => {
+  if(!G) return;
+  const inControl = e.target.closest && e.target.closest('.actions, .selectors');
+  if(inControl && (e.key===' '||e.key==='Enter'||e.key==='Tab'||e.key.startsWith('Arrow'))) return;
+  const k=e.key;
+  const moves={ArrowUp:[-1,0],k:[-1,0],ArrowDown:[1,0],j:[1,0],ArrowLeft:[0,-1],h:[0,-1],ArrowRight:[0,1],l:[0,1]};
+  if(moves[k]){ e.preventDefault(); moveSel(...moves[k]); return; }
+  switch(k){
+    case ' ': case 'Enter': e.preventDefault(); cycleCell(sel); return;
+    case '0': e.preventDefault(); setCell(sel,0); return;
+    case '1': e.preventDefault(); setCell(sel,1); return;
+    case 'Backspace': case 'Delete': e.preventDefault(); setCell(sel,null); return;
+    case 'n': case 'N': e.preventDefault(); flash(bNew); newGame(); return;
+    case 'r': case 'R': e.preventDefault(); flash(bReset); reset(); return;
+    case '?': e.preventDefault(); flash(bHint); doHint(); return;
+    case 'c': case 'C': e.preventDefault(); flash(bCheck); check(); return;
+    case 'v': case 'V': e.preventDefault(); flash(bReveal); reveal(); return;
+    case 's': case 'S': e.preventDefault(); flash(sizeSeg); cycleSize(); return;
+    case 'd': case 'D': e.preventDefault(); flash(diffSeg); cycleDiff(); return;
+    case 'a': case 'A': e.preventDefault(); flash(assistSeg); toggleAssist(); return;
+  }
+});
+
+/* wiring */
+document.getElementById('b-new').addEventListener('click', newGame);
+document.getElementById('b-reset').addEventListener('click', reset);
+document.getElementById('b-hint').addEventListener('click', doHint);
+document.getElementById('b-check').addEventListener('click', check);
+document.getElementById('b-reveal').addEventListener('click', reveal);
+buildSeg('size-seg', SIZES, size, v => { size=v; refreshSeg('size-seg',v); newGame(); });
+buildSeg('diff-seg', DIFFS, diff, v => { diff=v; refreshSeg('diff-seg',v); newGame(); });
+buildSeg('assist-seg', ['off','on'], 'off', v => { assist=(v==='on'); refreshSeg('assist-seg',v); paint();
+  setStatus(assist?'Assist on — rule breaks will highlight.':'Assist off.','good'); });
+
+startGame(SEED6);
+</script>
+</body>
+</html>

@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Takuzu / Binairo — self-contained hi-fi console prototype (2026-07-11).
+     Single file: inline CSS + JS (engine port of the Emacs package + UI).
+     Design-of-record for the Emacs SVG board; plays offline from a file:// bookmark. -->
+<title>Takuzu — Hi-Fi Console</title>
+<style>
+  :root {
+    /* Dupré panel family (from the archsetup instrument-console kit) */
+    --ground:#151311; --panel:#100f0f; --well:#0a0c0d; --raise:#1a1917;
+    --gold:#b99640; --gold-hi:#dcc061; --silver:#bfc4d0; --cream:#f3e7c5;
+    --steel:#969385; --dim:#7c838a; --slate:#424f5e; --slate-hi:#54677d;
+    --wash:#2c2f32; --pass:#74932f; --fail:#cb6b4d;
+    /* the two puzzle lamps */
+    --disc0:#67809c; --disc0-hi:#a6bcd6;
+    --disc1:#cb6b4d; --disc1-hi:#eb9a80;
+    --mono: ui-monospace, "Berkeley Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --cell:54px;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:34px 16px;
+    font-family:var(--mono); color:var(--silver);
+    background: radial-gradient(1100px 620px at 62% -12%, #1d1914 0%, transparent 60%), var(--ground);
+  }
+
+  /* ---- faceplate ---- */
+  .plate {
+    position:relative; max-width:100%; padding:26px 30px 24px;
+    background:
+      linear-gradient(180deg,#221e18,#151109),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.016) 0 2px, transparent 2px 4px);
+    border:1px solid #2c2620; border-radius:16px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05), inset 0 0 40px rgba(0,0,0,.35),
+                0 34px 66px -22px rgba(0,0,0,.85);
+  }
+  .screw { position:absolute; width:11px; height:11px; border-radius:50%; border:1px solid #0c0a07;
+    background:radial-gradient(circle at 40% 35%, #4d4940, #17140f);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.16), 0 1px 1px rgba(0,0,0,.6); }
+  .screw::after { content:''; position:absolute; inset:3px; border-top:1px solid #0c0a07; transform:rotate(38deg); }
+  .screw.tl{top:11px;left:11px} .screw.tr{top:11px;right:11px} .screw.bl{bottom:11px;left:11px} .screw.br{bottom:11px;right:11px}
+
+  /* ---- masthead ---- */
+  .head { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin:2px 0 4px; flex-wrap:wrap; }
+  .title { display:flex; align-items:center; gap:.05em; text-transform:uppercase; margin-top:3px; }
+  .title .mainname { color:var(--gold); font-size:1.7rem; font-weight:700; letter-spacing:.14em; text-shadow:0 0 14px rgba(185,150,64,.25); }
+  .title .slash { color:var(--gold-hi); font-size:2.3rem; font-weight:300; margin:0 .12em; line-height:1; }
+  .title .aliases { display:flex; flex-direction:column; justify-content:center; gap:2px; }
+  .title .aliases span { color:var(--dim); font-size:.6rem; letter-spacing:.24em; line-height:1.3; }
+
+  .lamp { width:10px; height:10px; border-radius:50%; background:var(--pass); box-shadow:0 0 7px 1px rgba(116,147,47,.6); flex:none; }
+  .lamp.gold { background:var(--gold); box-shadow:0 0 7px 1px rgba(185,150,64,.65); }
+  .lamp.red  { background:var(--fail); box-shadow:0 0 7px 1px rgba(203,107,77,.6); }
+  .lamp.big { width:16px; height:16px; align-self:center; }
+  @keyframes lamp-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .lamp.win { background:var(--pass); box-shadow:0 0 13px 2px rgba(116,147,47,.8); animation:lamp-pulse .9s ease-in-out infinite; }
+
+  .ro { text-align:center; min-width:44px; }
+  .ro .v { color:var(--cream); font-size:21px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:.03em;
+    text-shadow:0 0 8px rgba(243,231,197,.14); }
+  .u { color:var(--steel); font-size:.52rem; letter-spacing:.2em; text-transform:uppercase; margin-top:3px; text-align:center; }
+
+  /* board + right instrument panel */
+  .stage { display:flex; gap:16px; align-items:stretch; justify-content:center; margin:26px 0 6px; }
+  .rightpanel { display:flex; flex-direction:column; align-items:center; gap:12px; padding:14px 16px;
+    background:var(--well); border:1px solid #201d17; border-radius:10px; box-shadow: inset 0 2px 9px rgba(0,0,0,.65); }
+  .vmwrap { display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; align-self:stretch; }
+  .vmeter { flex:1; width:22px; min-height:70px; display:flex; flex-direction:column-reverse; gap:2px; padding:2px;
+    background:#0d0f10; border:1px solid #231f18; border-radius:5px; }
+  .vmeter i { width:100%; flex:1; background:var(--wash); border-radius:1px; opacity:.35; transition:opacity .12s, background .12s; }
+  .vmeter i.on { opacity:1; background:var(--pass); box-shadow:0 0 4px rgba(116,147,47,.4); }
+  .vmeter i.hot { opacity:1; background:var(--gold); box-shadow:0 0 5px rgba(185,150,64,.5); }
+
+  /* ---- engraved section label ---- */
+  .engrave { color:var(--steel); font-size:.58rem; letter-spacing:.3em; text-transform:uppercase;
+    display:flex; align-items:center; gap:11px; margin:16px 2px 9px; }
+  .engrave::before,.engrave::after { content:''; height:1px; background:var(--wash); flex:1; }
+  .engrave::before { max-width:14px; }
+
+
+  /* ---- board: recessed lamp sockets ---- */
+  .board-wrap { display:flex; justify-content:center; align-self:flex-start; }
+  .board { display:grid; gap:7px; padding:16px; border-radius:12px; border:1px solid #000;
+    background:linear-gradient(180deg,#19150f,#100d09);
+    box-shadow: inset 0 2px 12px rgba(0,0,0,.72), 0 1px 0 rgba(255,255,255,.03); }
+  .board:focus-visible { outline:none; }
+  .board.busy { opacity:.5; pointer-events:none; }
+
+  .cell { width:var(--cell); height:var(--cell); border-radius:10px; position:relative; cursor:pointer; padding:0; border:0;
+    background:radial-gradient(circle at 50% 38%, #14110c, #090705);
+    box-shadow: inset 0 2px 5px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,255,255,.03);
+    display:grid; place-items:center; transition:box-shadow .12s; }
+  .disc { width:62%; height:62%; border-radius:50%; transform:scale(.28); opacity:0; background:#0a0806;
+    transition:transform .14s ease, opacity .14s ease; }
+  .cell.filled .disc { transform:scale(1); opacity:1; }
+  .disc.v0 { background:#4d5f75; box-shadow: inset 0 2px 4px rgba(0,0,0,.5); }
+  .disc.v1 { background:#8f5236; box-shadow: inset 0 2px 4px rgba(0,0,0,.5); }
+  /* givens: the same disc, marked by a shiny light-silver bezel */
+  .cell.given .disc.v0,
+  .cell.given .disc.v1 { box-shadow: inset 0 2px 4px rgba(0,0,0,.5), 0 0 0 2px #b3b9c2, 0 0 0 3px rgba(0,0,0,.4); }
+  .cell.sel { box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px var(--gold), 0 0 15px -2px rgba(185,150,64,.75); z-index:2; }
+  .cell.err { box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px var(--fail); }
+  .board.solved { box-shadow: inset 0 2px 12px rgba(0,0,0,.72), 0 0 0 2px var(--gold), 0 0 36px -6px rgba(185,150,64,.55); }
+
+  /* hint highlight */
+  @keyframes tk-pulse { 0%,100%{ box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px rgba(116,147,47,.95); }
+    50%{ box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px rgba(116,147,47,.3); } }
+  .cell.hint-line::after { content:''; position:absolute; inset:0; border-radius:10px; background:rgba(185,150,64,.13); pointer-events:none; }
+  .cell.hint-src { animation:tk-pulse .9s ease-in-out infinite; z-index:2; }
+  .cell.hint-dst { box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px var(--gold), 0 0 16px -2px rgba(185,150,64,.75) !important; z-index:3; }
+
+  /* ---- status / toast ---- */
+  .status { text-align:center; margin:13px 0 2px; min-height:18px; font-size:12.5px; letter-spacing:.02em; color:var(--silver); }
+  .status.good { color:var(--pass); }
+  .status.win { color:var(--gold); font-weight:700; letter-spacing:.08em; }
+
+  /* ---- console keys ---- */
+  .actions { display:flex; gap:9px; justify-content:center; flex-wrap:wrap; }
+  .key { font:inherit; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--silver); cursor:pointer;
+    background:linear-gradient(180deg,#23211e,#191715); border:1px solid #33302b; border-bottom-color:#0c0b0a;
+    border-radius:8px; padding:10px 15px; min-height:42px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 2px 3px rgba(0,0,0,.45); transition:transform .07s, color .12s, border-color .12s; }
+  .key:hover { color:var(--gold); border-color:var(--gold); }
+  .key:active { transform:translateY(1px); }
+  .key:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+  .mn { color:var(--gold-hi); font-weight:800; text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:3px; }
+
+  /* ---- selectors ---- */
+  .selectors { display:flex; gap:22px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
+  .seg-group { display:flex; flex-direction:column; gap:6px; align-items:center; }
+  .seg-label { color:var(--steel); font-size:.58rem; letter-spacing:.24em; text-transform:uppercase; }
+  .seg-label .mn { color:var(--gold); }
+  .seg { display:flex; border:1px solid #33302b; border-radius:8px; overflow:hidden; }
+  .seg button { font:inherit; font-size:11px; color:var(--silver); background:#191715; border:0; border-right:1px solid #33302b;
+    padding:8px 12px; cursor:pointer; min-height:30px; transition:background .12s, color .12s; }
+  .seg button:last-child { border-right:0; }
+  .seg button[aria-pressed="true"] { background:linear-gradient(180deg,#d3bd68,var(--gold)); color:var(--panel); font-weight:700; }
+  .seg button:hover:not([aria-pressed="true"]) { color:var(--cream); }
+
+  /* physical toggle switch */
+  .switch { width:46px; height:24px; border-radius:12px; background:var(--wash); border:1px solid var(--slate);
+    position:relative; cursor:pointer; padding:0; }
+  .switch::after { content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%;
+    background:var(--dim); box-shadow:0 1px 2px rgba(0,0,0,.5); transition:left .15s, background .15s; }
+  .switch[aria-checked="true"] { background:var(--slate); border-color:var(--gold); }
+  .switch[aria-checked="true"]::after { left:24px; background:var(--gold); box-shadow:0 0 7px rgba(185,150,64,.6); }
+  .switch:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+
+  /* analogue clock */
+  .clockwrap { text-align:center; }
+  .clock { width:72px; height:72px; display:block; margin:0 auto 2px; }
+  .cface { fill:#0a0908; stroke:#2b2620; stroke-width:2; }
+  #clk-ticks line { stroke:var(--steel); stroke-width:1.4; }
+  .hmin { stroke:var(--gold); stroke-width:3; stroke-linecap:round; }
+  .hsec { stroke:var(--gold-hi); stroke-width:1.4; stroke-linecap:round; }
+  .hub { fill:var(--gold); }
+
+  /* ---- how-to ---- */
+  .howto { display:flex; flex-wrap:wrap; gap:9px 20px; justify-content:center; margin-top:16px; padding-top:14px;
+    border-top:1px solid #2a2620; font-size:12.5px; color:var(--dim); }
+  .howto .item { display:inline-flex; align-items:center; gap:7px; white-space:nowrap; }
+  .howto .item span { color:var(--steel); }
+  .kc { display:inline-grid; place-items:center; min-width:1.7em; height:1.7em; padding:0 .45em; font-family:var(--mono);
+    font-size:.95em; font-weight:700; color:var(--cream); background:linear-gradient(180deg,#26231f,#16130e);
+    border:1px solid #3a352c; border-bottom-color:#0c0b0a; border-radius:5px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.5); }
+
+  @keyframes tk-flash { 0%{ filter:brightness(1.9); } 100%{ filter:brightness(1); } }
+  .flash { animation:tk-flash .35s ease-out; }
+  @media (prefers-reduced-motion: reduce){ *, .disc, .flash, .cell.hint-src{ animation:none !important; transition:none !important; } }
+  @media (max-width:600px){ :root{ --cell:42px; } .title{ font-size:1.4rem; } }
+</style>
+</head>
+<body>
+<main class="plate" aria-label="Takuzu console">
+  <span class="screw tl"></span><span class="screw tr"></span><span class="screw bl"></span><span class="screw br"></span>
+
+  <div class="head">
+    <div>
+      <div class="title">
+        <span class="mainname">Takuzu</span>
+        <span class="slash">/</span>
+        <span class="aliases"><span>Binairo</span><span>Tohu wa-Vohu</span><span>Binary logic</span></span>
+      </div>
+    </div>
+    <span class="lamp gold big" id="statelamp"></span>
+  </div>
+
+  <div class="stage">
+    <div class="board-wrap">
+      <div class="board" id="board" role="grid" aria-label="Takuzu board" tabindex="0"></div>
+    </div>
+    <aside class="rightpanel" aria-hidden="true">
+      <div class="clockwrap">
+        <svg class="clock" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="46" class="cface"/>
+          <g id="clk-ticks"></g>
+          <line id="clk-min" x1="50" y1="52" x2="50" y2="28" class="hmin"/>
+          <line id="clk-sec" x1="50" y1="56" x2="50" y2="18" class="hsec"/>
+          <circle cx="50" cy="50" r="2.6" class="hub"/>
+        </svg>
+        <div class="u">Time</div>
+      </div>
+      <div class="ro"><div class="v" id="r-grade">easy</div><div class="u">Grade</div></div>
+      <div class="ro"><div class="v" id="r-left">–</div><div class="u">Left</div></div>
+      <div class="vmwrap">
+        <span class="vmeter" id="prog"></span>
+        <div class="u" id="prog-lbl">0 %</div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+
+  <div class="engrave">Console</div>
+  <div class="actions">
+    <button class="key" id="b-new"><span class="mn">N</span>ew</button>
+    <button class="key" id="b-reset"><span class="mn">R</span>eset</button>
+    <button class="key" id="b-undo"><span class="mn">U</span>ndo</button>
+    <button class="key" id="b-hint">Hint <span class="mn">?</span></button>
+    <button class="key" id="b-check"><span class="mn">C</span>heck</button>
+    <button class="key" id="b-reveal"><span class="mn">P</span>rove</button>
+  </div>
+
+  <div class="selectors">
+    <div class="seg-group"><span class="seg-label" id="size-lbl"><span class="mn">S</span>ize</span>
+      <div class="seg" role="group" aria-labelledby="size-lbl" id="size-seg"></div></div>
+    <div class="seg-group"><span class="seg-label" id="diff-lbl"><span class="mn">D</span>ifficulty</span>
+      <div class="seg" role="group" aria-labelledby="diff-lbl" id="diff-seg"></div></div>
+    <div class="seg-group"><span class="seg-label" id="assist-lbl"><span class="mn">A</span>ssist</span>
+      <button class="switch" id="assist-sw" role="switch" aria-checked="false" aria-labelledby="assist-lbl"></button></div>
+  </div>
+
+  <div class="howto" aria-hidden="true">
+    <span class="item"><span class="kc">←↑→↓</span> / <span class="kc">h</span><span class="kc">j</span><span class="kc">k</span><span class="kc">l</span> <span>move</span></span>
+    <span class="item"><span class="kc">Space</span> <span>cycle colour</span></span>
+    <span class="item"><span class="kc">U</span> <span>undo</span></span>
+    <span class="item"><span>or click a socket</span></span>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ============================ engine (JS port) ============================ */
+const idx = (n,r,c) => r*n + c;
+const rowOf = (b,n,r) => { const a=[]; for(let c=0;c<n;c++) a.push(b[idx(n,r,c)]); return a; };
+const colOf = (b,n,c) => { const a=[]; for(let r=0;r<n;r++) a.push(b[idx(n,r,c)]); return a; };
+const eqArr = (a,b) => a.length===b.length && a.every((v,i)=>v===b[i]);
+
+function hasTriple(line){
+  for(let i=0;i+2<line.length;i++){ const a=line[i]; if(a!=null && a===line[i+1] && a===line[i+2]) return true; }
+  return false;
+}
+function countLegal(line,n){ const h=n/2; let z=0,o=0; for(const v of line){ if(v===0)z++; else if(v===1)o++; } return z<=h && o<=h; }
+const lineComplete = line => line.every(v => v!=null);
+function completeValid(line,n){ return lineComplete(line) && line.filter(v=>v===0).length===n/2 && !hasTriple(line); }
+function uniqueAmong(line,lines){ let c=0; for(const l of lines){ if(lineComplete(l) && eqArr(l,line)) c++; } return c===1; }
+function allRows(b,n){ const a=[]; for(let r=0;r<n;r++) a.push(rowOf(b,n,r)); return a; }
+function allCols(b,n){ const a=[]; for(let c=0;c<n;c++) a.push(colOf(b,n,c)); return a; }
+
+function placementOk(b,n,r,c){
+  const rr=rowOf(b,n,r), cc=colOf(b,n,c);
+  if(hasTriple(rr)||!countLegal(rr,n)||hasTriple(cc)||!countLegal(cc,n)) return false;
+  if(lineComplete(rr) && !uniqueAmong(rr, allRows(b,n))) return false;
+  if(lineComplete(cc) && !uniqueAmong(cc, allCols(b,n))) return false;
+  return true;
+}
+function uniqueLines(lines){ const s=new Set(); for(const l of lines){ const k=l.join(''); if(s.has(k))return false; s.add(k); } return true; }
+function boardSolved(b,n){
+  if(b.some(v=>v==null)) return false;
+  const rows=allRows(b,n), cols=allCols(b,n);
+  return rows.every(l=>completeValid(l,n)) && cols.every(l=>completeValid(l,n)) && uniqueLines(rows) && uniqueLines(cols);
+}
+function legalValues(b,n,r,c){ const out=[]; const i=idx(n,r,c); for(const v of [0,1]){ b[i]=v; if(placementOk(b,n,r,c)) out.push(v); b[i]=null; } return out; }
+function propagate(b,n){
+  let filled=0, changed=true;
+  while(changed){ changed=false;
+    for(let r=0;r<n;r++) for(let c=0;c<n;c++){ const i=idx(n,r,c);
+      if(b[i]==null){ const vals=legalValues(b,n,r,c);
+        if(vals.length===0) return 'contradiction';
+        if(vals.length===1){ b[i]=vals[0]; filled++; changed=true; } } } }
+  return filled;
+}
+function solutions(b,n,limit,rand){
+  if(limit<=0) return [];
+  const rows=allRows(b,n), cols=allCols(b,n);
+  if(!rows.every(l=>!hasTriple(l)&&countLegal(l,n)&&(!lineComplete(l)||uniqueAmong(l,rows)))) return [];
+  if(!cols.every(l=>!hasTriple(l)&&countLegal(l,n)&&(!lineComplete(l)||uniqueAmong(l,cols)))) return [];
+  const snap=b.slice(); let res=[];
+  if(propagate(b,n)!=='contradiction'){
+    const i=b.indexOf(null);
+    if(i<0){ if(boardSolved(b,n)) res=[b.slice()]; }
+    else { const r=Math.floor(i/n), c=i%n; const order = rand && Math.random()<0.5 ? [1,0] : [0,1];
+      for(const v of order){ b[i]=v; if(placementOk(b,n,r,c)) res=res.concat(solutions(b,n,limit-res.length,rand)); b[i]=null; if(res.length>=limit) break; } }
+  }
+  for(let k=0;k<snap.length;k++) b[k]=snap[k];
+  return res;
+}
+const countSolutions = (b,n,limit=2) => solutions(b.slice(),n,limit,false).length;
+const isUnique = (b,n) => countSolutions(b,n,2)===1;
+function fullSolution(n){ return solutions(new Array(n*n).fill(null),n,1,true)[0]; }
+function propagationSolves(b,n){ const w=b.slice(); propagate(w,n); return w.every(v=>v!=null); }
+function forcedByHypothesis(b,n,r,c){
+  const s=[]; for(const v of [0,1]){ const t=b.slice(); t[idx(n,r,c)]=v; if(placementOk(t,n,r,c) && propagate(t,n)!=='contradiction') s.push(v); }
+  if(s.length===0) return 'contradiction'; if(s.length===1) return s[0]; return null;
+}
+function grade(b,n){
+  const w=b.slice(); propagate(w,n);
+  if(w.every(v=>v!=null)) return 'easy';
+  let progress=true;
+  while(progress && w.some(v=>v==null)){ progress=false;
+    outer: for(let r=0;r<n;r++) for(let c=0;c<n;c++){ if(w[idx(n,r,c)]==null){
+      const f=forcedByHypothesis(w,n,r,c);
+      if(f==='contradiction') break outer;
+      if(f!=null){ w[idx(n,r,c)]=f; propagate(w,n); progress=true; break outer; } } } }
+  return w.every(v=>v!=null) ? 'medium' : 'hard';
+}
+function carveKeep(b,n,tier){
+  if(tier==='easy') return propagationSolves(b,n);
+  if(tier==='medium') return isUnique(b,n) && ['easy','medium'].includes(grade(b,n));
+  return isUnique(b,n);
+}
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function generate(n,tier){
+  const sol=fullSolution(n); const b=sol.slice(); const givens=new Array(n*n).fill(true);
+  for(const i of shuffle([...Array(n*n).keys()])){ const v=b[i]; b[i]=null; givens[i]=false;
+    if(!carveKeep(b,n,tier)){ b[i]=v; givens[i]=true; } }
+  return { size:n, solution:sol, cells:b.slice(), givens, grade:grade(b,n) };
+}
+
+const SEED6 = {
+  size:6, grade:'easy',
+  cells:[1,null,null,null,null,null, 1,null,null,null,0,null, null,0,null,null,0,null,
+         null,null,null,null,null,null, null,0,0,null,null,null, null,0,null,null,null,null],
+  solution:[1,1,0,0,1,0, 1,1,0,1,0,0, 0,0,1,1,0,1, 0,1,1,0,1,0, 1,0,0,1,0,1, 0,0,1,0,1,1],
+  givens:null
+};
+SEED6.givens = SEED6.cells.map(v=>v!=null);
+
+/* ============================ UI ============================ */
+const SIZES=[4,6,8,10,12], DIFFS=['easy','medium','hard'];
+const boardEl=document.getElementById('board'), statusEl=document.getElementById('status');
+const rLeft=document.getElementById('r-left'), rGrade=document.getElementById('r-grade');
+const progEl=document.getElementById('prog'), progLbl=document.getElementById('prog-lbl'), stateLamp=document.getElementById('statelamp');
+const clkMin=document.getElementById('clk-min'), clkSec=document.getElementById('clk-sec');
+const plateEl=document.querySelector('.plate'), stageEl=document.querySelector('.stage'),
+      rightPanelEl=document.querySelector('.rightpanel'), boardWrapEl=document.querySelector('.board-wrap'),
+      headEl=document.querySelector('.head');
+(function(){ const g=document.getElementById('clk-ticks'); if(!g) return;
+  for(let i=0;i<12;i++){ const a=i*30*Math.PI/180,
+      x1=(50+40*Math.sin(a)).toFixed(1), y1=(50-40*Math.cos(a)).toFixed(1),
+      x2=(50+46*Math.sin(a)).toFixed(1), y2=(50-46*Math.cos(a)).toFixed(1);
+    const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+    ln.setAttribute('x1',x1); ln.setAttribute('y1',y1); ln.setAttribute('x2',x2); ln.setAttribute('y2',y2);
+    g.appendChild(ln); } })();
+const METER_SEGS=28;
+(function(){ if(progEl) for(let k=0;k<METER_SEGS;k++) progEl.appendChild(document.createElement('i')); })();
+function fitBoard(){
+  if(!G) return;
+  const n=G.size, gap=7, pad=16;
+  const vChrome = plateEl.offsetHeight - stageEl.offsetHeight;
+  const availH = window.innerHeight - 44 - vChrome;
+  const availW = stageEl.clientWidth - rightPanelEl.offsetWidth - 16;
+  const per = ext => (ext - 2*pad - (n-1)*gap) / n;
+  let cell = Math.floor(Math.min(per(availH), per(availW), 58));
+  cell = Math.max(cell, 18);
+  document.documentElement.style.setProperty('--cell', cell+'px');
+  // align the title's left edge to the centered board's left edge
+  headEl.style.marginLeft='0px';
+  const bl=boardWrapEl.getBoundingClientRect().left, hl=headEl.getBoundingClientRect().left;
+  headEl.style.marginLeft = Math.max(0, Math.round(bl-hl)) + 'px';
+  // place the status lamp directly above the column, centred over it
+  const lampEl=document.getElementById('statelamp');
+  if(lampEl){
+    lampEl.style.position='absolute'; lampEl.style.margin='0';
+    const pr=plateEl.getBoundingClientRect(), cr=rightPanelEl.getBoundingClientRect(), hr=headEl.getBoundingClientRect();
+    lampEl.style.left=(cr.left+cr.width/2-pr.left-plateEl.clientLeft-lampEl.offsetWidth/2)+'px';
+    lampEl.style.top=(hr.top+hr.height/2-pr.top-plateEl.clientTop-lampEl.offsetHeight/2)+'px';
+  }
+}
+
+let G=null, sel=0, startTs=null, timer=null, won=false, size=6, diff='easy', hint=null, assist=false, history=[];
+
+function buildSeg(id, values, current, onPick){
+  const el=document.getElementById(id); el.innerHTML='';
+  for(const v of values){ const b=document.createElement('button');
+    b.textContent=String(v); b.setAttribute('aria-pressed', v===current?'true':'false');
+    b.addEventListener('click', ()=>onPick(v)); el.appendChild(b); }
+}
+function refreshSeg(id, current){ for(const b of document.getElementById(id).children) b.setAttribute('aria-pressed', b.textContent===String(current)?'true':'false'); }
+
+function startGame(game){
+  G=game; won=false; hint=null; history=[]; stateLamp.className='lamp big gold';
+  boardEl.style.gridTemplateColumns=`repeat(${G.size}, var(--cell))`;
+  boardEl.classList.remove('solved');
+  const firstOpen=G.givens.findIndex(g=>!g); sel = firstOpen<0?0:firstOpen;
+  renderBoard();
+  rGrade.textContent=G.grade; refreshSeg('size-seg',G.size); refreshSeg('diff-seg',diff);
+  startTs=Date.now(); if(timer)clearInterval(timer); timer=setInterval(tick,250); tick();
+  setStatus('');
+  fitBoard();
+}
+function newGame(){
+  setStatus('Generating…'); boardEl.classList.add('busy');
+  setTimeout(()=>{ let g; try{ g=generate(size,diff); }catch(e){ g=SEED6; }
+    boardEl.classList.remove('busy'); startGame(g); }, 20);
+}
+function renderBoard(){
+  boardEl.innerHTML=''; const n=G.size;
+  for(let i=0;i<n*n;i++){ const cell=document.createElement('div');
+    cell.className='cell'; cell.dataset.i=i; cell.id='tk-'+i; cell.setAttribute('role','gridcell');
+    const disc=document.createElement('span'); disc.className='disc'; cell.appendChild(disc);
+    boardEl.appendChild(cell); }
+  paint();
+}
+function paint(){
+  const n=G.size, errs=errorSet(), cells=boardEl.children;
+  for(let i=0;i<n*n;i++){ const el=cells[i], v=G.cells[i], given=G.givens[i];
+    el.classList.toggle('given',given); el.classList.toggle('filled',v!=null);
+    el.classList.toggle('err',errs.has(i)); el.classList.toggle('sel',i===sel);
+    el.classList.remove('hint-line','hint-src','hint-dst');
+    el.firstChild.className='disc'+(v===0?' v0':v===1?' v1':'');
+    const r=Math.floor(i/n)+1,c=(i%n)+1;
+    el.setAttribute('aria-label',`Row ${r} column ${c}, ${v==null?'empty':(v===0?'blue':'orange')}${given?', given':''}`);
+  }
+  if(hint){
+    hint.line.forEach(k=>{ if(cells[k]) cells[k].classList.add('hint-line'); });
+    if(hint.stage>=2){
+      hint.cells.forEach(k=>{ if(cells[k]) cells[k].classList.add('hint-src'); });
+      if(cells[hint.i]) cells[hint.i].classList.add('hint-dst');
+    }
+  }
+  boardEl.setAttribute('aria-activedescendant','tk-'+sel);
+  const total=n*n, empty=G.cells.filter(v=>v==null).length, filled=total-empty;
+  rLeft.textContent=empty;
+  const pct=Math.round(filled/total*100); progLbl.textContent=pct+' %';
+  const lit=Math.round(filled/total*METER_SEGS), hot=Math.round(METER_SEGS*0.8), segs=progEl.children;
+  for(let k=0;k<segs.length;k++) segs[k].className = k<lit ? (k>=hot?'hot':'on') : '';
+}
+function errorSet(){
+  if(!assist) return new Set();
+  const n=G.size, bad=new Set(), rows=allRows(G.cells,n), cols=allCols(G.cells,n);
+  const mark=(isBad,cells)=>{ if(isBad) cells.forEach(i=>bad.add(i)); };
+  for(let r=0;r<n;r++){ const line=rows[r]; const dup=lineComplete(line)&&!uniqueAmong(line,rows);
+    mark(hasTriple(line)||!countLegal(line,n)||dup, [...Array(n).keys()].map(c=>idx(n,r,c))); }
+  for(let c=0;c<n;c++){ const line=cols[c]; const dup=lineComplete(line)&&!uniqueAmong(line,cols);
+    mark(hasTriple(line)||!countLegal(line,n)||dup, [...Array(n).keys()].map(r=>idx(n,r,c))); }
+  return bad;
+}
+function setCell(i,v){
+  if(G.givens[i]){ setStatus('That cell is a given — it can’t change.'); return; }
+  if(won) return;
+  hint=null;
+  history.push({i, prev:G.cells[i]});
+  G.cells[i]=v; paint(); setStatus('');
+  if(boardSolved(G.cells,G.size)) win();
+}
+function undo(){
+  if(won){ setStatus('The puzzle is finished.'); return; }
+  const last=history.pop();
+  if(!last){ setStatus('Nothing to undo.'); return; }
+  hint=null; G.cells[last.i]=last.prev; sel=last.i; paint(); setStatus('');
+}
+function cycleCell(i){ const v=G.cells[i]; setCell(i, v==null?0:v===0?1:null); }
+function win(){ won=true; clearInterval(timer); boardEl.classList.add('solved'); stateLamp.className='lamp big win';
+  statusEl.className='status win'; statusEl.textContent=`Solved in ${fmt(elapsed())} · nicely done`; }
+function setStatus(msg,cls){ statusEl.className='status'+(cls?' '+cls:''); statusEl.textContent=msg; }
+const elapsed=()=>Math.floor((Date.now()-startTs)/1000);
+const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+function tick(){ if(won) return; const s=elapsed();
+  if(clkSec) clkSec.setAttribute('transform',`rotate(${(s%60)*6} 50 50)`);
+  if(clkMin) clkMin.setAttribute('transform',`rotate(${(s/60*6)%360} 50 50)`); }
+
+/* selection is state, not DOM focus — arrows always work */
+function moveSel(dr,dc){ const n=G.size; let r=Math.floor(sel/n)+dr, c=sel%n+dc;
+  r=Math.max(0,Math.min(n-1,r)); c=Math.max(0,Math.min(n-1,c)); sel=idx(n,r,c); paint(); }
+
+boardEl.addEventListener('click', e => {
+  const cell=e.target.closest('.cell'); if(!cell) return;
+  sel=+cell.dataset.i; boardEl.focus(); paint(); cycleCell(sel);
+});
+
+/* aids */
+const cname = v => v===0?'blue':'orange';
+const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+
+function whyForced(r,c,b,n){
+  const rowIdx=[...Array(n).keys()].map(cc=>idx(n,r,cc));
+  if(rowIdx.filter(k=>G.cells[k]===b).length >= n/2)
+    return {text:`this row already has ${n/2} ${cname(b)}`, cells:rowIdx.filter(k=>G.cells[k]===b), line:new Set(rowIdx)};
+  for(const w of [[c-2,c-1,c],[c-1,c,c+1],[c,c+1,c+2]])
+    if(w[0]>=0 && w[2]<n){ const others=w.filter(x=>x!==c);
+      if(others.every(x=>G.cells[idx(n,r,x)]===b))
+        return {text:`two ${cname(b)} already sit together in this row`, cells:others.map(x=>idx(n,r,x)), line:new Set(rowIdx)}; }
+  const colIdx=[...Array(n).keys()].map(rr=>idx(n,rr,c));
+  if(colIdx.filter(k=>G.cells[k]===b).length >= n/2)
+    return {text:`this column already has ${n/2} ${cname(b)}`, cells:colIdx.filter(k=>G.cells[k]===b), line:new Set(colIdx)};
+  for(const w of [[r-2,r-1,r],[r-1,r,r+1],[r,r+1,r+2]])
+    if(w[0]>=0 && w[2]<n){ const others=w.filter(x=>x!==r);
+      if(others.every(x=>G.cells[idx(n,x,c)]===b))
+        return {text:`two ${cname(b)} already sit together in this column`, cells:others.map(x=>idx(n,x,c)), line:new Set(colIdx)}; }
+  return {text:`this cell is pinned by its row and column`, cells:[], line:new Set(rowIdx)};
+}
+function findHint(){
+  const n=G.size;
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++){ const i=idx(n,r,c);
+    if(G.cells[i]==null){ const vals=legalValues(G.cells,n,r,c);
+      if(vals.length===1){ const v=vals[0], w=whyForced(r,c,1-v,n); return {i,v,text:w.text,cells:w.cells,line:w.line,stage:0}; } } }
+  return null;
+}
+function doHint(){
+  if(won) return;
+  if(!hint){
+    hint=findHint();
+    if(!hint){ setStatus('No cell is forced right now — reason further.','good'); return; }
+    hint.stage=1; paint(); setStatus(cap(hint.text)+'.','good'); return;
+  }
+  if(hint.stage===1){ hint.stage=2; paint(); return; }
+  const {i,v}=hint; hint=null; sel=i; setCell(i,v);
+}
+function reveal(){ clearInterval(timer); G.cells=G.solution.slice(); won=true; stateLamp.className='lamp big red'; paint();
+  boardEl.classList.add('solved'); setStatus('Solution shown.'); }
+function reset(){ won=false; hint=null; history=[]; stateLamp.className='lamp big gold'; boardEl.classList.remove('solved');
+  for(let i=0;i<G.cells.length;i++) if(!G.givens[i]) G.cells[i]=null;
+  startTs=Date.now(); if(timer)clearInterval(timer); timer=setInterval(tick,250); tick(); paint(); setStatus(''); }
+function check(){ if(boardSolved(G.cells,G.size)) win();
+  else if(G.cells.every(v=>v!=null)) setStatus('Full, but a rule is broken.');
+  else setStatus(`Not finished — ${G.cells.filter(v=>v==null).length} cells left.`); }
+function cycleSize(){ size=SIZES[(SIZES.indexOf(size)+1)%SIZES.length]; refreshSeg('size-seg',size); newGame(); }
+function cycleDiff(){ diff=DIFFS[(DIFFS.indexOf(diff)+1)%DIFFS.length]; refreshSeg('diff-seg',diff); newGame(); }
+function toggleAssist(){ assist=!assist; assistSw.setAttribute('aria-checked', assist?'true':'false'); paint();
+  setStatus(assist?'Assist on — rule breaks will highlight.':'Assist off.','good'); }
+
+const bNew=document.getElementById('b-new'), bReset=document.getElementById('b-reset'),
+      bHint=document.getElementById('b-hint'), bCheck=document.getElementById('b-check'),
+      bReveal=document.getElementById('b-reveal'), bUndo=document.getElementById('b-undo'),
+      sizeSeg=document.getElementById('size-seg'), diffSeg=document.getElementById('diff-seg'),
+      assistSw=document.getElementById('assist-sw');
+const flash = el => { if(!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); };
+
+document.addEventListener('keydown', e => {
+  if(!G) return;
+  const inControl = e.target.closest && e.target.closest('.actions, .selectors');
+  if(inControl && (e.key===' '||e.key==='Enter'||e.key==='Tab'||e.key.startsWith('Arrow'))) return;
+  const k=e.key;
+  const moves={ArrowUp:[-1,0],k:[-1,0],ArrowDown:[1,0],j:[1,0],ArrowLeft:[0,-1],h:[0,-1],ArrowRight:[0,1],l:[0,1]};
+  if(moves[k]){ e.preventDefault(); moveSel(...moves[k]); return; }
+  switch(k){
+    case ' ': case 'Enter': e.preventDefault(); cycleCell(sel); return;
+    case 'u': case 'U': e.preventDefault(); flash(bUndo); undo(); return;
+    case 'n': case 'N': e.preventDefault(); flash(bNew); newGame(); return;
+    case 'r': case 'R': e.preventDefault(); flash(bReset); reset(); return;
+    case '?': e.preventDefault(); flash(bHint); doHint(); return;
+    case 'c': case 'C': e.preventDefault(); flash(bCheck); check(); return;
+    case 'p': case 'P': e.preventDefault(); flash(bReveal); reveal(); return;
+    case 's': case 'S': e.preventDefault(); flash(sizeSeg); cycleSize(); return;
+    case 'd': case 'D': e.preventDefault(); flash(diffSeg); cycleDiff(); return;
+    case 'a': case 'A': e.preventDefault(); flash(assistSw); toggleAssist(); return;
+  }
+});
+
+document.getElementById('b-new').addEventListener('click', newGame);
+document.getElementById('b-reset').addEventListener('click', reset);
+document.getElementById('b-undo').addEventListener('click', undo);
+document.getElementById('b-hint').addEventListener('click', doHint);
+document.getElementById('b-check').addEventListener('click', check);
+document.getElementById('b-reveal').addEventListener('click', reveal);
+buildSeg('size-seg', SIZES, size, v => { size=v; refreshSeg('size-seg',v); newGame(); });
+buildSeg('diff-seg', DIFFS, diff, v => { diff=v; refreshSeg('diff-seg',v); newGame(); });
+document.getElementById('assist-sw').addEventListener('click', toggleAssist);
+window.addEventListener('resize', ()=>{ if(G) fitBoard(); });
+
+/* start on a fresh random puzzle each load (seed is only a fallback) */
+try { startGame(generate(size, diff)); } catch(e){ startGame(SEED6); }
+</script>
+</body>
+</html>

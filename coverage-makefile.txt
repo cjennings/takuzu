@@ -1,0 +1,56 @@
+# Elisp coverage — Makefile fragment + setup recommendation
+#
+# This file is owned by the project, not the rulesets bundle. The bundle never
+# edits your Makefile. Copy the two targets below into your own Makefile (and
+# adjust the variables at the top), then delete this file or keep it as a note.
+#
+# What you get:
+#   make coverage          runs the test suite under undercover, writing a
+#                          SimpleCov JSON report to .coverage/simplecov.json
+#   make coverage-summary  prints a per-file table, a unit-weighted project
+#                          number, and — the point — every source file on disk
+#                          that no test imported, counted as 0%.
+#
+# Why the summary matters: a module no test loads never appears in undercover's
+# output, so a line-weighted total silently skips it. The summary weights by
+# file and counts a missing file as 0%, so untested modules stay visible.
+#
+# ---------------------------------------------------------------------------
+# Prerequisite: undercover
+#
+# Add undercover to your test dependencies and arm it in your test runner
+# (e.g. tests/run-coverage-file.el) before the source under test is loaded:
+#
+#   (when (require 'undercover nil t)
+#     (undercover "modules/*.el"
+#                 (:report-format 'simplecov)
+#                 (:report-file ".coverage/simplecov.json")
+#                 (:merge-report t)))
+#
+# Sources must be loaded from .el (not byte-compiled .elc) for instrumentation
+# to attach — the coverage target deletes stale .elc first.
+# ---------------------------------------------------------------------------
+
+# Variables — adjust to your layout.
+EMACS         ?= emacs
+SOURCE_DIR    ?= modules
+COVERAGE_DIR  ?= .coverage
+COVERAGE_FILE ?= $(COVERAGE_DIR)/simplecov.json
+# The summary script ships with the bundle under .claude/scripts/ (gitignored).
+COVERAGE_SUMMARY ?= .claude/scripts/coverage-summary.el
+
+coverage:
+	@rm -f $(COVERAGE_FILE) $(SOURCE_DIR)/*.elc
+	@mkdir -p $(COVERAGE_DIR)
+	@UNDERCOVER_FORCE=true $(EMACS) --batch -L $(SOURCE_DIR) -L tests \
+		$(foreach t,$(wildcard tests/test-*.el),-l $(t)) \
+		-f ert-run-tests-batch-and-exit
+	@$(MAKE) coverage-summary
+
+coverage-summary:
+	@if [ ! -f $(COVERAGE_FILE) ]; then \
+		echo "[!] No coverage file at $(COVERAGE_FILE). Run 'make coverage' first."; \
+		exit 1; \
+	fi
+	@$(EMACS) --batch -q -l $(COVERAGE_SUMMARY) \
+		--eval '(cj/coverage-print-module-summary "$(COVERAGE_FILE)" "$(SOURCE_DIR)" "$(CURDIR)")'
