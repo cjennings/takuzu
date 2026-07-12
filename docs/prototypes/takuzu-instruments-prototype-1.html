@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Takuzu — Instrument-panel era combinations</title>
+<!-- Exploring nixie-era instrument combinations for the right panel (TIME / SIZE /
+     LEVEL / LEFT) and the status display, in the Dupre design language.
+     No magic-eye; no VFD (70s-80s part). -->
+<style>
+:root{
+  --ground:#151311; --panel:#100f0f; --well:#0a0c0d; --raise:#1a1917;
+  --gold:#b99640; --gold-hi:#dcc061; --silver:#bfc4d0; --cream:#f3e7c5;
+  --steel:#969385; --dim:#7c838a; --slate:#424f5e; --wash:#2c2f32;
+  --pass:#74932f; --fail:#cb6b4d; --mono:ui-monospace,"Berkeley Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--mono);color:var(--silver);padding:30px 22px 60px;
+  background:radial-gradient(1200px 600px at 60% -12%,#1d1914 0%,transparent 60%),var(--ground)}
+.eyebrow{color:var(--steel);font-size:.72rem;letter-spacing:.28em;text-transform:uppercase}
+h1{color:var(--gold);font-size:1.4rem;margin:.3rem 0 .3rem;letter-spacing:.02em}
+.lede{color:var(--dim);font-size:.86rem;max-width:80ch;margin-bottom:1.4rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:18px;align-items:start}
+
+/* one console panel */
+.panel{background:var(--well);border:1px solid #201d17;border-radius:12px;padding:16px 14px 14px;
+  box-shadow:inset 0 2px 9px rgba(0,0,0,.65)}
+.ptitle{color:var(--cream);font-size:.82rem;font-weight:700;margin-bottom:2px}
+.psub{color:var(--dim);font-size:.68rem;line-height:1.45;margin-bottom:12px}
+.slot{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0;border-top:1px solid #201d17}
+.slot:first-of-type{border-top:0}
+.eng{color:var(--steel);font-size:.56rem;letter-spacing:.3em;text-transform:uppercase}
+.status{margin-top:12px;border-top:1px solid #201d17;padding-top:12px;display:flex;flex-direction:column;align-items:center;gap:6px}
+
+/* ---- shared ---- */
+.lamp{width:9px;height:9px;border-radius:50%;background:var(--pass);box-shadow:0 0 6px 1px rgba(116,147,47,.55)}
+
+/* nixie tube */
+.nixie{display:inline-flex;gap:4px;align-items:center}
+.nixie .tube{width:26px;height:40px;border-radius:5px;position:relative;overflow:hidden;
+  background:radial-gradient(circle at 50% 38%,#241a12,#0b0807);border:1px solid #2c261d;
+  display:grid;place-items:center;box-shadow:inset 0 0 12px rgba(0,0,0,.6)}
+.nixie .tube b{font-size:23px;font-weight:400;color:#ff9a3c;
+  text-shadow:0 0 6px rgba(255,140,50,.85),0 0 15px rgba(255,120,40,.45)}
+.nixie .tube.off b{color:#3a2a1c;text-shadow:none}
+.nixie .tube::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.06),transparent 32%)}
+.nixie .colon{color:#ff9a3c;font-size:20px;text-shadow:0 0 6px rgba(255,140,50,.8)}
+.nixie .colon.small{font-size:16px}
+
+/* jewel pilot lamps */
+.jewels{display:flex;gap:16px}
+.jw{display:flex;flex-direction:column;align-items:center;gap:5px}
+.jw span.l{color:var(--steel);font-size:.5rem;letter-spacing:.14em}
+.jewel{width:22px;height:22px;border-radius:50%;position:relative;
+  background:radial-gradient(circle at 36% 30%,rgba(255,255,255,.75),var(--jc) 42%,#3a0d08 100%);
+  box-shadow:0 0 10px 1px var(--jc),inset 0 -2px 3px rgba(0,0,0,.5)}
+.jewel::after{content:"";position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg,rgba(255,255,255,.12) 0 22deg,transparent 22deg 45deg,rgba(0,0,0,.18) 45deg 67deg,transparent 67deg 90deg)}
+.jewel.dim{background:radial-gradient(circle at 36% 30%,rgba(120,120,120,.3),#241f1b 55%,#0e0c0a);box-shadow:inset 0 -2px 3px rgba(0,0,0,.5)}
+
+/* rotary selector */
+.rotsel{position:relative;width:120px;height:74px}
+.knob{width:50px;height:50px;border-radius:50%;position:absolute;left:50%;top:20px;margin-left:-25px;
+  background:radial-gradient(circle at 40% 35%,#2a2622,#141210);border:1px solid #3a352c;
+  box-shadow:inset 0 2px 3px rgba(255,255,255,.05),0 3px 6px rgba(0,0,0,.5)}
+.knob .ind{position:absolute;left:50%;top:5px;width:2px;height:15px;background:var(--gold-hi);
+  margin-left:-1px;transform-origin:50% 20px;border-radius:1px;box-shadow:0 0 5px rgba(220,192,97,.7);transition:transform .25s}
+.rotsel .pos{position:absolute;font-size:9px;color:var(--dim);transform:translate(-50%,-50%);letter-spacing:.02em}
+.rotsel .pos.on{color:var(--gold-hi);text-shadow:0 0 6px rgba(220,192,97,.55)}
+
+/* needle gauge */
+.gauge{width:100px}
+.gauge .dial{position:relative;height:50px;overflow:hidden}
+.gauge .arc{position:absolute;inset:0 0 -50px 0;border:2px solid var(--wash);border-radius:50%}
+.gauge .tk{position:absolute;left:50%;bottom:0;width:1.5px;height:8px;background:var(--steel);transform-origin:50% 50px}
+.gauge .ndl{position:absolute;left:50%;bottom:0;width:2px;height:42px;background:var(--gold-hi);
+  transform-origin:50% 100%;border-radius:2px;box-shadow:0 0 6px rgba(220,192,97,.5);transition:transform .3s cubic-bezier(.3,1.3,.5,1)}
+.gauge .hub{position:absolute;left:50%;bottom:-4px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--gold)}
+.gauge .gv{color:var(--cream);text-align:center;font-size:12px;font-weight:700;margin-top:4px}
+
+/* tape counter */
+.counter{display:inline-flex;gap:2px;padding:4px;background:#0c0b0a;border:1px solid #2c261d;border-radius:4px;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.6)}
+.cwheel{width:17px;height:32px;border-radius:2px;position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#efe9d6,#c7c0ac);box-shadow:inset 0 0 3px rgba(0,0,0,.3)}
+.cwheel b{position:absolute;left:0;right:0;top:0;text-align:center;color:#1a1613;font-size:17px;font-weight:700;line-height:32px}
+.cwheel::before{content:"";position:absolute;left:0;right:0;top:0;height:8px;z-index:2;background:linear-gradient(180deg,rgba(0,0,0,.4),transparent)}
+.cwheel::after{content:"";position:absolute;left:0;right:0;bottom:0;height:8px;z-index:2;background:linear-gradient(0deg,rgba(0,0,0,.4),transparent)}
+
+/* analog clock */
+.clock{width:74px;height:74px;border-radius:50%;position:relative;
+  background:radial-gradient(circle at 46% 40%,#1c1915,#0c0b09);border:2px solid #2c261d;box-shadow:inset 0 2px 5px rgba(0,0,0,.6)}
+.clock .tk{position:absolute;left:50%;top:4px;width:1.5px;height:6px;background:var(--steel);margin-left:-.75px;transform-origin:50% 33px}
+.clock .mh{position:absolute;left:50%;top:50%;width:2px;height:26px;margin:-26px 0 0 -1px;background:var(--silver);transform-origin:50% 100%;border-radius:2px}
+.clock .sh{position:absolute;left:50%;top:50%;width:1px;height:28px;margin:-28px 0 0 -.5px;background:var(--gold-hi);transform-origin:50% 100%;box-shadow:0 0 4px rgba(220,192,97,.5)}
+.clock .pin{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--gold)}
+
+/* split-flap */
+.flap{display:inline-flex;gap:3px}
+.flapd{width:22px;height:32px;border-radius:4px;position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#211d18,#141210);border:1px solid #34302a;box-shadow:0 2px 4px rgba(0,0,0,.5)}
+.flapd b{position:absolute;inset:0;display:grid;place-items:center;font-size:18px;color:var(--cream);text-shadow:0 1px 2px rgba(0,0,0,.7)}
+.flapd::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.65);box-shadow:0 1px 0 rgba(255,255,255,.03)}
+.flapd b{animation:flip .34s ease-in}
+@keyframes flip{0%{transform:translateY(-42%) scaleY(.4);opacity:.3}100%{transform:none;opacity:1}}
+
+/* annunciator */
+.annun{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:100%}
+.acell{font-size:8.5px;letter-spacing:.08em;text-align:center;color:var(--dim);padding:6px 4px;border-radius:3px;
+  background:#141210;border:1px solid #262320;line-height:1.2}
+.acell.warn{color:var(--panel);background:linear-gradient(180deg,#e6c96f,var(--gold));font-weight:700;box-shadow:0 0 8px rgba(185,150,64,.4)}
+@keyframes pulse{50%{opacity:.3}}
+</style>
+</head>
+<body>
+<div class="eyebrow">Takuzu · instrument panel</div>
+<h1>Nixie-era combinations</h1>
+<p class="lede">Four internally-coherent sets for the right panel (TIME / SIZE / LEVEL / LEFT) plus the status display, all from ~1955-1968 components. Mix and match across sets — tell me the winning slots and I'll build them. Magic-eye and the VFD marquee are out.</p>
+
+<div class="grid" id="grid"></div>
+
+<script>
+"use strict";
+const $=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e;};
+
+// widget builders --------------------------------------------------
+function nixie(str){            // str like "1:23" or " 6"
+  const w=$('span','nixie');
+  for(const ch of str){
+    if(ch===':'){const c=$('span','colon small');c.textContent=':';w.appendChild(c);continue;}
+    const t=$('span','tube'+(ch===' '?' off':''));const b=$('b');b.textContent=ch===' '?'0':ch;t.appendChild(b);w.appendChild(t);
+  }
+  return w;
+}
+function jewels(active){        // active: 0 easy,1 med,2 hard
+  const wrap=$('div','jewels');
+  [['EASY','#6fce33'],['MED','#ffb43a'],['HARD','#ff5b45']].forEach((d,i)=>{
+    const col=$('div','jw');const j=$('span','jewel'+(i===active?'':' dim'));j.style.setProperty('--jc',d[1]);
+    const l=$('span','l');l.textContent=d[0];col.append(j,l);wrap.appendChild(col);
+  });
+  return wrap;
+}
+function rotsel(active){        // EASY/MED/HARD rotary
+  const r=$('div','rotsel');const k=$('div','knob');const ind=$('div','ind');k.appendChild(ind);r.appendChild(k);
+  const labels=['EASY','MED','HARD'],ang=[-42,0,42];
+  labels.forEach((t,i)=>{const p=$('span','pos'+(i===active?' on':''));p.textContent=t;
+    const a=(ang[i]-90)*Math.PI/180;p.style.left=(60+44*Math.cos(a))+'px';p.style.top=(46+34*Math.sin(a))+'px';r.appendChild(p);});
+  ind.style.transform='rotate('+ang[active]+'deg)';
+  return r;
+}
+function gauge(pct,val){        // needle 0..100
+  const g=$('div','gauge');const d=$('div','dial');const arc=$('div','arc');d.appendChild(arc);
+  for(let i=0;i<=6;i++){const tk=$('div','tk');tk.style.transform='rotate('+(-90+i*30)+'deg)';d.appendChild(tk);}
+  const n=$('div','ndl');n.style.transform='rotate('+(-90+pct/100*180)+'deg)';d.appendChild(n);
+  const h=$('div','hub');d.appendChild(h);g.appendChild(d);
+  const gv=$('div','gv');gv.textContent=val;g.appendChild(gv);
+  return g;
+}
+function counter(str){         // e.g. "27"
+  const c=$('span','counter');
+  for(const ch of str.padStart(2,'0')){const w=$('span','cwheel');const b=$('b');b.textContent=ch;w.appendChild(b);c.appendChild(w);}
+  return c;
+}
+function clock(){
+  const c=$('div','clock');
+  for(let i=0;i<12;i++){const tk=$('span','tk');tk.style.transform='rotate('+i*30+'deg)';c.appendChild(tk);}
+  const mh=$('span','mh'),sh=$('span','sh'),pin=$('span','pin');
+  mh.style.transform='rotate(150deg)';sh.style.transform='rotate(300deg)';
+  c.append(mh,sh,pin);return c;
+}
+function flap(str){
+  const f=$('span','flap');
+  for(const ch of str){const d=$('span','flapd');const b=$('b');b.textContent=ch;d.appendChild(b);f.appendChild(d);}
+  return f;
+}
+function annun(active){
+  const a=$('div','annun');
+  ['NEW','CHECK','SOLVED','GIVEN','HINT','SHOWN'].forEach((t,i)=>{
+    const c=$('span','acell'+(i===active?' warn':''));c.textContent=t;a.appendChild(c);});
+  return a;
+}
+function eng(t){const e=$('div','eng');e.textContent=t;return e;}
+function slot(label,node){const s=$('div','slot');s.append(eng(label),node);return s;}
+function statusSlot(label,node){const s=$('div','status');s.append(eng(label),node);return s;}
+
+// panels -----------------------------------------------------------
+const PANELS=[
+  {t:'Set A — All-nixie',s:'Nixie TIME + SIZE · jewel LEVEL · nixie LEFT · split-flap STATUS',
+   slots:[['TIME',nixie('1:23')],['SIZE',nixie(' 6')],['LEVEL',jewels(1)],['LEFT',nixie('27')]],status:['STATUS',flap('CHECK')]},
+  {t:'Set B — Tubes + meters',s:'Nixie TIME + SIZE · rotary LEVEL · needle LEFT · annunciator STATUS',
+   slots:[['TIME',nixie('1:23')],['SIZE',nixie(' 6')],['LEVEL',rotsel(1)],['LEFT',gauge(75,'27')]],status:['STATUS',annun(1)]},
+  {t:'Set C — Mechanical',s:'Analog clock TIME · nixie SIZE · jewel LEVEL · tape-counter LEFT · split-flap STATUS',
+   slots:[['TIME',clock()],['SIZE',nixie(' 6')],['LEVEL',jewels(1)],['LEFT',counter('27')]],status:['STATUS',flap('CHECK')]},
+  {t:'Set D — Radio console',s:'Analog clock TIME · nixie SIZE · rotary LEVEL · needle LEFT · annunciator STATUS',
+   slots:[['TIME',clock()],['SIZE',nixie(' 6')],['LEVEL',rotsel(1)],['LEFT',gauge(75,'27')]],status:['STATUS',annun(1)]},
+];
+const grid=document.getElementById('grid');
+for(const p of PANELS){
+  const el=$('div','panel');
+  const ti=$('div','ptitle');ti.textContent=p.t;
+  const su=$('div','psub');su.textContent=p.s;
+  el.append(ti,su);
+  for(const [lab,node] of p.slots) el.appendChild(slot(lab,node));
+  el.appendChild(statusSlot(p.status[0],p.status[1]));
+  grid.appendChild(el);
+}
+
+// light life: tick clocks + re-flip the flap message occasionally
+setInterval(()=>{document.querySelectorAll('.clock .sh').forEach(sh=>{
+  const cur=parseFloat(sh.dataset.a||300);const a=(cur+6)%360;sh.dataset.a=a;sh.style.transform='rotate('+a+'deg)';});},1000);
+</script>
+</body>
+</html>
