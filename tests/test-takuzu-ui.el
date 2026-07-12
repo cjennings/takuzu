@@ -603,6 +603,27 @@ gives no feedback at all in the graphical UI."
         (takuzu--set-status "")                    ; empty -> no echo
         (should-not captured)))))
 
+(ert-deftest test-takuzu-ui-check-win-freezes-elapsed-at-win ()
+  "Error: winning records the elapsed time at the win, not a stale zero.
+Flipping the won flag before reading the clock makes `takuzu--elapsed'
+return the old frozen value, so every win reported 0:00."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4 (copy-sequence test-takuzu-ui--solution-4))
+    (setq takuzu--start-time (time-subtract (current-time) (seconds-to-time 42)))
+    (takuzu--check-win)
+    (should takuzu--won)
+    (should (= takuzu--won-elapsed 42))))
+
+(ert-deftest test-takuzu-ui-prove-freezes-elapsed-at-reveal ()
+  "Error: proving records the elapsed time at the reveal, not a stale zero."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (setq takuzu--start-time (time-subtract (current-time) (seconds-to-time 42)))
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+      (takuzu-prove))
+    (should takuzu--proven)
+    (should (= takuzu--won-elapsed 42))))
+
 (ert-deftest test-takuzu-ui-nixie-size-single-digit-ghost ()
   "Normal: single-digit sizes show a ghost 0 in the tens tube.
 An empty dark tube next to the lit digit reads as a dead socket."

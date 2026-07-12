@@ -962,9 +962,13 @@ While the help overlay is up, a game key just dismisses it."
          (t ,@body)))
 
 (defun takuzu--check-win ()
-  "Note a win if the board is solved."
+  "Note a win if the board is solved.
+The elapsed time is read before the won flag flips: once the flag is set,
+`takuzu--elapsed' returns the frozen value, so reading it after would record
+the stale zero instead of the solve time."
   (when (and (not takuzu--won) (takuzu-board-solved-p takuzu--board))
-    (setq takuzu--won t takuzu--won-elapsed (takuzu--elapsed))
+    (let ((elapsed (takuzu--elapsed)))
+      (setq takuzu--won t takuzu--won-elapsed elapsed))
     (takuzu--set-status (format "Solved in %s -- nicely done" (takuzu--fmt-time takuzu--won-elapsed)))))
 
 (defun takuzu--current-given-p ()
@@ -1070,7 +1074,9 @@ Return (ROW COL VALUE) or nil when no cell is forced."
   (when (yes-or-no-p "Show the full solution? ")
     (setf (takuzu-board-cells takuzu--board)
           (copy-sequence (takuzu-board-cells takuzu--solution)))
-    (setq takuzu--proven t takuzu--won-elapsed (takuzu--elapsed))
+    ;; read the clock before the proven flag freezes `takuzu--elapsed'
+    (let ((elapsed (takuzu--elapsed)))
+      (setq takuzu--proven t takuzu--won-elapsed elapsed))
     (takuzu--set-status "Solution shown.")
     (takuzu--redraw))))
 
