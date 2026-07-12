@@ -237,7 +237,7 @@ own colour."
 Only the corners of the ring are drawn -- half the perimeter -- so the cursor
 reads clearly with far fewer pixels than a full ring."
   (let* ((m 3)                          ; inset from the cell edge
-         (a (round (* cell 0.3)))       ; arm length
+         (a (round (* cell 0.22)))      ; arm length, hugging the corner
          (gold (takuzu--c :gold))
          (x0 (+ sx m)) (y0 (+ sy m))
          (x1 (- (+ sx cell) m)) (y1 (- (+ sy cell) m)))
@@ -247,9 +247,9 @@ reads clearly with far fewer pixels than a full ring."
                           (list x1 y1 -1 -1)))  ; bottom-right
       (pcase-let ((`(,cx ,cy ,dx ,dy) corner))
         (svg-line svg cx cy (+ cx (* dx a)) cy
-                  :stroke gold :stroke-width 2 :stroke-linecap "round")
+                  :stroke gold :stroke-width 1.5 :stroke-linecap "round")
         (svg-line svg cx cy cx (+ cy (* dy a))
-                  :stroke gold :stroke-width 2 :stroke-linecap "round")))))
+                  :stroke gold :stroke-width 1.5 :stroke-linecap "round")))))
 
 (defun takuzu--draw-board (svg x y)
   "Draw the board on SVG with its top-left at X,Y."
@@ -273,7 +273,7 @@ reads clearly with far fewer pixels than a full ring."
                          :stroke-width (if (and errs (aref errs idx)) 2 1))
           (when val
             (takuzu--draw-disc svg (+ sx (/ cell 2)) (+ sy (/ cell 2))
-                               (round (* cell 0.28)) val given))
+                               (round (* cell 0.33)) val given))
           (when (takuzu--curp r c)
             (takuzu--draw-cursor svg sx sy cell)))))
     span))
@@ -719,8 +719,10 @@ stays in a narrow left column so it never overlaps the rule text."
                    :stroke fail :stroke-width 2.4 :stroke-linecap "round"))
       ;; a legal row with equal counts and no triple (three of each colour),
       ;; so the diagram itself does not break rule 1 above it
+      ;; six discs span wider than the three-disc rows; start 12 left so the
+      ;; row's centre lines up with theirs
       (2 (let ((row (list d0 d0 d1 d1 d0 d1)) (r2 4) (g2 10))
-           (dotimes (i 6) (takuzu--help-disc svg (+ x (* i g2)) y r2 (nth i row)))))
+           (dotimes (i 6) (takuzu--help-disc svg (+ x -12 (* i g2)) y r2 (nth i row)))))
       (3 (let ((top (list d1 d0 d1)) (bot (list d0 d1 d0)))
            (dotimes (i 3) (takuzu--help-disc svg (+ x (* i g)) (- y 7) r (nth i top)))
            (dotimes (i 3) (takuzu--help-disc svg (+ x (* i g)) (+ y 7) r (nth i bot))))))))
