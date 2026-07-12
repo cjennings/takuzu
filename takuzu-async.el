@@ -24,34 +24,63 @@
   "Absolute path to the running Emacs executable."
   (expand-file-name invocation-name invocation-directory))
 
+(defun takuzu--read-last-sexp (buffer)
+  "Read and return the last complete sexp in BUFFER, or nil if none.
+The child prints its result plist last, but stray output (load messages,
+warnings) can precede it on stdout, so reading from `point-min' would choke
+on the noise instead of the result."
+  (with-current-buffer buffer
+    (ignore-errors
+      (goto-char (point-max))
+      (forward-sexp -1)
+      (read (current-buffer)))))
+
 (defun takuzu-generate-async (size difficulty callback)
   "Generate a SIZE by DIFFICULTY puzzle in a child Emacs.
 Call CALLBACK with the decoded result plist (:board :solution :grade) on
-success, or with nil if the child failed.  Return the process."
+success, or with nil if the child failed.  Return the process.
+
+The child's stderr collects in a hidden buffer that is deleted on success;
+on failure it is renamed to *takuzu-gen-stderr* and kept for post-mortem."
   (let* ((dir (takuzu--lib-dir))
          (out (generate-new-buffer " *takuzu-gen*"))
+         (err (generate-new-buffer " *takuzu-gen-stderr*"))
          (expr (format "(progn (random t) (prin1 (takuzu--encode-result (takuzu-generate %d '%s))))"
-                       size difficulty)))
-    (make-process
-     :name "takuzu-gen"
-     :buffer out
-     :noquery t
-     :connection-type 'pipe
-     :command (list (takuzu--emacs-binary) "-Q" "--batch" "-L" dir "-l" "takuzu"
-                    "--eval" expr)
-     :sentinel
-     (lambda (proc _event)
-       (when (memq (process-status proc) '(exit signal))
-         (let ((result nil))
-           (unwind-protect
-               (when (and (eq (process-status proc) 'exit)
-                          (= 0 (process-exit-status proc)))
-                 (with-current-buffer (process-buffer proc)
-                   (goto-char (point-min))
-                   (let ((data (ignore-errors (read (current-buffer)))))
-                     (when data (setq result (takuzu--decode-result data))))))
-             (kill-buffer (process-buffer proc)))
-           (funcall callback result)))))))
+                       size difficulty))
+         (proc
+          (make-process
+           :name "takuzu-gen"
+           :buffer out
+           :stderr err
+           :noquery t
+           :connection-type 'pipe
+           :command (list (takuzu--emacs-binary) "-Q" "--batch" "-L" dir
+                          "-l" "takuzu-generator" "--eval" expr)
+           :sentinel
+           (lambda (proc _event)
+             (when (memq (process-status proc) '(exit signal))
+               (let ((result nil))
+                 (unwind-protect
+                     (when (and (eq (process-status proc) 'exit)
+                                (= 0 (process-exit-status proc)))
+                       (let ((data (takuzu--read-last-sexp (process-buffer proc))))
+                         (when (and (consp data) (plist-get data :size))
+                           (setq result (takuzu--decode-result data)))))
+                   (kill-buffer (process-buffer proc))
+                   (cond
+                    ;; a signal is a deliberate cancel (size/level cycling,
+                    ;; buffer kill), not a failure worth a post-mortem
+                    ((or result (not (eq (process-status proc) 'exit)))
+                     (kill-buffer err))
+                    (t
+                     (when-let ((old (get-buffer "*takuzu-gen-stderr*")))
+                       (kill-buffer old))
+                     (with-current-buffer err
+                       (rename-buffer "*takuzu-gen-stderr*")))))
+                 (funcall callback result)))))))
+    (when-let ((errproc (get-buffer-process err)))
+      (set-process-query-on-exit-flag errproc nil))
+    proc))
 
 (provide 'takuzu-async)
 ;;; takuzu-async.el ends here
