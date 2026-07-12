@@ -36,19 +36,46 @@
 ;; --- palette (from the hi-fi prototype) ---
 
 (defconst takuzu--colors
-  '(:plate "#1b1710" :plate-edge "#2c2620"
+  '(;; faceplate and hardware
+    :plate "#1b1710" :plate-edge "#2c2620" :panel-edge "#201d17"
+    :screw "#2b271f" :screw-slot "#0c0a07"
     :well "#0a0c0d" :board-bg "#14110c" :socket "#0c0a07" :socket-edge "#05040a"
+    ;; shared inks and metals
+    :ink "#000000" :white "#ffffff" :shadow "#00000055"
     :gold "#b99640" :gold-hi "#dcc061" :cream "#f3e7c5"
     :steel "#969385" :dim "#7c838a" :fail "#cb6b4d"
-    :amber "#ff9a3c" :amber-off "#3a2a1c" :amber-hi "#ffbf7a"
+    :slate "#424f5e" :wash "#2c2f32"
+    ;; board coins
     :disc0 "#4d5f75" :disc1 "#8f5236" :bezel "#a8aeb5"
     :disc0-edge "#6f839c" :disc1-edge "#b8734f"
-    :slate "#424f5e" :wash "#2c2f32")
-  "Faceplate palette, matching the prototype.")
+    ;; nixie tubes
+    :amber "#ff9a3c" :amber-off "#3a2a1c" :amber-hi "#ffbf7a"
+    :tube-glass "#0b0807" :tube-edge "#2c261d" :tube-halo "#ff8c32"
+    ;; rotary knob
+    :knob "#1f1b17" :knob-edge "#3a352c" :knob-shade "#2a2622"
+    ;; event annunciator
+    :annunciator-off "#141210" :annunciator-lit "#a8843a"
+    :annunciator-ink "#1c1710" :annunciator-edge "#262320"
+    ;; jewels and state lamps
+    :jewel-off "#241f1b" :jewel-off-edge "#0e0c0a"
+    :lamp-green "#6fce33" :lamp-amber "#ffb43a" :lamp-cyan "#63e6c8"
+    ;; cursor cup: the bead lamps and the leather floor
+    :cursor-lamp "#8f661b" :cursor-glow "#c08a2e"
+    :cup-floor "#170f09" :cup-floor-rim "#1c130c"
+    ;; instructions spec plate
+    :spec-silver "#74787d" :spec-silver-hi "#909498" :spec-silver-lo "#52565b"
+    :spec-ink "#16181c" :spec-name-silver "#9ba0a8")
+  "Faceplate palette.  Every colour the module paints is named here.")
 
 (defun takuzu--c (key)
   "The palette colour for KEY."
   (plist-get takuzu--colors key))
+
+(defconst takuzu--cursor-pool-stops
+  '(("0" . "0.30") ("0.4" . "0.05") ("1" . "0"))
+  "Falloff of a cursor bead lamp's pool, as (OFFSET . OPACITY) stops.
+Offsets are fractions of the pool's reach; tune these to reshape how fast
+the lamp light dies.")
 
 ;; --- layout ---
 
@@ -186,8 +213,8 @@ ANCHOR is start/middle/end; WEIGHT normal/bold."
 
 (defun takuzu--draw-screw (svg x y)
   "Draw a faceplate screw on SVG at X,Y."
-  (svg-circle svg x y 5 :fill "#2b271f" :stroke "#0c0a07")
-  (svg-line svg (- x 2) (- y 2) (+ x 2) (+ y 2) :stroke "#0c0a07" :stroke-width 1))
+  (svg-circle svg x y 5 :fill (takuzu--c :screw) :stroke (takuzu--c :screw-slot))
+  (svg-line svg (- x 2) (- y 2) (+ x 2) (+ y 2) :stroke (takuzu--c :screw-slot) :stroke-width 1))
 
 (defun takuzu--draw-title (svg x y)
   "Draw the TAKUZU / aliases title on SVG anchored at X,Y (top-left)."
@@ -228,7 +255,7 @@ own colour."
         (edge (if (eql val 0) (takuzu--c :disc0-edge) (takuzu--c :disc1-edge))))
     (if given
         (progn
-          (svg-circle svg cx cy (+ r 1) :fill "none" :stroke "#000" :stroke-width 1)
+          (svg-circle svg cx cy (+ r 1) :fill "none" :stroke (takuzu--c :ink) :stroke-width 1)
           (svg-circle svg cx cy r :fill fill :stroke (takuzu--c :bezel) :stroke-width 1.2))
       (svg-circle svg cx cy r :fill fill :stroke edge :stroke-width 1.2))))
 
@@ -259,24 +286,26 @@ midpoint between lamps.  The cup wall occludes everything behind a bead."
           ;; a bead-centred gradient in user space: bright at the lamp,
           ;; transparent well before the next lamp's territory
           (dom-append-child svg
-            (dom-node 'radialGradient
-                      (list (cons 'id id)
-                            (cons 'gradientUnits "userSpaceOnUse")
-                            (cons 'cx jx) (cons 'cy jy) (cons 'r reach))
-                      (dom-node 'stop '((offset . "0") (stop-color . "#c08a2e")
-                                        (stop-opacity . "0.30")))
-                      (dom-node 'stop '((offset . "0.4") (stop-color . "#c08a2e")
-                                        (stop-opacity . "0.05")))
-                      (dom-node 'stop '((offset . "1") (stop-color . "#c08a2e")
-                                        (stop-opacity . "0")))))
+            (apply #'dom-node 'radialGradient
+                   (list (cons 'id id)
+                         (cons 'gradientUnits "userSpaceOnUse")
+                         (cons 'cx jx) (cons 'cy jy) (cons 'r reach))
+                   (mapcar (lambda (stop)
+                             (dom-node 'stop
+                                       (list (cons 'offset (car stop))
+                                             (cons 'stop-color (takuzu--c :cursor-glow))
+                                             (cons 'stop-opacity (cdr stop)))))
+                           takuzu--cursor-pool-stops)))
           (dom-append-child svg
             (dom-node 'circle
                       (list (cons 'cx jx) (cons 'cy jy) (cons 'r reach)
                             (cons 'fill (format "url(#%s)" id))
                             (cons 'clip-path "url(#takuzu-cup)")))))
         ;; the bead itself: no circular halo, just the lamp and its catchlight
-        (svg-circle svg jx jy 2 :fill "#8f661b" :stroke "#00000055" :stroke-width 0.6)
-        (svg-circle svg (- jx 0.7) (- jy 0.7) 0.8 :fill "#ffffff" :fill-opacity 0.6)))))
+        (svg-circle svg jx jy 2 :fill (takuzu--c :cursor-lamp)
+                    :stroke (takuzu--c :shadow) :stroke-width 0.6)
+        (svg-circle svg (- jx 0.7) (- jy 0.7) 0.8
+                    :fill (takuzu--c :white) :fill-opacity 0.6)))))
 
 (defun takuzu--draw-board (svg x y)
   "Draw the board on SVG with its top-left at X,Y."
@@ -285,7 +314,7 @@ midpoint between lamps.  The cup wall occludes everything behind a bead."
          (span (takuzu--board-span n))
          (errs (takuzu--error-vector)))
     (svg-rectangle svg x y span span :rx 12
-                   :fill (takuzu--c :board-bg) :stroke "#000")
+                   :fill (takuzu--c :board-bg) :stroke (takuzu--c :ink))
     (dotimes (r n)
       (dotimes (c n)
         (let* ((sx (+ x bpad (* c (+ cell gap))))
@@ -297,7 +326,7 @@ midpoint between lamps.  The cup wall occludes everything behind a bead."
             ;; the whole cup floor sits just above the wall's darkness, nearly
             ;; flat; the corner pools are the only strong light
             (svg-gradient svg "takuzu-cursor-floor" 'radial
-                          (list (cons 0 "#170f09") (cons 100 "#1c130c"))))
+                          (list (cons 0 (takuzu--c :cup-floor)) (cons 100 (takuzu--c :cup-floor-rim)))))
           (let ((stroke (if (and errs (aref errs idx))
                             (takuzu--c :fail) (takuzu--c :socket-edge)))
                 (sw (if (and errs (aref errs idx)) 2 1)))
@@ -318,17 +347,17 @@ midpoint between lamps.  The cup wall occludes everything behind a bead."
 (defun takuzu--draw-nixie-tube (svg x y w h ch lit)
   "Draw a nixie tube on SVG at X,Y size W,H showing string CH.
 Glowing amber when LIT, a dim ember when not.  The digit scales with H."
-  (svg-rectangle svg x y w h :rx 4 :fill "#0b0807" :stroke "#2c261d")
+  (svg-rectangle svg x y w h :rx 4 :fill (takuzu--c :tube-glass) :stroke (takuzu--c :tube-edge))
   (let ((fs (round (* h 0.62))))
     (when lit
       (svg-ellipse svg (+ x (/ w 2.0)) (+ y (* h 0.52)) (* w 0.42) (* h 0.34)
-                   :fill "#ff8c32" :fill-opacity 0.16)
+                   :fill (takuzu--c :tube-halo) :fill-opacity 0.16)
       (takuzu--txt svg (+ x (/ w 2)) (round (+ y (* h 0.72))) ch (+ fs 2)
                    (takuzu--c :amber-hi) "middle"))
     (takuzu--txt svg (+ x (/ w 2)) (round (+ y (* h 0.72))) ch fs
                  (if lit (takuzu--c :amber) (takuzu--c :amber-off)) "middle"))
   (svg-rectangle svg (+ x 1.5) (+ y 1.5) (- w 3) (* h 0.28) :rx 3
-                 :fill "#ffffff" :fill-opacity 0.05))
+                 :fill (takuzu--c :white) :fill-opacity 0.05))
 
 (defun takuzu--draw-frame (svg x y w h label)
   "Draw an engraved instrument frame on SVG at X,Y size W,H.
@@ -371,7 +400,7 @@ size is adjustable (the s key)."
           (if (eq ch ?:)
               (progn
                 (takuzu--txt svg (round (+ x (/ colw 2))) (round (+ y (* th 0.64)))
-                             ":" 15 "#ff9a3c" "middle")
+                             ":" 15 (takuzu--c :amber) "middle")
                 (setq x (+ x colw)))
             (takuzu--draw-nixie-tube svg (round x) y tw th (char-to-string ch) t)
             (setq x (+ x tw))))))))
@@ -382,9 +411,9 @@ size is adjustable (the s key)."
          (specs '((easy "EASY" -46) (medium "MED" 0) (hard "HARD" 46)))
          (ang (or (nth 2 (assq level specs)) 0))
          (rad (lambda (a) (* (- a 90) (/ float-pi 180)))))
-    (svg-circle svg cx cy r :fill "#1f1b17" :stroke "#3a352c" :stroke-width 1)
+    (svg-circle svg cx cy r :fill (takuzu--c :knob) :stroke (takuzu--c :knob-edge) :stroke-width 1)
     (svg-circle svg (round (- cx (* r 0.3))) (round (- cy (* r 0.3))) (round (* r 0.5))
-                :fill "#2a2622" :fill-opacity 0.45)
+                :fill (takuzu--c :knob-shade) :fill-opacity 0.45)
     (let* ((a (funcall rad ang))
            (px (+ cx (* (- r 5) (cos a)))) (py (+ cy (* (- r 5) (sin a)))))
       (svg-line svg cx cy (round px) (round py)
@@ -427,7 +456,7 @@ whatever height is left spreads as even gaps between them."
          (time-h 44) (size-h 46) (level-h 84) (left-h 62) (state-h 110)
          (gap (/ (- h 12 8 time-h size-h level-h left-h state-h) 4.0))
          (fy (+ y 12.0)))
-    (svg-rectangle svg x y w h :rx 10 :fill (takuzu--c :well) :stroke "#201d17")
+    (svg-rectangle svg x y w h :rx 10 :fill (takuzu--c :well) :stroke (takuzu--c :panel-edge))
     (takuzu--draw-frame svg fx (round fy) fw time-h "TIME")
     (takuzu--draw-nixie-time svg cx (+ (round fy) 10))
     (setq fy (+ fy time-h gap))
@@ -511,7 +540,7 @@ Each item is (word WORD) -- word with its first letter gold-underlined -- or
   "Draw the EVENT annunciator strip on SVG at X,Y size W,H.
 Six momentary-event legends; the active one (`takuzu--event') pulses like a warm
 incandescent lamp, then fades."
-  (svg-rectangle svg x y w h :rx 10 :fill (takuzu--c :well) :stroke "#201d17")
+  (svg-rectangle svg x y w h :rx 10 :fill (takuzu--c :well) :stroke (takuzu--c :panel-edge))
   (let* ((events '((fixed . "FIXED") (hint . "HINT") (no-hint . "NO HINT")
                    (invalid . "INVALID") (nothing . "NOTHING") (gen-fail . "GEN FAIL")))
          (n (length events)) (pad 12) (gap 4)
@@ -522,10 +551,10 @@ incandescent lamp, then fades."
              (let* ((ev (car cell)) (lab (cdr cell))
                     (cx (+ x pad (* i (+ cw gap))))
                     (lit (if (eq ev takuzu--event) k 0))
-                    (bg (takuzu--lerp-color "#141210" "#a8843a" lit))
-                    (fg (takuzu--lerp-color (takuzu--c :dim) "#1c1710" lit)))
+                    (bg (takuzu--lerp-color (takuzu--c :annunciator-off) (takuzu--c :annunciator-lit) lit))
+                    (fg (takuzu--lerp-color (takuzu--c :dim) (takuzu--c :annunciator-ink) lit)))
                (svg-rectangle svg (round cx) cy (round cw) (round ch) :rx 3
-                              :fill bg :stroke "#262320")
+                              :fill bg :stroke (takuzu--c :annunciator-edge))
                (takuzu--txt svg (round (+ cx (/ cw 2))) (round (+ cy (/ ch 2) 3))
                             lab 8.5 fg "middle" "bold")))))
 
@@ -534,10 +563,10 @@ incandescent lamp, then fades."
   (if on
       (progn
         (svg-circle svg cx cy (+ r 3) :fill color :fill-opacity 0.25)
-        (svg-circle svg cx cy r :fill color :stroke "#00000055" :stroke-width 0.6)
+        (svg-circle svg cx cy r :fill color :stroke (takuzu--c :shadow) :stroke-width 0.6)
         (svg-circle svg (round (- cx (* r 0.35))) (round (- cy (* r 0.35))) (round (* r 0.4))
-                    :fill "#ffffff" :fill-opacity 0.6))
-    (svg-circle svg cx cy r :fill "#241f1b" :stroke "#0e0c0a" :stroke-width 0.5)))
+                    :fill (takuzu--c :white) :fill-opacity 0.6))
+    (svg-circle svg cx cy r :fill (takuzu--c :jewel-off) :stroke (takuzu--c :jewel-off-edge) :stroke-width 0.5)))
 
 (defun takuzu--game-state ()
   "The current game STATE symbol: ready, solving, solved, or shown."
@@ -549,11 +578,11 @@ incandescent lamp, then fades."
 READY/SOLVING/SOLVED/SHOWN track the game state; ASSIST is its own mode lamp."
   (takuzu--draw-frame svg x y w h "STATE")
   (let* ((state (takuzu--game-state))
-         (lamps `((ready "READY" "#6fce33" ,(eq state 'ready))
-                  (solving "SOLVING" "#ffb43a" ,(eq state 'solving))
-                  (solved "SOLVED" "#6fce33" ,(eq state 'solved))
-                  (shown "SHOWN" "#cb6b4d" ,(eq state 'shown))
-                  (assist "ASSIST" "#63e6c8" ,takuzu--assist)))
+         (lamps `((ready "READY" ,(takuzu--c :lamp-green) ,(eq state 'ready))
+                  (solving "SOLVING" ,(takuzu--c :lamp-amber) ,(eq state 'solving))
+                  (solved "SOLVED" ,(takuzu--c :lamp-green) ,(eq state 'solved))
+                  (shown "SHOWN" ,(takuzu--c :fail) ,(eq state 'shown))
+                  (assist "ASSIST" ,(takuzu--c :lamp-cyan) ,takuzu--assist)))
          (n (length lamps)) (top (+ y 16)) (bot (- (+ y h) 12))
          (rowstep (/ (- bot top) (float (1- n)))) (jx (+ x 22)))
     (cl-loop for lamp in lamps for i from 0 do
@@ -701,7 +730,7 @@ ANCHOR is the text anchor, HI the emboss highlight, WEIGHT the font weight."
 (defun takuzu--help-print (svg x y str size anchor &optional weight)
   "Draw STR on SVG at X,Y as flat printed black text, no etch."
   (svg-text svg str :x x :y y :font-family "monospace" :font-size size
-            :fill "#000000" :text-anchor anchor :font-weight (or weight "normal")))
+            :fill (takuzu--c :ink) :text-anchor anchor :font-weight (or weight "normal")))
 
 (defun takuzu--help-divider (svg x1 x2 y ink hi)
   "Draw an engraved divider on SVG from X1 to X2 at Y, dark INK over highlight HI."
@@ -710,7 +739,8 @@ ANCHOR is the text anchor, HI the emboss highlight, WEIGHT the font weight."
 
 (defun takuzu--help-plate (svg x y w h)
   "Draw a brushed-silver spec plate on SVG at X,Y size W,H, with sheen and rivets."
-  (let ((base "#74787d") (light "#909498") (dark "#52565b") (edge (takuzu--c :plate-edge)))
+  (let ((base (takuzu--c :spec-silver)) (light (takuzu--c :spec-silver-hi))
+        (dark (takuzu--c :spec-silver-lo)) (edge (takuzu--c :plate-edge)))
     (svg-rectangle svg x y w h :rx 9 :fill base :stroke edge :stroke-width 1.4)
     ;; soft brushed-metal sheen: a light wash fading down from the top and a
     ;; shadow deepening toward the bottom, replacing the old hard reflection bands
@@ -720,13 +750,13 @@ ANCHOR is the text anchor, HI the emboss highlight, WEIGHT the font weight."
           (svg-rectangle svg (+ x 3) by (- w 6) bh :fill light :fill-opacity (* 0.45 (- 1 frac)))
           (svg-rectangle svg (+ x 3) by (- w 6) bh :fill dark :fill-opacity (* 0.40 frac)))))
     (cl-loop for yy from (+ y 6) to (- (+ y h) 6) by 2 do
-             (svg-line svg (+ x 6) yy (- (+ x w) 6) yy :stroke "#ffffff" :stroke-opacity 0.04))
+             (svg-line svg (+ x 6) yy (- (+ x w) 6) yy :stroke (takuzu--c :white) :stroke-opacity 0.04))
     (svg-rectangle svg (+ x 8) (+ y 8) (- w 16) (- h 16) :rx 6 :fill "none"
                    :stroke edge :stroke-opacity 0.4)
     (dolist (p (list (cons (+ x 16) (+ y 16)) (cons (- (+ x w) 16) (+ y 16))
                      (cons (+ x 16) (- (+ y h) 16)) (cons (- (+ x w) 16) (- (+ y h) 16))))
       (svg-circle svg (car p) (cdr p) 3.4 :fill light :stroke edge :stroke-width 0.9)
-      (svg-circle svg (- (car p) 1) (- (cdr p) 1) 1.2 :fill "#ffffff" :fill-opacity 0.7))))
+      (svg-circle svg (- (car p) 1) (- (cdr p) 1) 1.2 :fill (takuzu--c :white) :fill-opacity 0.7))))
 
 (defun takuzu--help-emblem (svg cx cy kind ink hi)
   "Draw a faux-compliance emblem of KIND on SVG at CX,CY, etched in INK/HI."
@@ -743,7 +773,7 @@ ANCHOR is the text anchor, HI the emboss highlight, WEIGHT the font weight."
 
 (defun takuzu--help-disc (svg cx cy r fill)
   "Draw a small filled disc on SVG at CX,CY radius R in FILL."
-  (svg-circle svg cx cy r :fill fill :stroke "#00000055" :stroke-width 0.8))
+  (svg-circle svg cx cy r :fill fill :stroke (takuzu--c :shadow) :stroke-width 0.8))
 
 (defun takuzu--help-rule-widget (svg x y kind d0 d1 fail)
   "Draw the diagram for rule KIND on SVG at left edge X, vertical centre Y.
@@ -775,13 +805,13 @@ The line is sized down so the full name fits within the plate."
          (x0 (- cx (/ (* total a) 2)))
          (nx (+ x0 (* (length pre) a)))
          (ne (+ nx (* (length name) a)))
-         (silver "#9ba0a8"))
+         (silver (takuzu--c :spec-name-silver)))
     (takuzu--help-print svg x0 y pre size "start")
     ;; the name, embossed silver: dark shadow below, bright highlight above, face on top
     (svg-text svg name :x nx :y (+ y 1) :font-family "monospace" :font-size size
-              :fill "#000000" :fill-opacity 0.6 :text-anchor "start" :font-weight "bold")
+              :fill (takuzu--c :ink) :fill-opacity 0.6 :text-anchor "start" :font-weight "bold")
     (svg-text svg name :x nx :y (- y 1) :font-family "monospace" :font-size size
-              :fill "#ffffff" :fill-opacity 0.85 :text-anchor "start" :font-weight "bold")
+              :fill (takuzu--c :white) :fill-opacity 0.85 :text-anchor "start" :font-weight "bold")
     (svg-text svg name :x nx :y y :font-family "monospace" :font-size size
               :fill silver :text-anchor "start" :font-weight "bold")
     (takuzu--help-print svg ne y post size "start")))
@@ -807,9 +837,9 @@ to the box.  INK/HI are the etch colours; D0/D1/FAIL the rule-diagram colours."
     ;; footer, anchored to the bottom
     (takuzu--help-divider svg lx rx (+ y h -100) ink hi)
     (let ((ey (+ y h -78)))
-      (takuzu--help-emblem svg (+ lx 12) ey 'ce "#000000" "#000000")
-      (takuzu--help-emblem svg (+ lx 52) ey 'class2 "#000000" "#000000")
-      (takuzu--help-emblem svg (+ lx 92) ey 'warn "#000000" "#000000")
+      (takuzu--help-emblem svg (+ lx 12) ey 'ce (takuzu--c :ink) (takuzu--c :ink))
+      (takuzu--help-emblem svg (+ lx 52) ey 'class2 (takuzu--c :ink) (takuzu--c :ink))
+      (takuzu--help-emblem svg (+ lx 92) ey 'warn (takuzu--c :ink) (takuzu--c :ink))
       (takuzu--help-print svg rx (- ey 4) "CONFORMS TO BINARY-LOGIC STANDARD 3" 10 "end")
       (takuzu--help-print svg rx (+ ey 10) "CLASS II  -  SIZES 4 TO 12  -  ONE SOLUTION" 10 "end"))
     (takuzu--help-print svg lx (+ y h -50) "MADE IN NEW ORLEANS, LA, USA  -  (c) CRAIG JENNINGS 2026" 10 "start")
@@ -837,7 +867,7 @@ Border and screws match the board view so they never move; the board,
 instruments, and title give way to a large plate centred in the faceplate."
   (let* ((w (takuzu--faceplate-width)) (h (takuzu--faceplate-height))
          (svg (svg-create w h))
-         (ink "#16181c") (hi "#ffffff")
+         (ink (takuzu--c :spec-ink)) (hi (takuzu--c :white))
          (d0 (takuzu--c :disc0)) (d1 (takuzu--c :disc1)) (fail (takuzu--c :fail))
          (cw takuzu--help-card-w) (ch takuzu--help-card-h)
          (s (/ (* takuzu--help-card-frac w) cw))
