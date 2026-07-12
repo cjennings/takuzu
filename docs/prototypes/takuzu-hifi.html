@@ -3,579 +3,1420 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- Takuzu / Binairo — self-contained hi-fi console prototype (2026-07-11).
-     Single file: inline CSS + JS (engine port of the Emacs package + UI).
-     Design-of-record for the Emacs SVG board; plays offline from a file:// bookmark. -->
-<title>Takuzu — Hi-Fi Console</title>
+<!-- Takuzu / Binairo — self-contained instrument-console prototype.
+     A 1:1 port of the Emacs package's SVG faceplate (takuzu-ui.el): one SVG
+     rebuilt per state change.  Engine (board rules, solver, grader, generator)
+     lives in the #takuzu-engine script block, pure and DOM-free, so
+     tests/run-html-parity.mjs can replay tests/fixtures/parity-cases.json
+     against it.  Plays offline from file://. -->
+<title>Takuzu — Instrument Console</title>
 <style>
-  :root {
-    /* Dupré panel family */
-    --ground:#151311; --panel:#100f0f; --well:#0a0c0d; --raise:#1a1917;
-    --gold:#b99640; --gold-hi:#dcc061; --silver:#bfc4d0; --cream:#f3e7c5;
-    --steel:#969385; --dim:#7c838a; --slate:#424f5e; --slate-hi:#54677d;
-    --wash:#2c2f32; --pass:#74932f; --fail:#cb6b4d;
-    /* the two puzzle lamps */
-    --disc0:#67809c; --disc0-hi:#a6bcd6;
-    --disc1:#cb6b4d; --disc1-hi:#eb9a80;
-    --mono: ui-monospace, "Berkeley Mono", "Cascadia Code", Menlo, Consolas, monospace;
-    --cell:54px;
-  }
-  * { box-sizing:border-box; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
-    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:34px 16px;
-    font-family:var(--mono); color:var(--silver);
-    background: radial-gradient(1100px 620px at 62% -12%, #1d1914 0%, transparent 60%), var(--ground);
+    margin: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #0b0a08; font-family: ui-monospace, Menlo, Consolas, monospace;
   }
-
-  /* ---- faceplate ---- */
-  .plate {
-    position:relative; max-width:100%; padding:26px 30px 24px;
-    background:
-      linear-gradient(180deg,#221e18,#151109),
-      repeating-linear-gradient(90deg, rgba(255,255,255,.016) 0 2px, transparent 2px 4px);
-    border:1px solid #2c2620; border-radius:16px;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.05), inset 0 0 40px rgba(0,0,0,.35),
-                0 34px 66px -22px rgba(0,0,0,.85);
+  #stage svg { display: block; }
+  #echo {
+    margin-top: 10px; min-height: 18px; font-size: 13px; color: #969385;
+    text-align: center; padding: 0 12px;
   }
-  .screw { position:absolute; width:11px; height:11px; border-radius:50%; border:1px solid #0c0a07;
-    background:radial-gradient(circle at 40% 35%, #4d4940, #17140f);
-    box-shadow: inset 0 1px 1px rgba(255,255,255,.16), 0 1px 1px rgba(0,0,0,.6); }
-  .screw::after { content:''; position:absolute; inset:3px; border-top:1px solid #0c0a07; transform:rotate(38deg); }
-  .screw.tl{top:11px;left:11px} .screw.tr{top:11px;right:11px} .screw.bl{bottom:11px;left:11px} .screw.br{bottom:11px;right:11px}
-
-  /* ---- masthead ---- */
-  .head { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin:2px 0 4px; flex-wrap:wrap; }
-  .title { display:flex; align-items:center; gap:.05em; text-transform:uppercase; margin-top:3px; }
-  .title .mainname { color:var(--gold); font-size:1.7rem; font-weight:700; letter-spacing:.14em; text-shadow:0 0 14px rgba(185,150,64,.25); }
-  .title .slash { color:var(--gold-hi); font-size:2.3rem; font-weight:300; margin:0 .12em; line-height:1; }
-  .title .aliases { display:flex; flex-direction:column; justify-content:center; gap:2px; }
-  .title .aliases span { color:var(--dim); font-size:.6rem; letter-spacing:.24em; line-height:1.3; }
-
-  .lamp { width:10px; height:10px; border-radius:50%; background:var(--pass); box-shadow:0 0 7px 1px rgba(116,147,47,.6); flex:none; }
-  .lamp.gold { background:var(--gold); box-shadow:0 0 7px 1px rgba(185,150,64,.65); }
-  .lamp.red  { background:var(--fail); box-shadow:0 0 7px 1px rgba(203,107,77,.6); }
-  .lamp.big { width:16px; height:16px; align-self:center; }
-  @keyframes lamp-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-  .lamp.win { background:var(--pass); box-shadow:0 0 13px 2px rgba(116,147,47,.8); animation:lamp-pulse .9s ease-in-out infinite; }
-
-  .ro { text-align:center; min-width:44px; }
-  .ro .v { color:var(--cream); font-size:21px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:.03em;
-    text-shadow:0 0 8px rgba(243,231,197,.14); }
-  .u { color:var(--steel); font-size:.52rem; letter-spacing:.2em; text-transform:uppercase; margin-top:3px; text-align:center; }
-
-  /* board + right instrument panel */
-  .stage { display:flex; gap:16px; align-items:stretch; justify-content:center; margin:26px 0 6px; }
-  .rightpanel { display:flex; flex-direction:column; align-items:center; gap:12px; padding:14px 16px;
-    background:var(--well); border:1px solid #201d17; border-radius:10px; box-shadow: inset 0 2px 9px rgba(0,0,0,.65); }
-  .vmwrap { display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; align-self:stretch; }
-  .vmeter { flex:1; width:22px; min-height:70px; display:flex; flex-direction:column-reverse; gap:2px; padding:2px;
-    background:#0d0f10; border:1px solid #231f18; border-radius:5px; }
-  .vmeter i { width:100%; flex:1; background:var(--wash); border-radius:1px; opacity:.35; transition:opacity .12s, background .12s; }
-  .vmeter i.on { opacity:1; background:var(--pass); box-shadow:0 0 4px rgba(116,147,47,.4); }
-  .vmeter i.hot { opacity:1; background:var(--gold); box-shadow:0 0 5px rgba(185,150,64,.5); }
-
-  /* ---- engraved section label ---- */
-  .engrave { color:var(--steel); font-size:.58rem; letter-spacing:.3em; text-transform:uppercase;
-    display:flex; align-items:center; gap:11px; margin:16px 2px 9px; }
-  .engrave::before,.engrave::after { content:''; height:1px; background:var(--wash); flex:1; }
-  .engrave::before { max-width:14px; }
-
-
-  /* ---- board: recessed lamp sockets ---- */
-  .board-wrap { display:flex; justify-content:center; align-self:flex-start; }
-  .board { display:grid; gap:7px; padding:16px; border-radius:12px; border:1px solid #000;
-    background:linear-gradient(180deg,#19150f,#100d09);
-    box-shadow: inset 0 2px 12px rgba(0,0,0,.72), 0 1px 0 rgba(255,255,255,.03); }
-  .board:focus-visible { outline:none; }
-  .board.busy { opacity:.5; pointer-events:none; }
-
-  .cell { width:var(--cell); height:var(--cell); border-radius:10px; position:relative; cursor:pointer; padding:0; border:0;
-    background:radial-gradient(circle at 50% 38%, #14110c, #090705);
-    box-shadow: inset 0 2px 5px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,255,255,.03);
-    display:grid; place-items:center; transition:box-shadow .12s; }
-  .disc { width:62%; height:62%; border-radius:50%; transform:scale(.28); opacity:0; background:#0a0806;
-    transition:transform .14s ease, opacity .14s ease; }
-  .cell.filled .disc { transform:scale(1); opacity:1; }
-  .disc.v0 { background:#4d5f75; box-shadow: inset 0 2px 4px rgba(0,0,0,.5); }
-  .disc.v1 { background:#8f5236; box-shadow: inset 0 2px 4px rgba(0,0,0,.5); }
-  /* givens: the same disc, marked by a shiny light-silver bezel */
-  .cell.given .disc.v0,
-  .cell.given .disc.v1 { box-shadow: inset 0 2px 4px rgba(0,0,0,.5), 0 0 0 2px #b3b9c2, 0 0 0 3px rgba(0,0,0,.4); }
-  .cell.sel { box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px var(--gold), 0 0 15px -2px rgba(185,150,64,.75); z-index:2; }
-  .cell.err { box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px var(--fail); }
-  .board.solved { box-shadow: inset 0 2px 12px rgba(0,0,0,.72), 0 0 0 2px var(--gold), 0 0 36px -6px rgba(185,150,64,.55); }
-
-  /* hint highlight */
-  @keyframes tk-pulse { 0%,100%{ box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px rgba(116,147,47,.95); }
-    50%{ box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px rgba(116,147,47,.3); } }
-  .cell.hint-line::after { content:''; position:absolute; inset:0; border-radius:10px; background:rgba(185,150,64,.13); pointer-events:none; }
-  .cell.hint-src { animation:tk-pulse .9s ease-in-out infinite; z-index:2; }
-  .cell.hint-dst { box-shadow: inset 0 2px 5px rgba(0,0,0,.85), 0 0 0 2px var(--gold), 0 0 16px -2px rgba(185,150,64,.75) !important; z-index:3; }
-
-  /* ---- status / toast ---- */
-  .status { text-align:center; margin:13px 0 2px; min-height:18px; font-size:12.5px; letter-spacing:.02em; color:var(--silver); }
-  .status.good { color:var(--pass); }
-  .status.win { color:var(--gold); font-weight:700; letter-spacing:.08em; }
-
-  /* ---- console keys ---- */
-  .actions { display:flex; gap:9px; justify-content:center; flex-wrap:wrap; }
-  .key { font:inherit; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--silver); cursor:pointer;
-    background:linear-gradient(180deg,#23211e,#191715); border:1px solid #33302b; border-bottom-color:#0c0b0a;
-    border-radius:8px; padding:10px 15px; min-height:42px;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 2px 3px rgba(0,0,0,.45); transition:transform .07s, color .12s, border-color .12s; }
-  .key:hover { color:var(--gold); border-color:var(--gold); }
-  .key:active { transform:translateY(1px); }
-  .key:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
-  .mn { color:var(--gold-hi); font-weight:800; text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:3px; }
-
-  /* ---- selectors ---- */
-  .selectors { display:flex; gap:22px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
-  .seg-group { display:flex; flex-direction:column; gap:6px; align-items:center; }
-  .seg-label { color:var(--steel); font-size:.58rem; letter-spacing:.24em; text-transform:uppercase; }
-  .seg-label .mn { color:var(--gold); }
-  .seg { display:flex; border:1px solid #33302b; border-radius:8px; overflow:hidden; }
-  .seg button { font:inherit; font-size:11px; color:var(--silver); background:#191715; border:0; border-right:1px solid #33302b;
-    padding:8px 12px; cursor:pointer; min-height:30px; transition:background .12s, color .12s; }
-  .seg button:last-child { border-right:0; }
-  .seg button[aria-pressed="true"] { background:linear-gradient(180deg,#d3bd68,var(--gold)); color:var(--panel); font-weight:700; }
-  .seg button:hover:not([aria-pressed="true"]) { color:var(--cream); }
-
-  /* physical toggle switch */
-  .switch { width:46px; height:24px; border-radius:12px; background:var(--wash); border:1px solid var(--slate);
-    position:relative; cursor:pointer; padding:0; }
-  .switch::after { content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%;
-    background:var(--dim); box-shadow:0 1px 2px rgba(0,0,0,.5); transition:left .15s, background .15s; }
-  .switch[aria-checked="true"] { background:var(--slate); border-color:var(--gold); }
-  .switch[aria-checked="true"]::after { left:24px; background:var(--gold); box-shadow:0 0 7px rgba(185,150,64,.6); }
-  .switch:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
-
-  /* analogue clock */
-  .clockwrap { text-align:center; }
-  .clock { width:72px; height:72px; display:block; margin:0 auto 2px; }
-  .cface { fill:#0a0908; stroke:#2b2620; stroke-width:2; }
-  #clk-ticks line { stroke:var(--steel); stroke-width:1.4; }
-  .hmin { stroke:var(--gold); stroke-width:3; stroke-linecap:round; }
-  .hsec { stroke:var(--gold-hi); stroke-width:1.4; stroke-linecap:round; }
-  .hub { fill:var(--gold); }
-
-  /* ---- how-to ---- */
-  .howto { display:flex; flex-wrap:wrap; gap:9px 20px; justify-content:center; margin-top:16px; padding-top:14px;
-    border-top:1px solid #2a2620; font-size:12.5px; color:var(--dim); }
-  .howto .item { display:inline-flex; align-items:center; gap:7px; white-space:nowrap; }
-  .howto .item span { color:var(--steel); }
-  .kc { display:inline-grid; place-items:center; min-width:1.7em; height:1.7em; padding:0 .45em; font-family:var(--mono);
-    font-size:.95em; font-weight:700; color:var(--cream); background:linear-gradient(180deg,#26231f,#16130e);
-    border:1px solid #3a352c; border-bottom-color:#0c0b0a; border-radius:5px;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.5); }
-
-  @keyframes tk-flash { 0%{ filter:brightness(1.9); } 100%{ filter:brightness(1); } }
-  .flash { animation:tk-flash .35s ease-out; }
-  @media (prefers-reduced-motion: reduce){ *, .disc, .flash, .cell.hint-src{ animation:none !important; transition:none !important; } }
-  @media (max-width:600px){ :root{ --cell:42px; } .title{ font-size:1.4rem; } }
 </style>
 </head>
 <body>
-<main class="plate" aria-label="Takuzu console">
-  <span class="screw tl"></span><span class="screw tr"></span><span class="screw bl"></span><span class="screw br"></span>
+<div id="stage"></div>
+<div id="echo" role="status" aria-live="polite"></div>
 
-  <div class="head">
-    <div>
-      <div class="title">
-        <span class="mainname">Takuzu</span>
-        <span class="slash">/</span>
-        <span class="aliases"><span>Binairo</span><span>Tohu wa-Vohu</span><span>Binary logic</span></span>
-      </div>
-    </div>
-    <span class="lamp gold big" id="statelamp"></span>
-  </div>
+<script id="takuzu-engine">
+"use strict";
+/* Pure Takuzu engine — no DOM.  Mirrors takuzu-board.el, takuzu-solver.el,
+   and takuzu-generator.el.  Cells are row-major arrays of null/0/1. */
+var TakuzuEngine = (function () {
 
-  <div class="stage">
-    <div class="board-wrap">
-      <div class="board" id="board" role="grid" aria-label="Takuzu board" tabindex="0"></div>
-    </div>
-    <aside class="rightpanel" aria-hidden="true">
-      <div class="clockwrap">
-        <svg class="clock" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="46" class="cface"/>
-          <g id="clk-ticks"></g>
-          <line id="clk-min" x1="50" y1="52" x2="50" y2="28" class="hmin"/>
-          <line id="clk-sec" x1="50" y1="56" x2="50" y2="18" class="hsec"/>
-          <circle cx="50" cy="50" r="2.6" class="hub"/>
-        </svg>
-        <div class="u">Time</div>
-      </div>
-      <div class="ro"><div class="v" id="r-grade">easy</div><div class="u">Grade</div></div>
-      <div class="ro"><div class="v" id="r-left">–</div><div class="u">Left</div></div>
-      <div class="vmwrap">
-        <span class="vmeter" id="prog"></span>
-        <div class="u" id="prog-lbl">0 %</div>
-      </div>
-    </aside>
-  </div>
+  const idx = (n, r, c) => r * n + c;
+  const rowOf = (b, n, r) => { const a = []; for (let c = 0; c < n; c++) a.push(b[idx(n, r, c)]); return a; };
+  const colOf = (b, n, c) => { const a = []; for (let r = 0; r < n; r++) a.push(b[idx(n, r, c)]); return a; };
+  const allRows = (b, n) => { const a = []; for (let r = 0; r < n; r++) a.push(rowOf(b, n, r)); return a; };
+  const allCols = (b, n) => { const a = []; for (let c = 0; c < n; c++) a.push(colOf(b, n, c)); return a; };
+  const eqLine = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 
-  <div class="status" id="status" role="status" aria-live="polite"></div>
+  // --- line rules ---
 
-  <div class="engrave">Console</div>
-  <div class="actions">
-    <button class="key" id="b-new"><span class="mn">N</span>ew</button>
-    <button class="key" id="b-reset"><span class="mn">R</span>eset</button>
-    <button class="key" id="b-undo"><span class="mn">U</span>ndo</button>
-    <button class="key" id="b-hint">Hint <span class="mn">?</span></button>
-    <button class="key" id="b-check"><span class="mn">C</span>heck</button>
-    <button class="key" id="b-reveal"><span class="mn">P</span>rove</button>
-  </div>
+  function hasTriple(line) {
+    for (let i = 0; i + 2 < line.length; i++) {
+      const a = line[i];
+      if (a != null && a === line[i + 1] && a === line[i + 2]) return true;
+    }
+    return false;
+  }
 
-  <div class="selectors">
-    <div class="seg-group"><span class="seg-label" id="size-lbl"><span class="mn">S</span>ize</span>
-      <div class="seg" role="group" aria-labelledby="size-lbl" id="size-seg"></div></div>
-    <div class="seg-group"><span class="seg-label" id="diff-lbl"><span class="mn">D</span>ifficulty</span>
-      <div class="seg" role="group" aria-labelledby="diff-lbl" id="diff-seg"></div></div>
-    <div class="seg-group"><span class="seg-label" id="assist-lbl"><span class="mn">A</span>ssist</span>
-      <button class="switch" id="assist-sw" role="switch" aria-checked="false" aria-labelledby="assist-lbl"></button></div>
-  </div>
+  function countLegal(line, size) {
+    const half = size / 2;
+    let z = 0, o = 0;
+    for (const v of line) { if (v === 0) z++; else if (v === 1) o++; }
+    return z <= half && o <= half;
+  }
 
-  <div class="howto" aria-hidden="true">
-    <span class="item"><span class="kc">←↑→↓</span> / <span class="kc">h</span><span class="kc">j</span><span class="kc">k</span><span class="kc">l</span> <span>move</span></span>
-    <span class="item"><span class="kc">Space</span> <span>cycle colour</span></span>
-    <span class="item"><span class="kc">U</span> <span>undo</span></span>
-    <span class="item"><span>or click a socket</span></span>
-  </div>
-</main>
+  const lineComplete = line => line.every(v => v != null);
+
+  function completeValid(line, size) {
+    return lineComplete(line)
+      && line.filter(v => v === 0).length === size / 2
+      && !hasTriple(line);
+  }
+
+  // --- board rules ---
+
+  function noDupCompleteLines(lines) {
+    const seen = new Set();
+    for (const l of lines) {
+      if (!lineComplete(l)) continue;
+      const k = l.join("");
+      if (seen.has(k)) return false;
+      seen.add(k);
+    }
+    return true;
+  }
+
+  function boardLegal(b, n) {
+    const rows = allRows(b, n), cols = allCols(b, n);
+    const linesLegal = ls => ls.every(l => !hasTriple(l) && countLegal(l, n));
+    return linesLegal(rows) && linesLegal(cols)
+      && noDupCompleteLines(rows) && noDupCompleteLines(cols);
+  }
+
+  const boardFull = b => b.every(v => v != null);
+
+  function boardSolved(b, n) {
+    if (!boardFull(b)) return false;
+    const rows = allRows(b, n), cols = allCols(b, n);
+    return rows.every(l => completeValid(l, n))
+      && cols.every(l => completeValid(l, n))
+      && noDupCompleteLines(rows) && noDupCompleteLines(cols);
+  }
+
+  // --- solver ---
+
+  function uniqueAmong(line, lines) {
+    let count = 0;
+    for (const l of lines) if (lineComplete(l) && eqLine(l, line)) count++;
+    return count === 1;
+  }
+
+  function placementOk(b, n, r, c) {
+    const rr = rowOf(b, n, r), cc = colOf(b, n, c);
+    if (hasTriple(rr) || !countLegal(rr, n)) return false;
+    if (hasTriple(cc) || !countLegal(cc, n)) return false;
+    if (lineComplete(rr) && !uniqueAmong(rr, allRows(b, n))) return false;
+    if (lineComplete(cc) && !uniqueAmong(cc, allCols(b, n))) return false;
+    return true;
+  }
+
+  function legalValues(b, n, r, c) {
+    const out = [], i = idx(n, r, c);
+    for (const v of [0, 1]) {
+      b[i] = v;
+      if (placementOk(b, n, r, c)) out.push(v);
+      b[i] = null;
+    }
+    return out;
+  }
+
+  // Fill naked-single forced cells in place until fixpoint.
+  function propagate(b, n) {
+    let filled = 0, changed = true;
+    while (changed) {
+      changed = false;
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          const i = idx(n, r, c);
+          if (b[i] == null) {
+            const vals = legalValues(b, n, r, c);
+            if (vals.length === 0) return "contradiction";
+            if (vals.length === 1) { b[i] = vals[0]; filled++; changed = true; }
+          }
+        }
+      }
+    }
+    return filled;
+  }
+
+  // Depth-first fill with propagation; branch order (0 1), or random per node.
+  function solutions(b, n, limit, randomize) {
+    if (limit <= 0 || !boardLegal(b, n)) return [];
+    const snapshot = b.slice();
+    let res = [];
+    if (propagate(b, n) !== "contradiction") {
+      const i = b.indexOf(null);
+      if (i < 0) {
+        if (boardSolved(b, n)) res = [b.slice()];
+      } else {
+        const r = Math.floor(i / n), c = i % n;
+        const order = randomize && Math.random() < 0.5 ? [1, 0] : [0, 1];
+        for (const v of order) {
+          b[i] = v;
+          if (placementOk(b, n, r, c))
+            res = res.concat(solutions(b, n, limit - res.length, randomize));
+          b[i] = null;
+          if (res.length >= limit) break;
+        }
+      }
+    }
+    for (let k = 0; k < snapshot.length; k++) b[k] = snapshot[k];
+    return res;
+  }
+
+  const countSolutions = (b, n, limit) => solutions(b.slice(), n, limit == null ? 2 : limit, false).length;
+  const solve = (b, n) => solutions(b.slice(), n, 1, false)[0] || null;
+  const isUnique = (b, n) => countSolutions(b, n, 2) === 1;
+
+  // First empty cell with exactly one legal value, row-major, as [r, c, v].
+  function forcedCell(b, n) {
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (b[idx(n, r, c)] == null) {
+          const vals = legalValues(b, n, r, c);
+          if (vals.length === 1) return [r, c, vals[0]];
+        }
+      }
+    }
+    return null;
+  }
+
+  // --- difficulty grader ---
+
+  function forcedByHypothesis(b, n, r, c) {
+    const survivors = [];
+    for (const v of [0, 1]) {
+      const trial = b.slice();
+      trial[idx(n, r, c)] = v;
+      if (placementOk(trial, n, r, c) && propagate(trial, n) !== "contradiction")
+        survivors.push(v);
+    }
+    if (survivors.length === 0) return "contradiction";
+    if (survivors.length === 1) return survivors[0];
+    return null;
+  }
+
+  function hypothesisStep(w, n) {
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (w[idx(n, r, c)] == null) {
+          const f = forcedByHypothesis(w, n, r, c);
+          if (f === "contradiction") return false;
+          if (f != null) {
+            w[idx(n, r, c)] = f;
+            propagate(w, n);
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  // easy: propagation alone solves; medium: depth-1 hypothesis; hard: neither.
+  function grade(b, n) {
+    const w = b.slice();
+    propagate(w, n);
+    if (boardFull(w)) return "easy";
+    let progress = true;
+    while (progress && !boardFull(w)) progress = hypothesisStep(w, n);
+    return boardFull(w) ? "medium" : "hard";
+  }
+
+  // --- generator ---
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  const fullSolution = n => solutions(new Array(n * n).fill(null), n, 1, true)[0] || null;
+
+  function propagationSolves(b, n) {
+    const w = b.slice();
+    propagate(w, n);
+    return boardFull(w);
+  }
+
+  // The tier bounds the carve: easy stops while propagation still solves it;
+  // medium stays unique and no harder than medium; hard carves to minimal clues.
+  function carveKeep(b, n, tier) {
+    if (tier === "easy") return propagationSolves(b, n);
+    if (tier === "medium") return isUnique(b, n) && ["easy", "medium"].includes(grade(b, n));
+    return isUnique(b, n);
+  }
+
+  // Incremental carve so a caller can time-slice generation.
+  function makeCarve(n, tier) {
+    const solution = fullSolution(n);
+    return {
+      n, tier, solution,
+      cells: solution.slice(),
+      givens: new Array(n * n).fill(true),
+      order: shuffle([...Array(n * n).keys()]),
+      pos: 0,
+    };
+  }
+
+  // Run carve steps until done or budgetMs elapses; null budget runs to completion.
+  function carveStep(st, budgetMs) {
+    const t0 = Date.now();
+    while (st.pos < st.order.length) {
+      const i = st.order[st.pos++];
+      const v = st.cells[i];
+      if (v != null) {
+        st.cells[i] = null; st.givens[i] = false;
+        if (!carveKeep(st.cells, st.n, st.tier)) {
+          st.cells[i] = v; st.givens[i] = true;
+        }
+      }
+      if (budgetMs != null && Date.now() - t0 >= budgetMs) break;
+    }
+    return st.pos >= st.order.length;
+  }
+
+  function carveResult(st) {
+    return {
+      size: st.n,
+      cells: st.cells.slice(),
+      givens: st.givens.slice(),
+      solution: st.solution.slice(),
+      grade: grade(st.cells, st.n),
+    };
+  }
+
+  function generate(n, tier) {
+    const st = makeCarve(n, tier);
+    carveStep(st, null);
+    return carveResult(st);
+  }
+
+  // --- fixture codecs ---
+
+  const parseCells = s => Array.from(s, ch => ch === "0" ? 0 : ch === "1" ? 1 : null);
+  const parseGivens = s => Array.from(s, ch => ch === "g");
+  const cellsString = b => b.map(v => v == null ? "." : String(v)).join("");
+
+  return {
+    idx, rowOf, colOf, allRows, allCols,
+    hasTriple, countLegal, lineComplete, completeValid,
+    boardLegal, boardFull, boardSolved,
+    legalValues, propagate, solutions, countSolutions, solve, isUnique,
+    forcedCell, grade,
+    fullSolution, generate, makeCarve, carveStep, carveResult,
+    parseCells, parseGivens, cellsString,
+  };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = TakuzuEngine;
+</script>
 
 <script>
 "use strict";
+/* UI — the SVG faceplate, ported function-for-function from takuzu-ui.el. */
+(function () {
 
-/* ============================ engine (JS port) ============================ */
-const idx = (n,r,c) => r*n + c;
-const rowOf = (b,n,r) => { const a=[]; for(let c=0;c<n;c++) a.push(b[idx(n,r,c)]); return a; };
-const colOf = (b,n,c) => { const a=[]; for(let r=0;r<n;r++) a.push(b[idx(n,r,c)]); return a; };
-const eqArr = (a,b) => a.length===b.length && a.every((v,i)=>v===b[i]);
+const E = TakuzuEngine;
 
-function hasTriple(line){
-  for(let i=0;i+2<line.length;i++){ const a=line[i]; if(a!=null && a===line[i+1] && a===line[i+2]) return true; }
-  return false;
-}
-function countLegal(line,n){ const h=n/2; let z=0,o=0; for(const v of line){ if(v===0)z++; else if(v===1)o++; } return z<=h && o<=h; }
-const lineComplete = line => line.every(v => v!=null);
-function completeValid(line,n){ return lineComplete(line) && line.filter(v=>v===0).length===n/2 && !hasTriple(line); }
-function uniqueAmong(line,lines){ let c=0; for(const l of lines){ if(lineComplete(l) && eqArr(l,line)) c++; } return c===1; }
-function allRows(b,n){ const a=[]; for(let r=0;r<n;r++) a.push(rowOf(b,n,r)); return a; }
-function allCols(b,n){ const a=[]; for(let c=0;c<n;c++) a.push(colOf(b,n,c)); return a; }
+// --- palette (mirror of takuzu--colors; same key names) ---
 
-function placementOk(b,n,r,c){
-  const rr=rowOf(b,n,r), cc=colOf(b,n,c);
-  if(hasTriple(rr)||!countLegal(rr,n)||hasTriple(cc)||!countLegal(cc,n)) return false;
-  if(lineComplete(rr) && !uniqueAmong(rr, allRows(b,n))) return false;
-  if(lineComplete(cc) && !uniqueAmong(cc, allCols(b,n))) return false;
-  return true;
-}
-function uniqueLines(lines){ const s=new Set(); for(const l of lines){ const k=l.join(''); if(s.has(k))return false; s.add(k); } return true; }
-function boardSolved(b,n){
-  if(b.some(v=>v==null)) return false;
-  const rows=allRows(b,n), cols=allCols(b,n);
-  return rows.every(l=>completeValid(l,n)) && cols.every(l=>completeValid(l,n)) && uniqueLines(rows) && uniqueLines(cols);
-}
-function legalValues(b,n,r,c){ const out=[]; const i=idx(n,r,c); for(const v of [0,1]){ b[i]=v; if(placementOk(b,n,r,c)) out.push(v); b[i]=null; } return out; }
-function propagate(b,n){
-  let filled=0, changed=true;
-  while(changed){ changed=false;
-    for(let r=0;r<n;r++) for(let c=0;c<n;c++){ const i=idx(n,r,c);
-      if(b[i]==null){ const vals=legalValues(b,n,r,c);
-        if(vals.length===0) return 'contradiction';
-        if(vals.length===1){ b[i]=vals[0]; filled++; changed=true; } } } }
-  return filled;
-}
-function solutions(b,n,limit,rand){
-  if(limit<=0) return [];
-  const rows=allRows(b,n), cols=allCols(b,n);
-  if(!rows.every(l=>!hasTriple(l)&&countLegal(l,n)&&(!lineComplete(l)||uniqueAmong(l,rows)))) return [];
-  if(!cols.every(l=>!hasTriple(l)&&countLegal(l,n)&&(!lineComplete(l)||uniqueAmong(l,cols)))) return [];
-  const snap=b.slice(); let res=[];
-  if(propagate(b,n)!=='contradiction'){
-    const i=b.indexOf(null);
-    if(i<0){ if(boardSolved(b,n)) res=[b.slice()]; }
-    else { const r=Math.floor(i/n), c=i%n; const order = rand && Math.random()<0.5 ? [1,0] : [0,1];
-      for(const v of order){ b[i]=v; if(placementOk(b,n,r,c)) res=res.concat(solutions(b,n,limit-res.length,rand)); b[i]=null; if(res.length>=limit) break; } }
-  }
-  for(let k=0;k<snap.length;k++) b[k]=snap[k];
-  return res;
-}
-const countSolutions = (b,n,limit=2) => solutions(b.slice(),n,limit,false).length;
-const isUnique = (b,n) => countSolutions(b,n,2)===1;
-function fullSolution(n){ return solutions(new Array(n*n).fill(null),n,1,true)[0]; }
-function propagationSolves(b,n){ const w=b.slice(); propagate(w,n); return w.every(v=>v!=null); }
-function forcedByHypothesis(b,n,r,c){
-  const s=[]; for(const v of [0,1]){ const t=b.slice(); t[idx(n,r,c)]=v; if(placementOk(t,n,r,c) && propagate(t,n)!=='contradiction') s.push(v); }
-  if(s.length===0) return 'contradiction'; if(s.length===1) return s[0]; return null;
-}
-function grade(b,n){
-  const w=b.slice(); propagate(w,n);
-  if(w.every(v=>v!=null)) return 'easy';
-  let progress=true;
-  while(progress && w.some(v=>v==null)){ progress=false;
-    outer: for(let r=0;r<n;r++) for(let c=0;c<n;c++){ if(w[idx(n,r,c)]==null){
-      const f=forcedByHypothesis(w,n,r,c);
-      if(f==='contradiction') break outer;
-      if(f!=null){ w[idx(n,r,c)]=f; propagate(w,n); progress=true; break outer; } } } }
-  return w.every(v=>v!=null) ? 'medium' : 'hard';
-}
-function carveKeep(b,n,tier){
-  if(tier==='easy') return propagationSolves(b,n);
-  if(tier==='medium') return isUnique(b,n) && ['easy','medium'].includes(grade(b,n));
-  return isUnique(b,n);
-}
-function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-function generate(n,tier){
-  const sol=fullSolution(n); const b=sol.slice(); const givens=new Array(n*n).fill(true);
-  for(const i of shuffle([...Array(n*n).keys()])){ const v=b[i]; b[i]=null; givens[i]=false;
-    if(!carveKeep(b,n,tier)){ b[i]=v; givens[i]=true; } }
-  return { size:n, solution:sol, cells:b.slice(), givens, grade:grade(b,n) };
-}
-
-const SEED6 = {
-  size:6, grade:'easy',
-  cells:[1,null,null,null,null,null, 1,null,null,null,0,null, null,0,null,null,0,null,
-         null,null,null,null,null,null, null,0,0,null,null,null, null,0,null,null,null,null],
-  solution:[1,1,0,0,1,0, 1,1,0,1,0,0, 0,0,1,1,0,1, 0,1,1,0,1,0, 1,0,0,1,0,1, 0,0,1,0,1,1],
-  givens:null
+const COLORS = {
+  // faceplate and hardware
+  "plate": "#1b1710", "plate-edge": "#2c2620", "panel-edge": "#201d17",
+  "screw": "#2b271f", "screw-slot": "#0c0a07",
+  "well": "#0a0c0d", "board-bg": "#14110c", "socket": "#0c0a07", "socket-edge": "#05040a",
+  // shared inks and metals
+  "ink": "#000000", "white": "#ffffff", "shadow": "#00000055",
+  "gold": "#b99640", "gold-hi": "#dcc061", "cream": "#f3e7c5",
+  "steel": "#969385", "dim": "#7c838a", "fail": "#cb6b4d",
+  "wash": "#2c2f32",
+  // board coins
+  "disc0": "#4d5f75", "disc1": "#8f5236", "bezel": "#a8aeb5",
+  "disc0-edge": "#6f839c", "disc1-edge": "#b8734f",
+  // nixie tubes
+  "amber": "#ff9a3c", "amber-off": "#3a2a1c", "amber-hi": "#ffbf7a",
+  "tube-glass": "#0b0807", "tube-edge": "#2c261d", "tube-halo": "#ff8c32",
+  // rotary knob
+  "knob": "#1f1b17", "knob-edge": "#3a352c", "knob-shade": "#2a2622",
+  // event annunciator
+  "annunciator-off": "#141210", "annunciator-lit": "#a8843a",
+  "annunciator-ink": "#1c1710", "annunciator-edge": "#262320",
+  // jewels and state lamps
+  "jewel-off": "#241f1b", "jewel-off-edge": "#0e0c0a",
+  "lamp-green": "#6fce33", "lamp-amber": "#ffb43a", "lamp-cyan": "#63e6c8",
+  // cursor: the machined brass bezel ring
+  "cursor-bezel-hi": "#e8cd76", "cursor-bezel": "#b99640",
+  "cursor-bezel-lo": "#7a5f24", "cursor-bezel-dk": "#57431a",
+  "cursor-spark": "#fdf3c9",
+  // instructions spec plate
+  "spec-silver": "#74787d", "spec-silver-hi": "#909498", "spec-silver-lo": "#52565b",
+  "spec-ink": "#16181c", "spec-name-silver": "#9ba0a8",
 };
-SEED6.givens = SEED6.cells.map(v=>v!=null);
+const c = key => COLORS[key];
 
-/* ============================ UI ============================ */
-const SIZES=[4,6,8,10,12], DIFFS=['easy','medium','hard'];
-const boardEl=document.getElementById('board'), statusEl=document.getElementById('status');
-const rLeft=document.getElementById('r-left'), rGrade=document.getElementById('r-grade');
-const progEl=document.getElementById('prog'), progLbl=document.getElementById('prog-lbl'), stateLamp=document.getElementById('statelamp');
-const clkMin=document.getElementById('clk-min'), clkSec=document.getElementById('clk-sec');
-const plateEl=document.querySelector('.plate'), stageEl=document.querySelector('.stage'),
-      rightPanelEl=document.querySelector('.rightpanel'), boardWrapEl=document.querySelector('.board-wrap'),
-      headEl=document.querySelector('.head');
-(function(){ const g=document.getElementById('clk-ticks'); if(!g) return;
-  for(let i=0;i<12;i++){ const a=i*30*Math.PI/180,
-      x1=(50+40*Math.sin(a)).toFixed(1), y1=(50-40*Math.cos(a)).toFixed(1),
-      x2=(50+46*Math.sin(a)).toFixed(1), y2=(50-46*Math.cos(a)).toFixed(1);
-    const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
-    ln.setAttribute('x1',x1); ln.setAttribute('y1',y1); ln.setAttribute('x2',x2); ln.setAttribute('y2',y2);
-    g.appendChild(ln); } })();
-const METER_SEGS=28;
-(function(){ if(progEl) for(let k=0;k<METER_SEGS;k++) progEl.appendChild(document.createElement('i')); })();
-function fitBoard(){
-  if(!G) return;
-  const n=G.size, gap=7, pad=16;
-  const vChrome = plateEl.offsetHeight - stageEl.offsetHeight;
-  const availH = window.innerHeight - 44 - vChrome;
-  const availW = stageEl.clientWidth - rightPanelEl.offsetWidth - 16;
-  const per = ext => (ext - 2*pad - (n-1)*gap) / n;
-  let cell = Math.floor(Math.min(per(availH), per(availW), 58));
-  cell = Math.max(cell, 18);
-  document.documentElement.style.setProperty('--cell', cell+'px');
-  // align the title's left edge to the centered board's left edge
-  headEl.style.marginLeft='0px';
-  const bl=boardWrapEl.getBoundingClientRect().left, hl=headEl.getBoundingClientRect().left;
-  headEl.style.marginLeft = Math.max(0, Math.round(bl-hl)) + 'px';
-  // place the status lamp directly above the column, centred over it
-  const lampEl=document.getElementById('statelamp');
-  if(lampEl){
-    lampEl.style.position='absolute'; lampEl.style.margin='0';
-    const pr=plateEl.getBoundingClientRect(), cr=rightPanelEl.getBoundingClientRect(), hr=headEl.getBoundingClientRect();
-    lampEl.style.left=(cr.left+cr.width/2-pr.left-plateEl.clientLeft-lampEl.offsetWidth/2)+'px';
-    lampEl.style.top=(hr.top+hr.height/2-pr.top-plateEl.clientTop-lampEl.offsetHeight/2)+'px';
-  }
+// Gradient stops of the cursor bezel's turned-metal catch, top-left to bottom-right.
+const CURSOR_BEZEL_STOPS = [
+  [0, "cursor-bezel-hi"], [0.30, "cursor-bezel"],
+  [0.68, "cursor-bezel-lo"], [1, "cursor-bezel-dk"],
+];
+
+// --- layout constants (mirror of the takuzu-- layout defconsts) ---
+
+const GAP = 6;             // pixels between board cells
+const BPAD = 14;           // board inner padding
+const PPAD = 24;           // faceplate padding
+const STAGE_GAP = 16;      // gap between the board and the right panel
+const PANEL_W = 88;        // right panel width
+const PANEL_MIN_H = 406;   // minimum instrument-panel height
+const TITLE_H = 78;        // title band height
+const LEGEND_H = 64;       // legend band height
+const EVENT_H = 30;        // event annunciator strip height
+const EVENT_TICK = 0.08;   // seconds between event-lamp pulse frames
+const EVENT_BREATH = 2.8;  // seconds per breathing cycle
+const EVENT_DUR = EVENT_BREATH; // one breath, then dark
+const FILL = 0.85;         // fraction of the window the faceplate fills
+const CHAR_ASPECT = 0.62;  // monospace glyph width / font size
+const FLASH_PERIOD = 1.0;  // seconds per on/off cycle of the flashing New key
+const SIZES = [4, 6, 8, 10, 12];
+const DIFFS = ["easy", "medium", "hard"];
+const DEFAULT_SIZE = 6;
+const DEFAULT_DIFFICULTY = "easy";
+
+const cellSize = n => n <= 6 ? 50 : n <= 8 ? 44 : n <= 10 ? 38 : 34;
+const boardSpan = n => 2 * BPAD + n * cellSize(n) + (n - 1) * GAP;
+
+// --- game state ---
+
+const state = {
+  board: null,        // {size, cells, givens}
+  solution: null,     // cells array of the unique solution
+  grade: null,
+  size: DEFAULT_SIZE,
+  cursor: [0, 0],
+  assist: false,
+  history: [],        // [index, prevValue] undo stack
+  startTime: null,
+  won: false,
+  proven: false,
+  wonElapsed: 0,
+  status: "",
+  event: null,
+  eventTime: null,
+  generating: null,   // {size, difficulty} while generating
+  spinner: 0,
+  armed: null,        // {size, difficulty} while waiting for the start key
+  pending: null,      // pre-generated result awaiting the start key
+  pendingStart: false,
+  difficulty: null,
+  help: false,
+};
+const timers = { refresh: null, event: null, spinner: null };
+let genToken = 0;
+
+function cancelTimer(name) {
+  if (timers[name] != null) { clearInterval(timers[name]); timers[name] = null; }
 }
 
-let G=null, sel=0, startTs=null, timer=null, won=false, size=6, diff='easy', hint=null, assist=false, history=[];
+const blankBoard = n => ({
+  size: n,
+  cells: new Array(n * n).fill(null),
+  givens: new Array(n * n).fill(false),
+});
 
-function buildSeg(id, values, current, onPick){
-  const el=document.getElementById(id); el.innerHTML='';
-  for(const v of values){ const b=document.createElement('button');
-    b.textContent=String(v); b.setAttribute('aria-pressed', v===current?'true':'false');
-    b.addEventListener('click', ()=>onPick(v)); el.appendChild(b); }
-}
-function refreshSeg(id, current){ for(const b of document.getElementById(id).children) b.setAttribute('aria-pressed', b.textContent===String(current)?'true':'false'); }
+const boardRef = (b, r, cc) => b.cells[r * b.size + cc];
+const givenP = (b, r, cc) => b.givens[r * b.size + cc];
 
-function startGame(game){
-  G=game; won=false; hint=null; history=[]; stateLamp.className='lamp big gold';
-  boardEl.style.gridTemplateColumns=`repeat(${G.size}, var(--cell))`;
-  boardEl.classList.remove('solved');
-  const firstOpen=G.givens.findIndex(g=>!g); sel = firstOpen<0?0:firstOpen;
-  renderBoard();
-  rGrade.textContent=G.grade; refreshSeg('size-seg',G.size); refreshSeg('diff-seg',diff);
-  startTs=Date.now(); if(timer)clearInterval(timer); timer=setInterval(tick,250); tick();
-  setStatus('');
-  fitBoard();
+// --- helpers ---
+
+function elapsed() {
+  if (state.won || state.proven) return state.wonElapsed;
+  if (state.startTime != null)
+    return Math.floor((Date.now() - state.startTime) / 1000);
+  return 0;
 }
-function newGame(){
-  setStatus('Generating…'); boardEl.classList.add('busy');
-  setTimeout(()=>{ let g; try{ g=generate(size,diff); }catch(e){ g=SEED6; }
-    boardEl.classList.remove('busy'); startGame(g); }, 20);
+
+const flashOnP = () => (Date.now() / 1000) % FLASH_PERIOD < 0.5 * FLASH_PERIOD;
+const refreshInterval = () => Math.max(0.2, Math.min(1.0, FLASH_PERIOD / 2));
+const fmtTime = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+const curP = (r, cc) => r === state.cursor[0] && cc === state.cursor[1];
+
+function lineBadP(line, n, lines) {
+  return E.hasTriple(line)
+    || !E.countLegal(line, n)
+    || (E.lineComplete(line)
+        && lines.filter(l => E.lineComplete(l) && l.join(",") === line.join(",")).length > 1);
 }
-function renderBoard(){
-  boardEl.innerHTML=''; const n=G.size;
-  for(let i=0;i<n*n;i++){ const cell=document.createElement('div');
-    cell.className='cell'; cell.dataset.i=i; cell.id='tk-'+i; cell.setAttribute('role','gridcell');
-    const disc=document.createElement('span'); disc.className='disc'; cell.appendChild(disc);
-    boardEl.appendChild(cell); }
-  paint();
-}
-function paint(){
-  const n=G.size, errs=errorSet(), cells=boardEl.children;
-  for(let i=0;i<n*n;i++){ const el=cells[i], v=G.cells[i], given=G.givens[i];
-    el.classList.toggle('given',given); el.classList.toggle('filled',v!=null);
-    el.classList.toggle('err',errs.has(i)); el.classList.toggle('sel',i===sel);
-    el.classList.remove('hint-line','hint-src','hint-dst');
-    el.firstChild.className='disc'+(v===0?' v0':v===1?' v1':'');
-    const r=Math.floor(i/n)+1,c=(i%n)+1;
-    el.setAttribute('aria-label',`Row ${r} column ${c}, ${v==null?'empty':(v===0?'blue':'orange')}${given?', given':''}`);
-  }
-  if(hint){
-    hint.line.forEach(k=>{ if(cells[k]) cells[k].classList.add('hint-line'); });
-    if(hint.stage>=2){
-      hint.cells.forEach(k=>{ if(cells[k]) cells[k].classList.add('hint-src'); });
-      if(cells[hint.i]) cells[hint.i].classList.add('hint-dst');
-    }
-  }
-  boardEl.setAttribute('aria-activedescendant','tk-'+sel);
-  const total=n*n, empty=G.cells.filter(v=>v==null).length, filled=total-empty;
-  rLeft.textContent=empty;
-  const pct=Math.round(filled/total*100); progLbl.textContent=pct+' %';
-  const lit=Math.round(filled/total*METER_SEGS), hot=Math.round(METER_SEGS*0.8), segs=progEl.children;
-  for(let k=0;k<segs.length;k++) segs[k].className = k<lit ? (k>=hot?'hot':'on') : '';
-}
-function errorSet(){
-  if(!assist) return new Set();
-  const n=G.size, bad=new Set(), rows=allRows(G.cells,n), cols=allCols(G.cells,n);
-  const mark=(isBad,cells)=>{ if(isBad) cells.forEach(i=>bad.add(i)); };
-  for(let r=0;r<n;r++){ const line=rows[r]; const dup=lineComplete(line)&&!uniqueAmong(line,rows);
-    mark(hasTriple(line)||!countLegal(line,n)||dup, [...Array(n).keys()].map(c=>idx(n,r,c))); }
-  for(let c=0;c<n;c++){ const line=cols[c]; const dup=lineComplete(line)&&!uniqueAmong(line,cols);
-    mark(hasTriple(line)||!countLegal(line,n)||dup, [...Array(n).keys()].map(r=>idx(n,r,c))); }
+
+// Vector marking each index that lies in a rule-breaking line; null when assist is off.
+function errorVector() {
+  if (!state.assist) return null;
+  const n = state.size;
+  const bad = new Array(n * n).fill(false);
+  const rows = E.allRows(state.board.cells, n);
+  const cols = E.allCols(state.board.cells, n);
+  for (let r = 0; r < n; r++)
+    if (lineBadP(rows[r], n, rows))
+      for (let cc = 0; cc < n; cc++) bad[r * n + cc] = true;
+  for (let cc = 0; cc < n; cc++)
+    if (lineBadP(cols[cc], n, cols))
+      for (let r = 0; r < n; r++) bad[r * n + cc] = true;
   return bad;
 }
-function setCell(i,v){
-  if(G.givens[i]){ setStatus('That cell is a given — it can’t change.'); return; }
-  if(won) return;
-  hint=null;
-  history.push({i, prev:G.cells[i]});
-  G.cells[i]=v; paint(); setStatus('');
-  if(boardSolved(G.cells,G.size)) win();
-}
-function undo(){
-  if(won){ setStatus('The puzzle is finished.'); return; }
-  const last=history.pop();
-  if(!last){ setStatus('Nothing to undo.'); return; }
-  hint=null; G.cells[last.i]=last.prev; sel=last.i; paint(); setStatus('');
-}
-function cycleCell(i){ const v=G.cells[i]; setCell(i, v==null?0:v===0?1:null); }
-function win(){ won=true; clearInterval(timer); boardEl.classList.add('solved'); stateLamp.className='lamp big win';
-  statusEl.className='status win'; statusEl.textContent=`Solved in ${fmt(elapsed())} · nicely done`; }
-function setStatus(msg,cls){ statusEl.className='status'+(cls?' '+cls:''); statusEl.textContent=msg; }
-const elapsed=()=>Math.floor((Date.now()-startTs)/1000);
-const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
-function tick(){ if(won) return; const s=elapsed();
-  if(clkSec) clkSec.setAttribute('transform',`rotate(${(s%60)*6} 50 50)`);
-  if(clkMin) clkMin.setAttribute('transform',`rotate(${(s/60*6)%360} 50 50)`); }
 
-/* selection is state, not DOM focus — arrows always work */
-function moveSel(dr,dc){ const n=G.size; let r=Math.floor(sel/n)+dr, c=sel%n+dc;
-  r=Math.max(0,Math.min(n-1,r)); c=Math.max(0,Math.min(n-1,c)); sel=idx(n,r,c); paint(); }
+const emptyCount = () => state.board.cells.filter(v => v == null).length;
 
-boardEl.addEventListener('click', e => {
-  const cell=e.target.closest('.cell'); if(!cell) return;
-  sel=+cell.dataset.i; boardEl.focus(); paint(); cycleCell(sel);
+function fillPct() {
+  const total = state.size * state.size;
+  return 100 * (total - emptyCount()) / total;
+}
+
+// --- SVG element emitters (an svg is an array of markup strings) ---
+
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function attrs(o) {
+  let out = "";
+  for (const k in o) if (o[k] != null) out += ` ${k}="${o[k]}"`;
+  return out;
+}
+const rect = (svg, x, y, w, h, o) => svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}"${attrs(o)}/>`);
+const circle = (svg, cx, cy, r, o) => svg.push(`<circle cx="${cx}" cy="${cy}" r="${r}"${attrs(o)}/>`);
+const ellipse = (svg, cx, cy, rx, ry, o) => svg.push(`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"${attrs(o)}/>`);
+const line = (svg, x1, y1, x2, y2, o) => svg.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${attrs(o)}/>`);
+const polygon = (svg, pts, o) => svg.push(`<polygon points="${pts.map(p => p.join(",")).join(" ")}"${attrs(o)}/>`);
+const pathEl = (svg, d, o) => svg.push(`<path d="${d}"${attrs(o)}/>`);
+function textEl(svg, x, y, str, o) {
+  svg.push(`<text x="${x}" y="${y}"${attrs(o)}>${esc(str)}</text>`);
+}
+
+// Mirror of takuzu--txt: monospace text at a size/color/anchor/weight.
+function txt(svg, x, y, str, size, color, anchor, weight) {
+  textEl(svg, x, y, str, {
+    "font-family": "monospace", "font-size": size, fill: color,
+    "font-weight": weight || "normal", "text-anchor": anchor || "start",
+  });
+}
+
+// --- SVG regions ---
+
+function drawScrew(svg, x, y) {
+  circle(svg, x, y, 5, { fill: c("screw"), stroke: c("screw-slot") });
+  line(svg, x - 2, y - 2, x + 2, y + 2, { stroke: c("screw-slot"), "stroke-width": 1 });
+}
+
+function drawTitle(svg, x, y) {
+  textEl(svg, x, y + 31, "TAKUZU", {
+    "font-family": "monospace", "font-size": 30, fill: c("gold"),
+    "font-weight": "bold", "font-style": "italic", "text-anchor": "start",
+  });
+  txt(svg, x + 112, y + 31, "/", 30, c("gold-hi"), "start");
+  const ax = x + 134;
+  txt(svg, ax, y + 14, "BINAIRO", 10, c("dim"));
+  txt(svg, ax, y + 28, "TOHU WA-VOHU", 10, c("dim"));
+  txt(svg, ax, y + 42, "BINARY LOGIC", 10, c("dim"));
+}
+
+function drawFaceplateShell(svg, w, h, noTitle) {
+  rect(svg, 0, 0, w, h, { rx: 16, fill: c("plate"), stroke: c("plate-edge") });
+  for (const [x, y] of [[12, 12], [w - 12, 12], [12, h - 12], [w - 12, h - 12]])
+    drawScrew(svg, x, y);
+  if (!noTitle) drawTitle(svg, PPAD, PPAD);
+}
+
+// Givens wear a thin dulled-silver bezel; placed discs a lighter lip of their colour.
+function drawDisc(svg, cx, cy, r, val, given) {
+  const fill = val === 0 ? c("disc0") : c("disc1");
+  const edge = val === 0 ? c("disc0-edge") : c("disc1-edge");
+  if (given) {
+    circle(svg, cx, cy, r + 1, { fill: "none", stroke: c("ink"), "stroke-width": 1 });
+    circle(svg, cx, cy, r, { fill, stroke: c("bezel"), "stroke-width": 1.2 });
+  } else {
+    circle(svg, cx, cy, r, { fill, stroke: edge, "stroke-width": 1.2 });
+  }
+}
+
+// The cursor: a machined brass bezel ring seated on the socket rim, catching
+// light from the top-left with a hard specular flash on that corner's arc.
+function drawCursorBezel(svg, sx, sy, cell) {
+  const g = "takuzu-cursor-bezel-g";
+  // machined catch: brightest at the top-left, falling to shadowed brass
+  svg.push(`<linearGradient id="${g}" gradientUnits="userSpaceOnUse" `
+    + `x1="${sx}" y1="${sy}" x2="${sx + cell}" y2="${sy + cell}">`
+    + CURSOR_BEZEL_STOPS.map(([off, key]) =>
+        `<stop offset="${off}" stop-color="${c(key)}"/>`).join("")
+    + `</linearGradient>`);
+  // grounding shadow just outside the ring seats it on the plate
+  rect(svg, sx - 2.2, sy - 2.2, cell + 4.4, cell + 4.4, {
+    rx: 11, fill: "none", stroke: c("ink"),
+    "stroke-width": 1.2, "stroke-opacity": 0.7,
+  });
+  // the turned ring, its stroke carrying the metal gradient
+  rect(svg, sx - 0.8, sy - 0.8, cell + 1.6, cell + 1.6, {
+    rx: 9.8, fill: "none", stroke: `url(#${g})`, "stroke-width": 3.2,
+  });
+  // a turning groove scored into the ring face
+  rect(svg, sx - 0.8, sy - 0.8, cell + 1.6, cell + 1.6, {
+    rx: 9.8, fill: "none", stroke: c("ink"),
+    "stroke-width": 0.5, "stroke-opacity": 0.35,
+  });
+  // hard specular catch on the top-left corner arc
+  pathEl(svg, `M ${sx - 0.8} ${sy + 9} A 9.8 9.8 0 0 1 ${sx + 9} ${sy - 0.8}`, {
+    fill: "none", stroke: c("cursor-spark"), "stroke-opacity": 0.9,
+    "stroke-width": 1.4, "stroke-linecap": "round",
+  });
+  // polished inner lip where the ring meets the cup
+  rect(svg, sx + 1.4, sy + 1.4, cell - 2.8, cell - 2.8, {
+    rx: 7.8, fill: "none", stroke: c("white"),
+    "stroke-width": 0.7, "stroke-opacity": 0.3,
+  });
+}
+
+function drawBoard(svg, x, y) {
+  const n = state.size, cell = cellSize(n);
+  const span = boardSpan(n);
+  const errs = errorVector();
+  rect(svg, x, y, span, span, { rx: 12, fill: c("board-bg"), stroke: c("ink") });
+  for (let r = 0; r < n; r++) {
+    for (let cc = 0; cc < n; cc++) {
+      const sx = x + BPAD + cc * (cell + GAP);
+      const sy = y + BPAD + r * (cell + GAP);
+      const i = r * n + cc;
+      const val = boardRef(state.board, r, cc);
+      const given = givenP(state.board, r, cc);
+      const bad = errs && errs[i];
+      rect(svg, sx, sy, cell, cell, {
+        rx: 9, fill: c("socket"),
+        stroke: bad ? c("fail") : c("socket-edge"),
+        "stroke-width": bad ? 2 : 1,
+      });
+      if (curP(r, cc)) drawCursorBezel(svg, sx, sy, cell);
+      if (val != null)
+        drawDisc(svg, sx + cell / 2, sy + cell / 2, Math.round(cell * 0.33), val, given);
+    }
+  }
+  return span;
+}
+
+// Glowing amber when lit, a dim ember when not.  The digit scales with h.
+function drawNixieTube(svg, x, y, w, h, ch, lit) {
+  rect(svg, x, y, w, h, { rx: 4, fill: c("tube-glass"), stroke: c("tube-edge") });
+  const fs = Math.round(h * 0.62);
+  if (lit) {
+    ellipse(svg, x + w / 2, y + h * 0.52, w * 0.42, h * 0.34,
+      { fill: c("tube-halo"), "fill-opacity": 0.16 });
+    txt(svg, x + w / 2, Math.round(y + h * 0.72), ch, fs + 2, c("amber-hi"), "middle");
+  }
+  txt(svg, x + w / 2, Math.round(y + h * 0.72), ch, fs,
+    lit ? c("amber") : c("amber-off"), "middle");
+  rect(svg, x + 1.5, y + 1.5, w - 3, h * 0.28,
+    { rx: 3, fill: c("white"), "fill-opacity": 0.05 });
+}
+
+// Engraved frame with the caption etched into a break in the top edge.
+function drawFrame(svg, x, y, w, h, label) {
+  rect(svg, x, y, w, h, { rx: 6, fill: "none", stroke: c("wash"), "stroke-width": 1 });
+  const cx = x + w / 2;
+  const lw = label.length * 7 + 8;
+  rect(svg, Math.round(cx - lw / 2), y - 6, Math.round(lw), 12, { fill: c("well") });
+  txt(svg, Math.round(cx), y + 3, label, 9, c("steel"), "middle");
+}
+
+// Two nixie tubes; a ghost 0 in the tens tube for single-digit sizes, and
+// up/down chevrons hinting the size is adjustable (the s key).
+function drawNixieSize(svg, cx, y, size) {
+  const tw = 16, th = 23, g = 4;
+  const s = String(size).padStart(2, "0");
+  const x0 = Math.round(cx - 23);
+  const ax = x0 + 2 * tw + g + 7;
+  drawNixieTube(svg, x0, y, tw, th, s[0], size >= 10);
+  drawNixieTube(svg, x0 + tw + g, y, tw, th, s[1], true);
+  polygon(svg, [[ax, y + 3], [ax + 3, y + 9], [ax - 3, y + 9]], { fill: c("steel") });
+  polygon(svg, [[ax, y + th - 1], [ax + 3, y + th - 7], [ax - 3, y + th - 7]], { fill: c("steel") });
+}
+
+function drawNixieTime(svg, cx, y) {
+  const str = fmtTime(elapsed());
+  const tw = 15, th = 23, g = 3, colw = 7;
+  let total = 0;
+  for (let i = 0; i < str.length; i++)
+    total += (str[i] === ":" ? colw : tw) + (i > 0 ? g : 0);
+  let x = cx - Math.floor(total / 2);
+  for (let i = 0; i < str.length; i++) {
+    if (i > 0) x += g;
+    const ch = str[i];
+    if (ch === ":") {
+      txt(svg, Math.round(x + colw / 2), Math.round(y + th * 0.64), ":", 15, c("amber"), "middle");
+      x += colw;
+    } else {
+      drawNixieTube(svg, Math.round(x), y, tw, th, ch, true);
+      x += tw;
+    }
+  }
+}
+
+function drawRotaryLevel(svg, cx, cy) {
+  const r = 19;
+  const level = state.grade || state.difficulty;
+  const specs = [["easy", "EASY", -46], ["medium", "MED", 0], ["hard", "HARD", 46]];
+  const found = specs.find(s => s[0] === level);
+  const ang = found ? found[2] : 0;
+  const rad = a => (a - 90) * Math.PI / 180;
+  circle(svg, cx, cy, r, { fill: c("knob"), stroke: c("knob-edge"), "stroke-width": 1 });
+  circle(svg, Math.round(cx - r * 0.3), Math.round(cy - r * 0.3), Math.round(r * 0.5),
+    { fill: c("knob-shade"), "fill-opacity": 0.45 });
+  const a = rad(ang);
+  line(svg, cx, cy, Math.round(cx + (r - 5) * Math.cos(a)), Math.round(cy + (r - 5) * Math.sin(a)),
+    { stroke: c("gold-hi"), "stroke-width": 2, "stroke-linecap": "round" });
+  for (const [lv, lab, deg] of specs) {
+    const la = rad(deg);
+    const lx = cx + (r + 12) * Math.cos(la), ly = cy + (r + 12) * Math.sin(la);
+    const on = lv === level;
+    txt(svg, Math.round(lx), Math.round(ly + 3), lab, 7,
+      on ? c("gold-hi") : c("steel"), "middle", on ? "bold" : null);
+  }
+}
+
+// The needle sweeps left-to-right across the top by pct; value sits below.
+function drawNeedleGauge(svg, cx, cy, r, pct, value) {
+  pathEl(svg, `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`,
+    { fill: "none", stroke: c("wash"), "stroke-width": 2 });
+  for (let i = 0; i <= 6; i++) {
+    const th = (180 - i * 30) * Math.PI / 180;
+    line(svg,
+      Math.round(cx + r * Math.cos(th)), Math.round(cy - r * Math.sin(th)),
+      Math.round(cx + (r - 5) * Math.cos(th)), Math.round(cy - (r - 5) * Math.sin(th)),
+      { stroke: c("steel"), "stroke-width": 1 });
+  }
+  const th = (180 - (pct / 100) * 180) * Math.PI / 180;
+  line(svg, cx, cy,
+    Math.round(cx + (r - 4) * Math.cos(th)), Math.round(cy - (r - 4) * Math.sin(th)),
+    { stroke: c("gold-hi"), "stroke-width": 2, "stroke-linecap": "round" });
+  circle(svg, cx, cy, 4, { fill: c("gold") });
+  txt(svg, cx, cy + 15, String(value), 12, c("cream"), "middle", "bold");
+}
+
+// Fixed-height framed instruments; leftover height spreads as even gaps.
+function drawPanel(svg, x, y, h) {
+  const w = PANEL_W, cx = x + Math.floor(w / 2);
+  const fx = x + 8, fw = w - 16;
+  const timeH = 44, sizeH = 46, levelH = 84, leftH = 62, stateH = 110;
+  const gap = (h - 12 - 8 - timeH - sizeH - levelH - leftH - stateH) / 4;
+  let fy = y + 12;
+  rect(svg, x, y, w, h, { rx: 10, fill: c("well"), stroke: c("panel-edge") });
+  drawFrame(svg, fx, Math.round(fy), fw, timeH, "TIME");
+  drawNixieTime(svg, cx, Math.round(fy) + 10);
+  fy += timeH + gap;
+  drawFrame(svg, fx, Math.round(fy), fw, sizeH, "SIZE");
+  drawNixieSize(svg, cx, Math.round(fy) + 11, state.size);
+  fy += sizeH + gap;
+  drawFrame(svg, fx, Math.round(fy), fw, levelH, "LEVEL");
+  drawRotaryLevel(svg, cx, Math.round(fy) + 48);
+  fy += levelH + gap;
+  drawFrame(svg, fx, Math.round(fy), fw, leftH, "LEFT");
+  drawNeedleGauge(svg, cx, Math.round(fy) + 38, 26, fillPct(), emptyCount());
+  fy += leftH + gap;
+  drawStateLamps(svg, fx, Math.round(fy), fw, (y + h) - 8 - Math.round(fy));
+}
+
+function drawJewel(svg, cx, cy, r, color, on) {
+  if (on) {
+    circle(svg, cx, cy, r + 3, { fill: color, "fill-opacity": 0.25 });
+    circle(svg, cx, cy, r, { fill: color, stroke: c("shadow"), "stroke-width": 0.6 });
+    circle(svg, Math.round(cx - r * 0.35), Math.round(cy - r * 0.35), Math.round(r * 0.4),
+      { fill: c("white"), "fill-opacity": 0.6 });
+  } else {
+    circle(svg, cx, cy, r, { fill: c("jewel-off"), stroke: c("jewel-off-edge"), "stroke-width": 0.5 });
+  }
+}
+
+function gameState() {
+  if (state.armed) return "ready";
+  if (state.won) return "solved";
+  if (state.proven) return "shown";
+  return "solving";
+}
+
+function drawStateLamps(svg, x, y, w, h) {
+  drawFrame(svg, x, y, w, h, "STATE");
+  const st = gameState();
+  const lamps = [
+    ["READY", c("lamp-green"), st === "ready"],
+    ["SOLVING", c("lamp-amber"), st === "solving"],
+    ["SOLVED", c("lamp-green"), st === "solved"],
+    ["SHOWN", c("fail"), st === "shown"],
+    ["ASSIST", c("lamp-cyan"), state.assist],
+  ];
+  const n = lamps.length, top = y + 16, bot = y + h - 12;
+  const rowstep = (bot - top) / (n - 1);
+  const jx = x + 22;
+  lamps.forEach(([lab, col, on], i) => {
+    const ly = Math.round(top + i * rowstep);
+    drawJewel(svg, jx, ly, 6, col, on);
+    txt(svg, jx + 13, ly + 3, lab, 7, on ? c("cream") : c("steel"), "start");
+  });
+}
+
+// Slow breathing intensity 0..1 of the current event over elapsed time.
+function eventIntensity() {
+  if (state.eventTime == null) return 0;
+  const e = (Date.now() - state.eventTime) / 1000;
+  return 0.5 * (1 - Math.cos(2 * Math.PI * e / EVENT_BREATH));
+}
+
+function lerpColor(a, b, k) {
+  const chan = (s, i) => parseInt(s.slice(1 + i * 2, 3 + i * 2), 16);
+  const mix = i => Math.max(0, Math.min(255, Math.round(chan(a, i) + k * (chan(b, i) - chan(a, i)))));
+  return "#" + [0, 1, 2].map(i => mix(i).toString(16).padStart(2, "0")).join("");
+}
+
+// Six momentary-event legends; the active one pulses like a warm lamp, then fades.
+function drawEventAnnunciator(svg, x, y, w, h) {
+  rect(svg, x, y, w, h, { rx: 10, fill: c("well"), stroke: c("panel-edge") });
+  const events = [["fixed", "FIXED"], ["hint", "HINT"], ["no-hint", "NO HINT"],
+                  ["invalid", "INVALID"], ["nothing", "NOTHING"], ["gen-fail", "GEN FAIL"]];
+  const n = events.length, pad = 12, gap = 4;
+  const cw = (w - 2 * pad - (n - 1) * gap) / n;
+  const chh = h - 16, cy = y + 8;
+  const k = eventIntensity();
+  events.forEach(([ev, lab], i) => {
+    const cx = x + pad + i * (cw + gap);
+    const lit = ev === state.event ? k : 0;
+    const bg = lerpColor(c("annunciator-off"), c("annunciator-lit"), lit);
+    const fg = lerpColor(c("dim"), c("annunciator-ink"), lit);
+    rect(svg, Math.round(cx), cy, Math.round(cw), Math.round(chh),
+      { rx: 3, fill: bg, stroke: c("annunciator-edge") });
+    txt(svg, Math.round(cx + cw / 2), Math.round(cy + chh / 2 + 3), lab, 8.5, fg, "middle", "bold");
+  });
+}
+
+// --- legend ---
+
+function legendGlyph(svg, cx, y, size, key, color, underline) {
+  textEl(svg, cx, y, key, {
+    "font-family": "monospace", "font-size": size, fill: color,
+    "font-weight": underline ? "bold" : "normal",
+    "text-decoration": underline ? "underline" : "none",
+  });
+}
+
+function legendItemWidth(it, charw, kgap) {
+  if (it[0] === "word" || it[0] === "flashword") return it[1].length * charw;
+  return it[1].length * charw + kgap + it[2].length * charw;
+}
+
+// Items justified across width: (word W) first letter gold-underlined,
+// (flashword W ON) flashing first letter, (keyed K L) key underlined then label.
+function drawLegendLine(svg, x, y, width, size, items) {
+  const charw = size * CHAR_ASPECT, kgap = size * 0.4;
+  const widths = items.map(it => legendItemWidth(it, charw, kgap));
+  const n = items.length;
+  const inter = n > 1
+    ? Math.max(size * 0.9, (width - widths.reduce((a, b) => a + b, 0)) / (n - 1))
+    : 0;
+  let cx = x;
+  items.forEach((it, i) => {
+    if (it[0] === "word") {
+      const w = it[1];
+      legendGlyph(svg, cx, y, size, w[0], c("gold"), true);
+      legendGlyph(svg, cx + charw, y, size, w.slice(1), c("dim"));
+    } else if (it[0] === "flashword") {
+      const w = it[1], on = it[2];
+      legendGlyph(svg, cx, y, size, w[0], on ? c("gold-hi") : c("steel"), on);
+      legendGlyph(svg, cx + charw, y, size, w.slice(1), c("dim"));
+    } else if (it[0] === "keyed") {
+      const k = it[1], l = it[2];
+      legendGlyph(svg, cx, y, size, k, c("gold"), true);
+      legendGlyph(svg, cx + k.length * charw + kgap, y, size, l, c("dim"));
+    }
+    cx += widths[i] + inter;
+  });
+}
+
+function drawEngrave(svg, x, y, width, label) {
+  txt(svg, x, y, label, 9, c("steel"));
+  line(svg, x + label.length * 7 + 12, y - 3, x + width, y - 3,
+    { stroke: c("wash"), "stroke-width": 1 });
+}
+
+const stripWidth = () => boardSpan(state.size) + STAGE_GAP + PANEL_W;
+
+// GAME (session keys) on top, PLAY (solving keys) below; New flashes while armed.
+function drawLegend(svg, x, y, width) {
+  const newItem = state.armed ? ["flashword", "NEW", flashOnP()] : ["word", "NEW"];
+  drawEngrave(svg, x, y, width, "GAME");
+  drawLegendLine(svg, x, y + 16, width, 10,
+    [newItem, ["word", "RESET"], ["word", "SIZE"], ["word", "LEVEL"],
+     ["word", "PROVE"], ["word", "INSTRUCTIONS"], ["word", "QUIT"]]);
+  drawEngrave(svg, x, y + 36, width, "PLAY");
+  drawLegendLine(svg, x, y + 52, width, 10,
+    [["keyed", "SPC", "CYCLE"], ["word", "UNDO"], ["keyed", "?", "HINT"],
+     ["word", "CHECK"], ["word", "ASSIST"]]);
+}
+
+// --- faceplate geometry ---
+
+const faceplateWidth = () => 2 * PPAD + Math.max(stripWidth(), 380);
+
+// At sizes 8+ the panel starts at the board's top; smaller boards start it
+// up in the title band so the instruments get more room.
+const panelTop = () => state.size >= 8 ? PPAD + TITLE_H : PPAD + 6;
+
+// The lower of the board and panel bottoms; small boards stretch the stage
+// to keep the panel at PANEL_MIN_H and centre the board in the extra room.
+const stageBottom = () => Math.max(
+  PPAD + TITLE_H + boardSpan(state.size),
+  panelTop() + PANEL_MIN_H);
+
+const faceplateHeight = () =>
+  stageBottom() + 12 + EVENT_H + 14 + LEGEND_H + PPAD;
+
+// Mirror of takuzu--svg: the whole faceplate for the current state.
+function svgFaceplate() {
+  const boardw = boardSpan(state.size);
+  const w = faceplateWidth();
+  const stagey = PPAD + TITLE_H;
+  const bottom = stageBottom();
+  const boardy = stagey + Math.floor((bottom - stagey - boardw) / 2);
+  const h = faceplateHeight();
+  const svg = [];
+  drawFaceplateShell(svg, w, h);
+  drawBoard(svg, PPAD, boardy);
+  const px = PPAD + boardw + STAGE_GAP;
+  const ptop = panelTop();
+  drawPanel(svg, px, ptop, bottom - ptop);
+  const evy = bottom + 12;
+  drawEventAnnunciator(svg, PPAD, evy, stripWidth(), EVENT_H);
+  drawLegend(svg, PPAD, evy + EVENT_H + 14, w - 2 * PPAD);
+  return { w, h, body: svg.join("") };
+}
+
+// --- generating overlay ---
+
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function svgGenerating() {
+  const w = faceplateWidth(), h = faceplateHeight();
+  const svg = [];
+  const diff = state.generating.difficulty, n = state.generating.size;
+  const frame = SPINNER_FRAMES[state.spinner % SPINNER_FRAMES.length];
+  drawFaceplateShell(svg, w, h);
+  txt(svg, Math.floor(w / 2), Math.floor(h / 2) - 4, frame, 48, c("gold"), "middle");
+  txt(svg, Math.floor(w / 2), Math.floor(h / 2) + 36,
+    `generating a ${diff} ${n}×${n} puzzle…`, 13, c("dim"), "middle");
+  return { w, h, body: svg.join("") };
+}
+
+// --- help overlay: the brushed-silver spec plate ---
+
+const RULES = [
+  ["No three cells of the same colour", "may sit adjacent in a row or column."],
+  ["Each row and each column must hold", "an equal number of both colours."],
+  ["No two rows may be identical, and", "no two columns may be identical."],
+];
+
+// Etched text: a light lower highlight then dark ink on top.
+function helpEtch(svg, x, y, str, size, anchor, ink, hi, weight) {
+  textEl(svg, x, y + 1, str, {
+    "font-family": "monospace", "font-size": size, fill: hi, "fill-opacity": 0.5,
+    "text-anchor": anchor, "font-weight": weight || "normal",
+  });
+  textEl(svg, x, y, str, {
+    "font-family": "monospace", "font-size": size, fill: ink,
+    "text-anchor": anchor, "font-weight": weight || "normal",
+  });
+}
+
+function helpDivider(svg, x1, x2, y, ink, hi) {
+  line(svg, x1, y + 1, x2, y + 1, { stroke: hi, "stroke-opacity": 0.5 });
+  line(svg, x1, y, x2, y, { stroke: ink, "stroke-opacity": 0.55 });
+}
+
+// Brushed-silver plate with sheen bands and corner rivets.
+function helpPlate(svg, x, y, w, h) {
+  const base = c("spec-silver"), light = c("spec-silver-hi");
+  const dark = c("spec-silver-lo"), edge = c("plate-edge");
+  rect(svg, x, y, w, h, { rx: 9, fill: base, stroke: edge, "stroke-width": 1.4 });
+  // a light wash fading down from the top, a shadow deepening toward the bottom
+  const bands = 26, bh = 1.0 + h / bands;
+  for (let i = 0; i < bands; i++) {
+    const frac = i / bands, by = y + frac * h;
+    rect(svg, x + 3, by, w - 6, bh, { fill: light, "fill-opacity": 0.45 * (1 - frac) });
+    rect(svg, x + 3, by, w - 6, bh, { fill: dark, "fill-opacity": 0.40 * frac });
+  }
+  for (let yy = y + 6; yy <= y + h - 6; yy += 2)
+    line(svg, x + 6, yy, x + w - 6, yy, { stroke: c("white"), "stroke-opacity": 0.04 });
+  rect(svg, x + 8, y + 8, w - 16, h - 16,
+    { rx: 6, fill: "none", stroke: edge, "stroke-opacity": 0.4 });
+  for (const [px, py] of [[x + 16, y + 16], [x + w - 16, y + 16],
+                          [x + 16, y + h - 16], [x + w - 16, y + h - 16]]) {
+    circle(svg, px, py, 3.4, { fill: light, stroke: edge, "stroke-width": 0.9 });
+    circle(svg, px - 1, py - 1, 1.2, { fill: c("white"), "fill-opacity": 0.7 });
+  }
+}
+
+function helpEmblem(svg, cx, cy, kind, ink, hi) {
+  if (kind === "ce") {
+    helpEtch(svg, cx, cy + 4, "CE", 13, "middle", ink, hi, "bold");
+  } else if (kind === "class2") {
+    rect(svg, cx - 9, cy - 9, 18, 18, { fill: "none", stroke: ink, "stroke-opacity": 0.7 });
+    rect(svg, cx - 6, cy - 6, 12, 12, { fill: "none", stroke: ink, "stroke-opacity": 0.7 });
+    helpEtch(svg, cx, cy + 4, "II", 10, "middle", ink, hi, "bold");
+  } else if (kind === "warn") {
+    polygon(svg, [[cx, cy - 9], [cx + 9, cy + 7], [cx - 9, cy + 7]],
+      { fill: "none", stroke: ink, "stroke-opacity": 0.7, "stroke-linejoin": "round" });
+    helpEtch(svg, cx, cy + 6, "!", 11, "middle", ink, hi, "bold");
+  }
+}
+
+const helpDisc = (svg, cx, cy, r, fill) =>
+  circle(svg, cx, cy, r, { fill, stroke: c("shadow"), "stroke-width": 0.8 });
+
+// The diagram for each rule stays in a narrow left column beside the text.
+function helpRuleWidget(svg, x, y, kind, d0, d1, fail) {
+  const r = 5, g = 13;
+  if (kind === 1) {
+    for (let i = 0; i < 3; i++) helpDisc(svg, x + i * g, y, r, d1);
+    line(svg, x - 7, y + 7, x + 2 * g + 7, y - 7,
+      { stroke: fail, "stroke-width": 2.4, "stroke-linecap": "round" });
+  } else if (kind === 2) {
+    // a legal row with equal counts and no triple; six discs start 12 left so
+    // the row's centre lines up with the three-disc rows
+    const row = [d0, d0, d1, d1, d0, d1], r2 = 4, g2 = 10;
+    for (let i = 0; i < 6; i++) helpDisc(svg, x - 12 + i * g2, y, r2, row[i]);
+  } else if (kind === 3) {
+    const top = [d1, d0, d1], bot = [d0, d1, d0];
+    for (let i = 0; i < 3; i++) helpDisc(svg, x + i * g, y - 7, r, top[i]);
+    for (let i = 0; i < 3; i++) helpDisc(svg, x + i * g, y + 7, r, bot[i]);
+  }
+}
+
+// Flat black print; only the name is embossed silver, raised off the plate.
+function drawHelpDedication(svg, cx, y) {
+  const size = 10, a = size * CHAR_ASPECT;
+  const pre = "Dedicated to ", name = "Christine Ciarmello";
+  const post = ", with thanks for the inspiration.";
+  const total = pre.length + name.length + post.length;
+  const x0 = cx - (total * a) / 2;
+  const nx = x0 + pre.length * a;
+  const ne = nx + name.length * a;
+  const silver = c("spec-name-silver");
+  txt(svg, x0, y, pre, size, c("ink"));
+  const emboss = (yy, fill, opacity) => textEl(svg, nx, yy, name, {
+    "font-family": "monospace", "font-size": size, fill,
+    "fill-opacity": opacity, "text-anchor": "start", "font-weight": "bold",
+  });
+  emboss(y + 1, c("ink"), 0.6);
+  emboss(y - 1, c("white"), 0.85);
+  emboss(y, silver, null);
+  txt(svg, ne, y, post, size, c("ink"));
+}
+
+// The spec-plate card: frame, plate, header, rules with diagrams, compliance
+// footer, and dedication.  All offsets relative to the box; callers scale it.
+function drawHelpCard(svg, x, y, w, h, ink, hi, d0, d1, fail) {
+  const lx = x + 26, rx = x + w - 26, cx = x + w / 2;
+  const wx = lx + 20, tx = lx + 80;
+  // faceplating: an engraved frame the plate is set into
+  rect(svg, x - 6, y - 6, w + 12, h + 12,
+    { rx: 13, fill: "none", stroke: c("plate-edge"), "stroke-width": 1.2 });
+  helpPlate(svg, x, y, w, h);
+  // header
+  helpEtch(svg, lx, y + 40, "TAKUZU", 26, "start", ink, hi, "bold");
+  helpEtch(svg, rx, y + 45, "MODEL TKZ-06", 11, "end", ink, hi);
+  helpEtch(svg, rx, y + 60, "SERIAL 2026-0711-CJ", 10, "end", ink, hi);
+  helpEtch(svg, lx, y + 60, "BINAIRO  -  TOHU WA-VOHU  -  BINARY LOGIC", 10, "start", ink, hi);
+  helpDivider(svg, lx, rx, y + 76, ink, hi);
+  // footer, anchored to the bottom
+  helpDivider(svg, lx, rx, y + h - 100, ink, hi);
+  const ey = y + h - 78;
+  helpEmblem(svg, lx + 12, ey, "ce", c("ink"), c("ink"));
+  helpEmblem(svg, lx + 52, ey, "class2", c("ink"), c("ink"));
+  helpEmblem(svg, lx + 92, ey, "warn", c("ink"), c("ink"));
+  txt(svg, rx, ey - 4, "CONFORMS TO BINARY-LOGIC STANDARD 3", 10, c("ink"), "end");
+  txt(svg, rx, ey + 10, "CLASS II  -  SIZES 4 TO 12  -  ONE SOLUTION", 10, c("ink"), "end");
+  txt(svg, lx, y + h - 50, "MADE IN NEW ORLEANS, LA, USA  -  (c) CRAIG JENNINGS 2026", 10, c("ink"), "start");
+  drawHelpDedication(svg, cx, y + h - 26);
+  // rules block, centred between the two dividers
+  const rtop = y + 92, rbot = y + h - 112, blockh = 165;
+  const y0 = rtop + Math.max(0, Math.floor((rbot - rtop - blockh) / 2));
+  txt(svg, lx, y0, "HOW TO PLAY", 12, c("ink"), "start", "bold");
+  txt(svg, lx, y0 + 18, "Fill the grid with two colours so that:", 11, c("ink"), "start");
+  let ry = y0 + 50;
+  RULES.forEach((rule, i) => {
+    helpRuleWidget(svg, wx, ry + 5, i + 1, d0, d1, fail);
+    txt(svg, tx, ry, rule[0], 12, c("ink"), "start");
+    txt(svg, tx, ry + 17, rule[1], 12, c("ink"), "start");
+    ry += 48;
+  });
+}
+
+const HELP_CARD_W = 452;   // natural card size before scaling
+const HELP_CARD_H = 438;
+const HELP_CARD_FRAC = 0.8; // card width as a fraction of the faceplate width
+
+// Border and screws match the board view so they never move; the board,
+// instruments, and title give way to a large plate centred in the faceplate.
+function svgHelp() {
+  const w = faceplateWidth(), h = faceplateHeight();
+  const svg = [];
+  const ink = c("spec-ink"), hi = c("white");
+  const d0 = c("disc0"), d1 = c("disc1"), fail = c("fail");
+  const cw = HELP_CARD_W, ch = HELP_CARD_H;
+  const s = (HELP_CARD_FRAC * w) / cw;
+  const gx = Math.round((w - cw * s) / 2);
+  const gy = Math.round((h - ch * s) / 2);
+  drawFaceplateShell(svg, w, h, true);
+  const card = [];
+  drawHelpCard(card, 0, 0, cw, ch, ink, hi, d0, d1, fail);
+  svg.push(`<g transform="translate(${gx} ${gy}) scale(${s})">${card.join("")}</g>`);
+  return { w, h, body: svg.join("") };
+}
+
+// --- rendering ---
+
+const stageEl = document.getElementById("stage");
+const echoEl = document.getElementById("echo");
+
+function fitStage(w, h) {
+  const scale = Math.max(0.4, FILL * Math.min(window.innerWidth / w, window.innerHeight / h));
+  const el = stageEl.firstElementChild;
+  if (el) { el.style.width = (w * scale) + "px"; el.style.height = (h * scale) + "px"; }
+}
+
+function redraw() {
+  const view = state.help ? svgHelp()
+    : state.generating ? svgGenerating()
+    : svgFaceplate();
+  stageEl.innerHTML =
+    `<svg viewBox="0 0 ${view.w} ${view.h}" xmlns="http://www.w3.org/2000/svg" `
+    + `role="img" aria-label="Takuzu console">${view.body}</svg>`;
+  fitStage(view.w, view.h);
+}
+
+// The echo area stands in for Emacs' `message'.
+function message(msg) { echoEl.textContent = msg; }
+
+// --- game actions ---
+
+// A non-empty message with no lamp of its own is echoed instead, so the
+// keypress still gives visible feedback.
+function setStatus(msg, event) {
+  state.status = msg;
+  signalEvent(event || null);
+  if (!event && msg !== "") message(msg);
+}
+
+function signalEvent(event) {
+  cancelTimer("event");
+  if (event == null) {
+    state.event = null; state.eventTime = null;
+  } else {
+    state.event = event; state.eventTime = Date.now();
+    timers.event = setInterval(eventPulse, EVENT_TICK * 1000);
+  }
+}
+
+function eventPulse() {
+  if (state.eventTime == null
+      || (Date.now() - state.eventTime) / 1000 > EVENT_DUR) {
+    state.event = null; state.eventTime = null;
+    cancelTimer("event");
+  }
+  redraw();
+}
+
+function closeHelp() { state.help = false; redraw(); }
+
+const MSG_FINISHED = "The puzzle is finished.";
+
+const currentDifficulty = () => state.difficulty || DEFAULT_DIFFICULTY;
+
+// Guard for board-dereferencing commands: a mid-generation keypress is inert,
+// and while the help overlay is up a game key just dismisses it.
+function playingOnly() {
+  if (state.help) { closeHelp(); return false; }
+  if (state.armed) { message("Press n to begin."); return false; }
+  if (state.generating) { message("Still generating a puzzle…"); return false; }
+  return true;
+}
+
+// The elapsed time is read before the won flag flips: once set, elapsed()
+// returns the frozen value.
+function checkWin() {
+  if (!state.won && E.boardSolved(state.board.cells, state.size)) {
+    const el = elapsed();
+    state.won = true; state.wonElapsed = el;
+    setStatus(`Solved in ${fmtTime(state.wonElapsed)} -- nicely done`);
+  }
+}
+
+const currentGivenP = () => givenP(state.board, state.cursor[0], state.cursor[1]);
+
+function setCurrent(val) {
+  if (currentGivenP()) {
+    setStatus("That cell is a given -- it can't change.", "fixed");
+  } else if (state.won || state.proven) {
+    setStatus(MSG_FINISHED);
+  } else {
+    const [r, cc] = state.cursor;
+    const i = r * state.size + cc;
+    state.history.push([i, state.board.cells[i]]);
+    state.board.cells[i] = val;
+    setStatus("");
+    checkWin();
+  }
+  redraw();
+}
+
+// While the help overlay is up, a movement key dismisses it instead of moving.
+function move(dr, dc) {
+  if (state.help) { closeHelp(); return; }
+  const n = state.size;
+  state.cursor = [
+    Math.max(0, Math.min(n - 1, state.cursor[0] + dr)),
+    Math.max(0, Math.min(n - 1, state.cursor[1] + dc)),
+  ];
+  if (!(state.won || state.proven)) state.status = "";
+  redraw();
+}
+
+function cycle() {
+  if (!playingOnly()) return;
+  const v = boardRef(state.board, state.cursor[0], state.cursor[1]);
+  setCurrent(v == null ? 0 : v === 0 ? 1 : null);
+}
+
+function undo() {
+  if (!playingOnly()) return;
+  if (state.won || state.proven) {
+    setStatus(MSG_FINISHED);
+  } else if (state.history.length === 0) {
+    setStatus("Nothing to undo.", "nothing");
+  } else {
+    const [i, prev] = state.history.pop();
+    const n = state.size;
+    state.board.cells[i] = prev;
+    state.cursor = [Math.floor(i / n), i % n];
+    setStatus("");
+  }
+  redraw();
+}
+
+function hint() {
+  if (!playingOnly()) return;
+  if (state.won || state.proven) {
+    setStatus(MSG_FINISHED);
+  } else {
+    const found = E.forcedCell(state.board.cells, state.size);
+    if (!found) {
+      setStatus("No cell is forced right now -- reason further.", "no-hint");
+    } else {
+      state.cursor = [found[0], found[1]];
+      setCurrent(found[2]);
+      setStatus("Filled a forced cell.", "hint");
+    }
+  }
+  redraw();
+}
+
+function check() {
+  if (!playingOnly()) return;
+  checkWin();
+  if (!state.won) {
+    if (E.boardFull(state.board.cells))
+      setStatus("The board is full but a rule is broken.", "invalid");
+    else
+      setStatus(`Not finished -- ${emptyCount()} cells left.`);
+  }
+  redraw();
+}
+
+function prove() {
+  if (!playingOnly()) return;
+  if (window.confirm("Show the full solution?")) {
+    state.board.cells = state.solution.slice();
+    // read the clock before the proven flag freezes elapsed()
+    const el = elapsed();
+    state.proven = true; state.wonElapsed = el;
+    setStatus("Solution shown.");
+    redraw();
+  }
+}
+
+function reset() {
+  if (!playingOnly()) return;
+  const n = state.size;
+  for (let r = 0; r < n; r++)
+    for (let cc = 0; cc < n; cc++)
+      if (!givenP(state.board, r, cc)) state.board.cells[r * n + cc] = null;
+  state.won = false; state.proven = false; state.history = [];
+  state.startTime = Date.now();
+  // the refresh tick cancels its timer at a win; a replay needs it back
+  if (timers.refresh == null) startRefreshTimer();
+  setStatus("");
+  redraw();
+}
+
+function toggleAssist() {
+  state.assist = !state.assist;
+  setStatus(state.assist ? "Assist on -- rule breaks highlight." : "Assist off.");
+  redraw();
+}
+
+function help() {
+  state.help = !state.help;
+  redraw();
+}
+
+// Start the armed puzzle, or arm a fresh game (blank board, flashing New).
+function newGame() {
+  if (state.armed && state.pending) {
+    beginPlay(state.pending);
+  } else if (state.armed) {
+    // not generated yet: show the spinner and start as soon as it arrives
+    state.pendingStart = true; state.spinner = 0;
+    state.generating = { size: state.armed.size, difficulty: state.armed.difficulty };
+    cancelTimer("refresh");
+    timers.spinner = setInterval(() => { state.spinner++; redraw(); }, 100);
+    redraw();
+  } else {
+    arm(state.size, currentDifficulty());
+  }
+}
+
+function cycleSize() {
+  const i = SIZES.indexOf(state.size);
+  const next = SIZES[((i < 0 ? 0 : i) + 1) % SIZES.length];
+  arm(next, currentDifficulty());
+}
+
+function cycleLevel() {
+  const i = DIFFS.indexOf(currentDifficulty());
+  const next = DIFFS[((i < 0 ? 0 : i) + 1) % DIFFS.length];
+  arm(state.size, next);
+}
+
+// --- timers and game flow ---
+
+// Cancels itself once the game is over: the clock is frozen, so the periodic
+// redraw would only burn cycles.
+function refreshTick() {
+  if ((state.won || state.proven) && !state.armed) cancelTimer("refresh");
+  else redraw();
+}
+
+function startRefreshTimer() {
+  timers.refresh = setInterval(refreshTick, refreshInterval() * 1000);
+}
+
+function teardownTimers() {
+  cancelTimer("refresh");
+  cancelTimer("spinner");
+  cancelTimer("event");
+}
+
+function resetPlayState() {
+  state.pending = null; state.pendingStart = false; state.generating = null;
+  state.cursor = [0, 0]; state.assist = false; state.history = [];
+  state.won = false; state.proven = false; state.wonElapsed = 0;
+  state.status = ""; state.event = null; state.help = false;
+}
+
+function beginPlay(result) {
+  teardownTimers();
+  resetPlayState();
+  state.board = { size: result.size, cells: result.cells.slice(), givens: result.givens.slice() };
+  state.solution = result.solution.slice();
+  state.grade = result.grade;
+  state.size = result.size;
+  state.armed = null;
+  state.startTime = Date.now();
+  startRefreshTimer();
+  redraw();
+}
+
+function onGenerated(result) {
+  if (result == null) {
+    cancelTimer("spinner");
+    state.generating = null;
+    setStatus("Generation failed -- press n to retry.", "gen-fail");
+    redraw();
+  } else if (state.pendingStart) {
+    cancelTimer("spinner");
+    beginPlay(result);
+  } else {
+    state.pending = result;
+  }
+}
+
+// Time-sliced generation so the armed/generating faceplate stays live.
+function generateAsync(size, difficulty, cb) {
+  const token = ++genToken;
+  let st = null;
+  function step() {
+    if (token !== genToken) return; // superseded by a re-arm
+    try {
+      if (st == null) st = E.makeCarve(size, difficulty);
+      if (E.carveStep(st, 30)) { cb(E.carveResult(st)); return; }
+    } catch (e) { cb(null); return; }
+    setTimeout(step, 0);
+  }
+  setTimeout(step, 0);
+}
+
+// Open the game blank at size, ready to start on the New key.  The clock
+// stays stopped and New flashes; the puzzle pre-generates so starting is instant.
+function arm(size, difficulty) {
+  teardownTimers();
+  genToken++; // drop any in-flight generation
+  resetPlayState();
+  state.size = size;
+  state.difficulty = difficulty;
+  state.board = blankBoard(size);
+  state.solution = null;
+  state.grade = null;
+  state.armed = { size, difficulty };
+  state.startTime = null;
+  startRefreshTimer();
+  generateAsync(size, difficulty, onGenerated);
+  redraw();
+}
+
+// --- keymap (mirror of takuzu-mode-map) ---
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const moves = {
+    ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1],
+  };
+  if (moves[e.key]) { e.preventDefault(); move(...moves[e.key]); return; }
+  switch (e.key) {
+    case " ": e.preventDefault(); cycle(); return;
+    case "u": undo(); return;
+    case "?": hint(); return;
+    case "c": check(); return;
+    case "p": prove(); return;
+    case "r": reset(); return;
+    case "a": toggleAssist(); return;
+    case "s": cycleSize(); return;
+    case "l": cycleLevel(); return;
+    case "n": newGame(); return;
+    case "i": help(); return;
+    case "q": message("Close the tab to quit."); return;
+  }
 });
 
-/* aids */
-const cname = v => v===0?'blue':'orange';
-const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+window.addEventListener("resize", redraw);
 
-function whyForced(r,c,b,n){
-  const rowIdx=[...Array(n).keys()].map(cc=>idx(n,r,cc));
-  if(rowIdx.filter(k=>G.cells[k]===b).length >= n/2)
-    return {text:`this row already has ${n/2} ${cname(b)}`, cells:rowIdx.filter(k=>G.cells[k]===b), line:new Set(rowIdx)};
-  for(const w of [[c-2,c-1,c],[c-1,c,c+1],[c,c+1,c+2]])
-    if(w[0]>=0 && w[2]<n){ const others=w.filter(x=>x!==c);
-      if(others.every(x=>G.cells[idx(n,r,x)]===b))
-        return {text:`two ${cname(b)} already sit together in this row`, cells:others.map(x=>idx(n,r,x)), line:new Set(rowIdx)}; }
-  const colIdx=[...Array(n).keys()].map(rr=>idx(n,rr,c));
-  if(colIdx.filter(k=>G.cells[k]===b).length >= n/2)
-    return {text:`this column already has ${n/2} ${cname(b)}`, cells:colIdx.filter(k=>G.cells[k]===b), line:new Set(colIdx)};
-  for(const w of [[r-2,r-1,r],[r-1,r,r+1],[r,r+1,r+2]])
-    if(w[0]>=0 && w[2]<n){ const others=w.filter(x=>x!==r);
-      if(others.every(x=>G.cells[idx(n,x,c)]===b))
-        return {text:`two ${cname(b)} already sit together in this column`, cells:others.map(x=>idx(n,x,c)), line:new Set(colIdx)}; }
-  return {text:`this cell is pinned by its row and column`, cells:[], line:new Set(rowIdx)};
-}
-function findHint(){
-  const n=G.size;
-  for(let r=0;r<n;r++) for(let c=0;c<n;c++){ const i=idx(n,r,c);
-    if(G.cells[i]==null){ const vals=legalValues(G.cells,n,r,c);
-      if(vals.length===1){ const v=vals[0], w=whyForced(r,c,1-v,n); return {i,v,text:w.text,cells:w.cells,line:w.line,stage:0}; } } }
-  return null;
-}
-function doHint(){
-  if(won) return;
-  if(!hint){
-    hint=findHint();
-    if(!hint){ setStatus('No cell is forced right now — reason further.','good'); return; }
-    hint.stage=1; paint(); setStatus(cap(hint.text)+'.','good'); return;
-  }
-  if(hint.stage===1){ hint.stage=2; paint(); return; }
-  const {i,v}=hint; hint=null; sel=i; setCell(i,v);
-}
-function reveal(){ clearInterval(timer); G.cells=G.solution.slice(); won=true; stateLamp.className='lamp big red'; paint();
-  boardEl.classList.add('solved'); setStatus('Solution shown.'); }
-function reset(){ won=false; hint=null; history=[]; stateLamp.className='lamp big gold'; boardEl.classList.remove('solved');
-  for(let i=0;i<G.cells.length;i++) if(!G.givens[i]) G.cells[i]=null;
-  startTs=Date.now(); if(timer)clearInterval(timer); timer=setInterval(tick,250); tick(); paint(); setStatus(''); }
-function check(){ if(boardSolved(G.cells,G.size)) win();
-  else if(G.cells.every(v=>v!=null)) setStatus('Full, but a rule is broken.');
-  else setStatus(`Not finished — ${G.cells.filter(v=>v==null).length} cells left.`); }
-function cycleSize(){ size=SIZES[(SIZES.indexOf(size)+1)%SIZES.length]; refreshSeg('size-seg',size); newGame(); }
-function cycleDiff(){ diff=DIFFS[(DIFFS.indexOf(diff)+1)%DIFFS.length]; refreshSeg('diff-seg',diff); newGame(); }
-function toggleAssist(){ assist=!assist; assistSw.setAttribute('aria-checked', assist?'true':'false'); paint();
-  setStatus(assist?'Assist on — rule breaks will highlight.':'Assist off.','good'); }
+// M-x takuzu opens armed at the defaults.
+arm(DEFAULT_SIZE, DEFAULT_DIFFICULTY);
 
-const bNew=document.getElementById('b-new'), bReset=document.getElementById('b-reset'),
-      bHint=document.getElementById('b-hint'), bCheck=document.getElementById('b-check'),
-      bReveal=document.getElementById('b-reveal'), bUndo=document.getElementById('b-undo'),
-      sizeSeg=document.getElementById('size-seg'), diffSeg=document.getElementById('diff-seg'),
-      assistSw=document.getElementById('assist-sw');
-const flash = el => { if(!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); };
-
-document.addEventListener('keydown', e => {
-  if(!G) return;
-  const inControl = e.target.closest && e.target.closest('.actions, .selectors');
-  if(inControl && (e.key===' '||e.key==='Enter'||e.key==='Tab'||e.key.startsWith('Arrow'))) return;
-  const k=e.key;
-  const moves={ArrowUp:[-1,0],k:[-1,0],ArrowDown:[1,0],j:[1,0],ArrowLeft:[0,-1],h:[0,-1],ArrowRight:[0,1],l:[0,1]};
-  if(moves[k]){ e.preventDefault(); moveSel(...moves[k]); return; }
-  switch(k){
-    case ' ': case 'Enter': e.preventDefault(); cycleCell(sel); return;
-    case 'u': case 'U': e.preventDefault(); flash(bUndo); undo(); return;
-    case 'n': case 'N': e.preventDefault(); flash(bNew); newGame(); return;
-    case 'r': case 'R': e.preventDefault(); flash(bReset); reset(); return;
-    case '?': e.preventDefault(); flash(bHint); doHint(); return;
-    case 'c': case 'C': e.preventDefault(); flash(bCheck); check(); return;
-    case 'p': case 'P': e.preventDefault(); flash(bReveal); reveal(); return;
-    case 's': case 'S': e.preventDefault(); flash(sizeSeg); cycleSize(); return;
-    case 'd': case 'D': e.preventDefault(); flash(diffSeg); cycleDiff(); return;
-    case 'a': case 'A': e.preventDefault(); flash(assistSw); toggleAssist(); return;
-  }
-});
-
-document.getElementById('b-new').addEventListener('click', newGame);
-document.getElementById('b-reset').addEventListener('click', reset);
-document.getElementById('b-undo').addEventListener('click', undo);
-document.getElementById('b-hint').addEventListener('click', doHint);
-document.getElementById('b-check').addEventListener('click', check);
-document.getElementById('b-reveal').addEventListener('click', reveal);
-buildSeg('size-seg', SIZES, size, v => { size=v; refreshSeg('size-seg',v); newGame(); });
-buildSeg('diff-seg', DIFFS, diff, v => { diff=v; refreshSeg('diff-seg',v); newGame(); });
-document.getElementById('assist-sw').addEventListener('click', toggleAssist);
-window.addEventListener('resize', ()=>{ if(G) fitBoard(); });
-
-/* start on a fresh random puzzle each load (seed is only a fallback) */
-try { startGame(generate(size, diff)); } catch(e){ startGame(SEED6); }
+})();
 </script>
 </body>
 </html>
