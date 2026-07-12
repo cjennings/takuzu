@@ -4,6 +4,7 @@
 ;; Version: 0.7.0
 ;; Package-Requires: ((emacs "28.1"))
 ;; Keywords: games
+;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; URL: https://github.com/cjennings/takuzu
 
 ;;; Commentary:

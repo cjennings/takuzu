@@ -2,6 +2,7 @@
 
 ;; Author: Craig Jennings <craigmartinjennings@gmail.com>
 ;; Keywords: games
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 ;; Generate a uniquely-solvable puzzle: draw a random full solution, then carve

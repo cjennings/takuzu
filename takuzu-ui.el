@@ -2,6 +2,7 @@
 
 ;; Author: Craig Jennings <craigmartinjennings@gmail.com>
 ;; Keywords: games
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 ;; `takuzu-mode' renders the whole game as one state-to-SVG faceplate image,

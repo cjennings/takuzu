@@ -2,6 +2,7 @@
 
 ;; Author: Craig Jennings <craigmartinjennings@gmail.com>
 ;; Keywords: games
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 ;; Generation is CPU-bound and, on a large hard board, can run for many seconds.
