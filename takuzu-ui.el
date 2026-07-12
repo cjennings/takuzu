@@ -96,9 +96,9 @@ boards stretch the stage to keep it.")
 (defconst takuzu--event-h 30 "Height of the event annunciator strip below the board.")
 (defconst takuzu--event-tick 0.08 "Seconds between event-lamp pulse frames.")
 (defconst takuzu--event-breath 2.8 "Seconds per breathing cycle of a pulsing event lamp.")
-(defconst takuzu--event-dur (* 2 takuzu--event-breath)
+(defconst takuzu--event-dur takuzu--event-breath
   "Seconds an event lamp pulses before it goes dark.
-A whole number of breathing cycles, so the pulse fades out instead of
+A single breathing cycle: the lamp breathes once and fades out rather than
 snapping off mid-breath.")
 (defconst takuzu--fill 0.85
   "Fraction of the window the faceplate is scaled to fill.
