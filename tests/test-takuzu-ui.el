@@ -603,6 +603,13 @@ gives no feedback at all in the graphical UI."
         (takuzu--set-status "")                    ; empty -> no echo
         (should-not captured)))))
 
+(ert-deftest test-takuzu-ui-nixie-size-single-digit-ghost ()
+  "Normal: single-digit sizes show a ghost 0 in the tens tube.
+An empty dark tube next to the lit digit reads as a dead socket."
+  (let ((svg (svg-create 100 60)))
+    (takuzu--draw-nixie-size svg 50 10 8)
+    (should (member "0" (mapcar #'dom-text (dom-by-tag svg 'text))))))
+
 (ert-deftest test-takuzu-ui-legend-renders-in-caps ()
   "Normal: the control legends render in caps, matching the panel labels.
 Lowercase words were the one typographic outlier on the faceplate."

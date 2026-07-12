@@ -57,10 +57,10 @@
 (defconst takuzu--ppad 24 "Faceplate padding.")
 (defconst takuzu--stage-gap 16 "Gap between the board and the right panel.")
 (defconst takuzu--panel-w 88 "Right panel width.")
-(defconst takuzu--panel-min-h 372
+(defconst takuzu--panel-min-h 406
   "Minimum height of the instrument panel.
-Below this the five instruments overprint each other, so small boards
-stretch the stage to keep it.")
+Below this the five framed instruments overprint each other, so small
+boards stretch the stage to keep it.")
 (defconst takuzu--title-h 78 "Title band height.")
 (defconst takuzu--legend-h 64 "Legend (control rows) band height.")
 (defconst takuzu--event-h 30 "Height of the event annunciator strip below the board.")
@@ -293,32 +293,38 @@ Glowing amber when LIT, a dim ember when not.  The digit scales with H."
   (svg-rectangle svg (+ x 1.5) (+ y 1.5) (- w 3) (* h 0.28) :rx 3
                  :fill "#ffffff" :fill-opacity 0.05))
 
+(defun takuzu--draw-frame (svg x y w h label)
+  "Draw an engraved instrument frame on SVG at X,Y size W,H.
+LABEL is etched into a break in the frame's top edge, the shared caption
+convention for every panel instrument."
+  (svg-rectangle svg x y w h :rx 6 :fill "none"
+                 :stroke (takuzu--c :wash) :stroke-width 1)
+  (let* ((cx (+ x (/ w 2.0)))
+         (lw (+ (* (length label) 7) 8)))
+    (svg-rectangle svg (round (- cx (/ lw 2.0))) (- y 6) (round lw) 12
+                   :fill (takuzu--c :well))
+    (takuzu--txt svg (round cx) (+ y 3) label 9 (takuzu--c :steel) "middle")))
+
 (defun takuzu--draw-nixie-size (svg cx y size)
   "Draw board SIZE on SVG as two nixie tubes centred at CX with their top at Y.
-Up/down chevrons to the right hint that the size is adjustable (the s key).  An
-engraved frame encircles the tubes and chevrons, broken at the top by the SIZE
-label.  Kept smaller than a board disc so the readout does not overwhelm the
-board."
-  (let* ((tw 18) (th 26) (g 4) (s (format "%2d" size))
-         (x0 (- cx (+ tw (/ g 2.0))))
-         (ax (+ x0 (* 2 tw) g 7))
-         (pad 6) (fl (- x0 pad)) (fr (+ ax 4 pad))
-         (fy (- y pad)) (fh (+ th (* 2 pad))))
-    (svg-rectangle svg fl fy (- fr fl) fh :rx 6 :fill "none"
-                   :stroke (takuzu--c :wash) :stroke-width 1)
-    (svg-rectangle svg (- cx 17) (- fy 6) 34 12 :fill (takuzu--c :well))
-    (takuzu--txt svg cx (+ fy 3) "SIZE" 9 (takuzu--c :steel) "middle")
-    (takuzu--draw-nixie-tube svg x0 y tw th (substring s 0 1) (not (eq (aref s 0) ?\s)))
+A single-digit size shows a ghost 0 in the tens tube so it reads as an idle
+tube rather than a dead socket.  Up/down chevrons to the right hint that the
+size is adjustable (the s key)."
+  (let* ((tw 16) (th 23) (g 4)
+         (s (format "%02d" size))
+         (x0 (round (- cx 23)))
+         (ax (+ x0 (* 2 tw) g 7)))
+    (takuzu--draw-nixie-tube svg x0 y tw th (substring s 0 1) (>= size 10))
     (takuzu--draw-nixie-tube svg (+ x0 tw g) y tw th (substring s 1 2) t)
-    (svg-polygon svg (list (cons ax (+ y 4)) (cons (+ ax 4) (+ y 10)) (cons (- ax 4) (+ y 10)))
+    (svg-polygon svg (list (cons ax (+ y 3)) (cons (+ ax 3) (+ y 9)) (cons (- ax 3) (+ y 9)))
                  :fill (takuzu--c :steel))
-    (svg-polygon svg (list (cons ax (+ y th -1)) (cons (+ ax 4) (+ y th -7)) (cons (- ax 4) (+ y th -7)))
+    (svg-polygon svg (list (cons ax (+ y th -1)) (cons (+ ax 3) (+ y th -7)) (cons (- ax 3) (+ y th -7)))
                  :fill (takuzu--c :steel))))
 
 (defun takuzu--draw-nixie-time (svg cx y)
   "Draw elapsed time on SVG as M:SS nixie tubes centred at CX, top at Y."
   (let* ((str (takuzu--fmt-time (takuzu--elapsed)))
-         (tw 17) (th 26) (g 3) (colw 8) (total 0))
+         (tw 15) (th 23) (g 3) (colw 7) (total 0))
     (dotimes (i (length str))
       (setq total (+ total (if (eq (aref str i) ?:) colw tw) (if (> i 0) g 0))))
     (let ((x (- cx (/ total 2))))
@@ -328,7 +334,7 @@ board."
           (if (eq ch ?:)
               (progn
                 (takuzu--txt svg (round (+ x (/ colw 2))) (round (+ y (* th 0.64)))
-                             ":" 17 "#ff9a3c" "middle")
+                             ":" 15 "#ff9a3c" "middle")
                 (setq x (+ x colw)))
             (takuzu--draw-nixie-tube svg (round x) y tw th (char-to-string ch) t)
             (setq x (+ x tw))))))))
@@ -376,26 +382,29 @@ The needle sweeps left-to-right across the top by PCT (0-100); VALUE sits below.
 
 (defun takuzu--draw-panel (svg x y h)
   "Draw the right instrument panel on SVG at X,Y with height H.
-Nixie TIME/SIZE, the LEVEL rotary, the LEFT needle gauge, and the STATE lamps."
+Each instrument sits in an engraved frame with its caption etched into the
+frame's top break.  The frames have fixed heights sized to their contents;
+whatever height is left spreads as even gaps between them."
   (let* ((w takuzu--panel-w) (cx (+ x (/ w 2)))
-         (empty (takuzu--empty-count))
-         (sh 118) (m 32)
-         (top-h (- h sh 10))
-         (step (/ (- top-h (* 2 m)) 3.0))
-         (time-cy (round (+ y m)))
-         (size-cy (round (+ y m step)))
-         (level-cy (round (+ y m (* 2 step))))
-         (left-cy (round (+ y m (* 3 step))))
-         (state-y (round (- (+ y h) sh 6))))
+         (fx (+ x 8)) (fw (- w 16))
+         (time-h 44) (size-h 46) (level-h 84) (left-h 62) (state-h 110)
+         (gap (/ (- h 12 8 time-h size-h level-h left-h state-h) 4.0))
+         (fy (+ y 12.0)))
     (svg-rectangle svg x y w h :rx 10 :fill (takuzu--c :well) :stroke "#201d17")
-    (takuzu--txt svg cx (- time-cy 20) "TIME" 9 (takuzu--c :steel) "middle")
-    (takuzu--draw-nixie-time svg cx (- time-cy 13))
-    (takuzu--draw-nixie-size svg cx (- size-cy 13) takuzu--size)
-    (takuzu--txt svg cx (- level-cy 34) "LEVEL" 9 (takuzu--c :steel) "middle")
-    (takuzu--draw-rotary-level svg cx level-cy)
-    (takuzu--txt svg cx (- left-cy 24) "LEFT" 9 (takuzu--c :steel) "middle")
-    (takuzu--draw-needle-gauge svg cx (- left-cy 4) 26 (takuzu--fill-pct) empty)
-    (takuzu--draw-state-lamps svg (+ x 8) state-y (- w 16) sh)))
+    (takuzu--draw-frame svg fx (round fy) fw time-h "TIME")
+    (takuzu--draw-nixie-time svg cx (+ (round fy) 10))
+    (setq fy (+ fy time-h gap))
+    (takuzu--draw-frame svg fx (round fy) fw size-h "SIZE")
+    (takuzu--draw-nixie-size svg cx (+ (round fy) 11) takuzu--size)
+    (setq fy (+ fy size-h gap))
+    (takuzu--draw-frame svg fx (round fy) fw level-h "LEVEL")
+    (takuzu--draw-rotary-level svg cx (+ (round fy) 48))
+    (setq fy (+ fy level-h gap))
+    (takuzu--draw-frame svg fx (round fy) fw left-h "LEFT")
+    (takuzu--draw-needle-gauge svg cx (+ (round fy) 38) 26
+                               (takuzu--fill-pct) (takuzu--empty-count))
+    (setq fy (+ fy left-h gap))
+    (takuzu--draw-state-lamps svg fx (round fy) fw (- (+ y h) 8 (round fy)))))
 
 (defun takuzu--legend-glyph (svg cx y size key color &optional underline)
   "Draw KEY on SVG at CX,Y in monospace SIZE and COLOR; underline when UNDERLINE."
@@ -501,10 +510,7 @@ incandescent lamp, then fades."
 (defun takuzu--draw-state-lamps (svg x y w h)
   "Draw the framed STATE lamp group on SVG at X,Y size W,H.
 READY/SOLVING/SOLVED/SHOWN track the game state; ASSIST is its own mode lamp."
-  (svg-rectangle svg x y w h :rx 8 :fill "none" :stroke (takuzu--c :wash) :stroke-width 1)
-  (let ((cx (+ x (/ w 2))))
-    (svg-rectangle svg (round (- cx 18)) (- y 6) 36 12 :fill (takuzu--c :well))
-    (takuzu--txt svg (round cx) (+ y 2) "STATE" 8 (takuzu--c :steel) "middle"))
+  (takuzu--draw-frame svg x y w h "STATE")
   (let* ((state (takuzu--game-state))
          (lamps `((ready "READY" "#6fce33" ,(eq state 'ready))
                   (solving "SOLVING" "#ffb43a" ,(eq state 'solving))
