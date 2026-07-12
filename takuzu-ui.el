@@ -232,32 +232,51 @@ own colour."
           (svg-circle svg cx cy r :fill fill :stroke (takuzu--c :bezel) :stroke-width 1.2))
       (svg-circle svg cx cy r :fill fill :stroke edge :stroke-width 1.2))))
 
-(defun takuzu--draw-cursor (svg sx sy cell)
-  "Draw the cursor on SVG as four corner brackets at SX,SY, cell size CELL.
-Each bracket is a single path whose corner arc matches the socket's rounded
-corner: a straight L drawn against that curved edge reads as bending inward
-even though it doesn't."
-  (let* ((m 3)                          ; inset from the cell edge
-         (rc 6)                         ; bracket corner radius (socket rx 9 - m)
-         (a (max (+ rc 2) (round (* cell 0.15))))  ; arm length along each edge
-         (gold (takuzu--c :gold))
-         (x0 (+ sx m)) (y0 (+ sy m))
-         (x1 (- (+ sx cell) m)) (y1 (- (+ sy cell) m)))
-    (dolist (corner (list (list x0 y0 1 1)      ; top-left
-                          (list x1 y0 -1 1)     ; top-right
-                          (list x0 y1 1 -1)     ; bottom-left
-                          (list x1 y1 -1 -1)))  ; bottom-right
-      (pcase-let ((`(,cx ,cy ,dx ,dy) corner))
-        (dom-append-child svg
-          (dom-node 'path
-            (list (cons 'd (format "M %s %s L %s %s A %s %s 0 0 %s %s %s L %s %s"
-                                   (+ cx (* dx a)) cy (+ cx (* dx rc)) cy
-                                   rc rc (if (> (* dx dy) 0) 0 1)
-                                   cx (+ cy (* dy rc))
-                                   cx (+ cy (* dy a))))
-                  (cons 'fill "none") (cons 'stroke gold)
-                  (cons 'stroke-width "1.5")
-                  (cons 'stroke-linecap "round"))))))))
+(defun takuzu--draw-cursor-lamps (svg sx sy cell)
+  "Draw the cursor's four corner bead lamps on SVG at SX,SY, cell size CELL.
+They sit at the bottom of the socket's cup; each casts a quarter-fan of
+light into the cup with a true radial falloff, sized to die out before the
+midpoint between lamps.  The cup wall occludes everything behind a bead."
+  ;; the 6px inset keeps a bead inside the clip's rounded corner: any closer
+  ;; to the corner and the bead crosses the corner arc, so the pool's hot
+  ;; core gets clipped away and the lamp reads as mounted on the rim
+  (let ((in 6) (reach (round (* cell 0.30))) (i 0))
+    ;; the cup interior is the clip: light cannot leave it, so each lamp's
+    ;; cast is a plain circular falloff and the wall does the occluding
+    (dom-append-child svg
+      (dom-node 'clipPath (list (cons 'id "takuzu-cup"))
+                (dom-node 'rect (list (cons 'x (+ sx 1)) (cons 'y (+ sy 1))
+                                      (cons 'width (- cell 2))
+                                      (cons 'height (- cell 2))
+                                      (cons 'rx 8)))))
+    (dolist (corner (list (list (+ sx in) (+ sy in))
+                          (list (- (+ sx cell) in) (+ sy in))
+                          (list (+ sx in) (- (+ sy cell) in))
+                          (list (- (+ sx cell) in) (- (+ sy cell) in))))
+      (pcase-let ((`(,jx ,jy) corner))
+        (setq i (1+ i))
+        (let ((id (format "takuzu-lamp-%d" i)))
+          ;; a bead-centred gradient in user space: bright at the lamp,
+          ;; transparent well before the next lamp's territory
+          (dom-append-child svg
+            (dom-node 'radialGradient
+                      (list (cons 'id id)
+                            (cons 'gradientUnits "userSpaceOnUse")
+                            (cons 'cx jx) (cons 'cy jy) (cons 'r reach))
+                      (dom-node 'stop '((offset . "0") (stop-color . "#c08a2e")
+                                        (stop-opacity . "0.30")))
+                      (dom-node 'stop '((offset . "0.4") (stop-color . "#c08a2e")
+                                        (stop-opacity . "0.05")))
+                      (dom-node 'stop '((offset . "1") (stop-color . "#c08a2e")
+                                        (stop-opacity . "0")))))
+          (dom-append-child svg
+            (dom-node 'circle
+                      (list (cons 'cx jx) (cons 'cy jy) (cons 'r reach)
+                            (cons 'fill (format "url(#%s)" id))
+                            (cons 'clip-path "url(#takuzu-cup)")))))
+        ;; the bead itself: no circular halo, just the lamp and its catchlight
+        (svg-circle svg jx jy 2 :fill "#8f661b" :stroke "#00000055" :stroke-width 0.6)
+        (svg-circle svg (- jx 0.7) (- jy 0.7) 0.8 :fill "#ffffff" :fill-opacity 0.6)))))
 
 (defun takuzu--draw-board (svg x y)
   "Draw the board on SVG with its top-left at X,Y."
@@ -274,16 +293,26 @@ even though it doesn't."
                (idx (+ (* r n) c))
                (val (takuzu-board-ref takuzu--board r c))
                (given (takuzu-board-given-p takuzu--board r c)))
-          (svg-rectangle svg sx sy cell cell :rx 9
-                         :fill (takuzu--c :socket)
-                         :stroke (if (and errs (aref errs idx))
-                                     (takuzu--c :fail) (takuzu--c :socket-edge))
-                         :stroke-width (if (and errs (aref errs idx)) 2 1))
+          (when (takuzu--curp r c)
+            ;; the whole cup floor sits just above the wall's darkness, nearly
+            ;; flat; the corner pools are the only strong light
+            (svg-gradient svg "takuzu-cursor-floor" 'radial
+                          (list (cons 0 "#170f09") (cons 100 "#1c130c"))))
+          (let ((stroke (if (and errs (aref errs idx))
+                            (takuzu--c :fail) (takuzu--c :socket-edge)))
+                (sw (if (and errs (aref errs idx)) 2 1)))
+            (if (takuzu--curp r c)
+                (svg-rectangle svg sx sy cell cell :rx 9
+                               :gradient "takuzu-cursor-floor"
+                               :stroke stroke :stroke-width sw)
+              (svg-rectangle svg sx sy cell cell :rx 9
+                             :fill (takuzu--c :socket)
+                             :stroke stroke :stroke-width sw)))
+          (when (takuzu--curp r c)
+            (takuzu--draw-cursor-lamps svg sx sy cell))
           (when val
             (takuzu--draw-disc svg (+ sx (/ cell 2)) (+ sy (/ cell 2))
-                               (round (* cell 0.33)) val given))
-          (when (takuzu--curp r c)
-            (takuzu--draw-cursor svg sx sy cell)))))
+                               (round (* cell 0.33)) val given)))))
     span))
 
 (defun takuzu--draw-nixie-tube (svg x y w h ch lit)

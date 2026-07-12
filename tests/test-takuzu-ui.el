@@ -105,17 +105,23 @@
   (should (equal (takuzu--glyph 1) "X"))
   (should (equal (takuzu--glyph nil) ".")))
 
-(ert-deftest test-takuzu-ui-draw-cursor-corner-brackets ()
-  "Normal: the cursor draws four rounded corner brackets, one path each.
-Each path carries an arc so the bracket follows the socket's rounded corner;
-straight arms against the curved edge read as bending inward."
+(ert-deftest test-takuzu-ui-draw-cursor-lamps ()
+  "Normal: the cursor draws four corner bead lamps, each with a falloff pool.
+Every lamp gets its own user-space radial gradient (bright at the bead,
+transparent at its reach); the pools are plain circles clipped to the cup's
+rounded interior, so the wall does the occluding."
   (let ((svg (svg-create 100 100)))
-    (takuzu--draw-cursor svg 0 0 40)
-    (let ((paths (dom-by-tag svg 'path)))
-      (should (= (length paths) 4))
-      (dolist (p paths)
-        (should (equal (dom-attr p 'stroke) (takuzu--c :gold)))
-        (should (string-match-p " A " (dom-attr p 'd)))))))
+    (takuzu--draw-cursor-lamps svg 0 0 50)
+    (should (= (length (dom-by-tag svg 'radialGradient)) 4))
+    (should (= (length (dom-by-tag svg 'clipPath)) 1))
+    (let ((pools (seq-filter (lambda (c) (dom-attr c 'clip-path))
+                             (dom-by-tag svg 'circle))))
+      (should (= (length pools) 4))
+      (dolist (p pools)
+        (should (string-match-p "^url(#takuzu-lamp-" (dom-attr p 'fill)))
+        (should (equal (dom-attr p 'clip-path) "url(#takuzu-cup)"))))
+    ;; per corner: the pool, the bead, and its catchlight
+    (should (= (length (dom-by-tag svg 'circle)) 12))))
 
 (ert-deftest test-takuzu-ui-help-toggle ()
   "Normal: help toggles the overlay flag and the help SVG renders."
