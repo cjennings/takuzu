@@ -106,14 +106,16 @@
   (should (equal (takuzu--glyph nil) ".")))
 
 (ert-deftest test-takuzu-ui-draw-cursor-corner-brackets ()
-  "Normal: the cursor draws four corner brackets (eight line segments)."
+  "Normal: the cursor draws four rounded corner brackets, one path each.
+Each path carries an arc so the bracket follows the socket's rounded corner;
+straight arms against the curved edge read as bending inward."
   (let ((svg (svg-create 100 100)))
     (takuzu--draw-cursor svg 0 0 40)
-    ;; four corners, two arms each -> eight line elements, all gold
-    (let ((lines (dom-by-tag svg 'line)))
-      (should (= (length lines) 8))
-      (should (cl-every (lambda (l) (equal (dom-attr l 'stroke) (takuzu--c :gold)))
-                        lines)))))
+    (let ((paths (dom-by-tag svg 'path)))
+      (should (= (length paths) 4))
+      (dolist (p paths)
+        (should (equal (dom-attr p 'stroke) (takuzu--c :gold)))
+        (should (string-match-p " A " (dom-attr p 'd)))))))
 
 (ert-deftest test-takuzu-ui-help-toggle ()
   "Normal: help toggles the overlay flag and the help SVG renders."

@@ -234,10 +234,12 @@ own colour."
 
 (defun takuzu--draw-cursor (svg sx sy cell)
   "Draw the cursor on SVG as four corner brackets at SX,SY, cell size CELL.
-Only the corners of the ring are drawn -- half the perimeter -- so the cursor
-reads clearly with far fewer pixels than a full ring."
+Each bracket is a single path whose corner arc matches the socket's rounded
+corner: a straight L drawn against that curved edge reads as bending inward
+even though it doesn't."
   (let* ((m 3)                          ; inset from the cell edge
-         (a (round (* cell 0.22)))      ; arm length, hugging the corner
+         (rc 6)                         ; bracket corner radius (socket rx 9 - m)
+         (a (max (+ rc 2) (round (* cell 0.15))))  ; arm length along each edge
          (gold (takuzu--c :gold))
          (x0 (+ sx m)) (y0 (+ sy m))
          (x1 (- (+ sx cell) m)) (y1 (- (+ sy cell) m)))
@@ -246,10 +248,16 @@ reads clearly with far fewer pixels than a full ring."
                           (list x0 y1 1 -1)     ; bottom-left
                           (list x1 y1 -1 -1)))  ; bottom-right
       (pcase-let ((`(,cx ,cy ,dx ,dy) corner))
-        (svg-line svg cx cy (+ cx (* dx a)) cy
-                  :stroke gold :stroke-width 1.5 :stroke-linecap "round")
-        (svg-line svg cx cy cx (+ cy (* dy a))
-                  :stroke gold :stroke-width 1.5 :stroke-linecap "round")))))
+        (dom-append-child svg
+          (dom-node 'path
+            (list (cons 'd (format "M %s %s L %s %s A %s %s 0 0 %s %s %s L %s %s"
+                                   (+ cx (* dx a)) cy (+ cx (* dx rc)) cy
+                                   rc rc (if (> (* dx dy) 0) 0 1)
+                                   cx (+ cy (* dy rc))
+                                   cx (+ cy (* dy a))))
+                  (cons 'fill "none") (cons 'stroke gold)
+                  (cons 'stroke-width "1.5")
+                  (cons 'stroke-linecap "round"))))))))
 
 (defun takuzu--draw-board (svg x y)
   "Draw the board on SVG with its top-left at X,Y."
