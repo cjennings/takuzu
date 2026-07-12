@@ -20,7 +20,10 @@
 (require 'seq)
 
 (cl-defstruct (takuzu-board (:constructor takuzu-board--new)
-                            (:copier takuzu-board-copy))
+                            ;; no copier: the default copy is shallow, and a
+                            ;; board shared down to its cell vectors is a bug
+                            ;; waiting to happen -- use `takuzu-board-clone'
+                            (:copier nil))
   "A Takuzu board: SIZE-by-SIZE grid of CELLS with a GIVENS lock mask.
 CELLS and GIVENS are row-major vectors of length SIZE*SIZE.  Each cell is
 nil, 0, or 1; each given is non-nil when its cell is a locked clue."

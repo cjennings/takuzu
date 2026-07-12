@@ -45,7 +45,7 @@
     :ink "#000000" :white "#ffffff" :shadow "#00000055"
     :gold "#b99640" :gold-hi "#dcc061" :cream "#f3e7c5"
     :steel "#969385" :dim "#7c838a" :fail "#cb6b4d"
-    :slate "#424f5e" :wash "#2c2f32"
+    :wash "#2c2f32"
     ;; board coins
     :disc0 "#4d5f75" :disc1 "#8f5236" :bezel "#a8aeb5"
     :disc0-edge "#6f839c" :disc1-edge "#b8734f"
@@ -201,6 +201,9 @@ Returns nil when assist is off."
         (when (takuzu--line-bad-p (nth c cols) n cols)
           (dotimes (r n) (aset bad (+ (* r n) c) t))))
       bad)))
+
+(defconst takuzu--char-aspect 0.62
+  "Estimated monospace glyph width as a fraction of the font size.")
 
 (defun takuzu--txt (svg x y str size color &optional anchor weight)
   "Draw STR on SVG at X,Y in monospace SIZE and COLOR.
@@ -489,7 +492,7 @@ whatever height is left spreads as even gaps between them."
   "Draw legend ITEMS justified across WIDTH on SVG from X at baseline Y.
 Each item is (word WORD) -- word with its first letter gold-underlined -- or
 \\(keyed KEY LABEL) -- KEY gold-underlined then LABEL dim."
-  (let* ((charw (* size 0.62)) (kgap (* size 0.4))
+  (let* ((charw (* size takuzu--char-aspect)) (kgap (* size 0.4))
          (widths (mapcar (lambda (it) (takuzu--legend-item-width it charw kgap)) items))
          (n (length items))
          (inter (if (> n 1)
@@ -728,11 +731,6 @@ ANCHOR is the text anchor, HI the emboss highlight, WEIGHT the font weight."
   (svg-text svg str :x x :y y :font-family "monospace" :font-size size
             :fill ink :text-anchor anchor :font-weight (or weight "normal")))
 
-(defun takuzu--help-print (svg x y str size anchor &optional weight)
-  "Draw STR on SVG at X,Y as flat printed black text, no etch."
-  (svg-text svg str :x x :y y :font-family "monospace" :font-size size
-            :fill (takuzu--c :ink) :text-anchor anchor :font-weight (or weight "normal")))
-
 (defun takuzu--help-divider (svg x1 x2 y ink hi)
   "Draw an engraved divider on SVG from X1 to X2 at Y, dark INK over highlight HI."
   (svg-line svg x1 (1+ y) x2 (1+ y) :stroke hi :stroke-opacity 0.5)
@@ -799,7 +797,7 @@ stays in a narrow left column so it never overlaps the rule text."
   "Draw the dedication on SVG centred at CX, baseline Y.
 Printed in flat black; only the name is embossed silver, raised off the plate.
 The line is sized down so the full name fits within the plate."
-  (let* ((size 10) (a (* size 0.6))
+  (let* ((size 10) (a (* size takuzu--char-aspect))
          (pre "Dedicated to ") (name "Christine Ciarmello")
          (post ", with thanks for the inspiration.")
          (total (+ (length pre) (length name) (length post)))
@@ -807,7 +805,7 @@ The line is sized down so the full name fits within the plate."
          (nx (+ x0 (* (length pre) a)))
          (ne (+ nx (* (length name) a)))
          (silver (takuzu--c :spec-name-silver)))
-    (takuzu--help-print svg x0 y pre size "start")
+    (takuzu--txt svg x0 y pre size (takuzu--c :ink))
     ;; the name, embossed silver: dark shadow below, bright highlight above, face on top
     (svg-text svg name :x nx :y (+ y 1) :font-family "monospace" :font-size size
               :fill (takuzu--c :ink) :fill-opacity 0.6 :text-anchor "start" :font-weight "bold")
@@ -815,7 +813,7 @@ The line is sized down so the full name fits within the plate."
               :fill (takuzu--c :white) :fill-opacity 0.85 :text-anchor "start" :font-weight "bold")
     (svg-text svg name :x nx :y y :font-family "monospace" :font-size size
               :fill silver :text-anchor "start" :font-weight "bold")
-    (takuzu--help-print svg ne y post size "start")))
+    (takuzu--txt svg ne y post size (takuzu--c :ink))))
 
 (defun takuzu--draw-help-card (svg x y w h ink hi d0 d1 fail)
   "Draw the spec-plate card into SVG filling the box X,Y,W,H.
@@ -841,20 +839,20 @@ to the box.  INK/HI are the etch colours; D0/D1/FAIL the rule-diagram colours."
       (takuzu--help-emblem svg (+ lx 12) ey 'ce (takuzu--c :ink) (takuzu--c :ink))
       (takuzu--help-emblem svg (+ lx 52) ey 'class2 (takuzu--c :ink) (takuzu--c :ink))
       (takuzu--help-emblem svg (+ lx 92) ey 'warn (takuzu--c :ink) (takuzu--c :ink))
-      (takuzu--help-print svg rx (- ey 4) "CONFORMS TO BINARY-LOGIC STANDARD 3" 10 "end")
-      (takuzu--help-print svg rx (+ ey 10) "CLASS II  -  SIZES 4 TO 12  -  ONE SOLUTION" 10 "end"))
-    (takuzu--help-print svg lx (+ y h -50) "MADE IN NEW ORLEANS, LA, USA  -  (c) CRAIG JENNINGS 2026" 10 "start")
+      (takuzu--txt svg rx (- ey 4) "CONFORMS TO BINARY-LOGIC STANDARD 3" 10 (takuzu--c :ink) "end")
+      (takuzu--txt svg rx (+ ey 10) "CLASS II  -  SIZES 4 TO 12  -  ONE SOLUTION" 10 (takuzu--c :ink) "end"))
+    (takuzu--txt svg lx (+ y h -50) "MADE IN NEW ORLEANS, LA, USA  -  (c) CRAIG JENNINGS 2026" 10 (takuzu--c :ink) "start")
     (takuzu--draw-help-dedication svg cx (+ y h -26))
     ;; rules block, centred between the two dividers
     (let* ((rtop (+ y 92)) (rbot (+ y h -112)) (blockh 165)
            (y0 (+ rtop (max 0 (/ (- (- rbot rtop) blockh) 2)))))
-      (takuzu--help-print svg lx y0 "HOW TO PLAY" 12 "start" "bold")
-      (takuzu--help-print svg lx (+ y0 18) "Fill the grid with two colours so that:" 11 "start")
+      (takuzu--txt svg lx y0 "HOW TO PLAY" 12 (takuzu--c :ink) "start" "bold")
+      (takuzu--txt svg lx (+ y0 18) "Fill the grid with two colours so that:" 11 (takuzu--c :ink) "start")
       (let ((ry (+ y0 50)))
         (cl-loop for rule in takuzu--rules for n from 1 do
                  (takuzu--help-rule-widget svg wx (+ ry 5) n d0 d1 fail)
-                 (takuzu--help-print svg tx ry (nth 0 rule) 12 "start")
-                 (takuzu--help-print svg tx (+ ry 17) (nth 1 rule) 12 "start")
+                 (takuzu--txt svg tx ry (nth 0 rule) 12 (takuzu--c :ink) "start")
+                 (takuzu--txt svg tx (+ ry 17) (nth 1 rule) 12 (takuzu--c :ink) "start")
                  (setq ry (+ ry 48)))))))
 
 (defconst takuzu--help-card-w 452 "Natural width of the spec-plate card before scaling.")
@@ -967,24 +965,15 @@ Kicks off the scale-easing timer when the displayed scale is off target."
 
 ;; --- game actions ---
 
-(defun takuzu--event-of (msg)
-  "Map a status MSG to an annunciator event symbol, or nil for a state message."
-  (cond ((string-prefix-p "That cell is a given" msg) 'fixed)
-        ((string-prefix-p "Filled a forced" msg) 'hint)
-        ((string-prefix-p "No cell is forced" msg) 'no-hint)
-        ((string-prefix-p "The board is full" msg) 'invalid)
-        ((string-prefix-p "Nothing to undo" msg) 'nothing)
-        ((string-prefix-p "Generation failed" msg) 'gen-fail)))
-
-(defun takuzu--set-status (msg)
-  "Set the status MSG and flash its event lamp.
-A non-empty MSG with no lamp of its own is echoed instead, so the keypress
-still gives visible feedback in the graphical UI."
+(defun takuzu--set-status (msg &optional event)
+  "Set the status MSG and flash the EVENT annunciator lamp.
+A nil EVENT clears the lamp strip, and a non-empty MSG with no lamp of its
+own is echoed instead, so the keypress still gives visible feedback in the
+graphical UI."
   (setq takuzu--status msg)
-  (let ((event (takuzu--event-of msg)))
-    (takuzu--signal-event event)
-    (when (and (null event) (not (string-empty-p msg)))
-      (message "%s" msg))))
+  (takuzu--signal-event event)
+  (when (and (null event) (not (string-empty-p msg)))
+    (message "%s" msg)))
 
 (defun takuzu--signal-event (event)
   "Light the EVENT annunciator lamp for EVENT and pulse it; nil clears the strip.
@@ -1048,7 +1037,8 @@ the stale zero instead of the solve time."
 (defun takuzu--set-current (val)
   "Set the cursor cell to VAL, recording history, unless it is a given."
   (cond
-   ((takuzu--current-given-p) (takuzu--set-status "That cell is a given -- it can't change."))
+   ((takuzu--current-given-p)
+    (takuzu--set-status "That cell is a given -- it can't change." 'fixed))
    ((or takuzu--won takuzu--proven) (takuzu--set-status takuzu--msg-finished))
    (t (let* ((r (car takuzu--cursor)) (c (cdr takuzu--cursor))
              (idx (+ (* r takuzu--size) c)))
@@ -1089,7 +1079,7 @@ While the help overlay is up, a movement key dismisses it instead of moving."
   (takuzu--playing-only
   (cond
    ((or takuzu--won takuzu--proven) (takuzu--set-status takuzu--msg-finished))
-   ((null takuzu--history) (takuzu--set-status "Nothing to undo."))
+   ((null takuzu--history) (takuzu--set-status "Nothing to undo." 'nothing))
    (t (let* ((last (pop takuzu--history))
              (idx (car last)) (n takuzu--size))
         (takuzu-board-set takuzu--board (/ idx n) (mod idx n) (cdr last))
@@ -1119,10 +1109,10 @@ Return (ROW COL VALUE) or nil when no cell is forced."
       (takuzu--set-status takuzu--msg-finished)
     (let ((found (takuzu--forced-cell)))
       (if (not found)
-          (takuzu--set-status "No cell is forced right now -- reason further.")
+          (takuzu--set-status "No cell is forced right now -- reason further." 'no-hint)
         (setq takuzu--cursor (cons (nth 0 found) (nth 1 found)))
         (takuzu--set-current (nth 2 found))
-        (takuzu--set-status "Filled a forced cell."))))
+        (takuzu--set-status "Filled a forced cell." 'hint))))
   (takuzu--redraw)))
 
 (defun takuzu-check ()
@@ -1131,9 +1121,9 @@ Return (ROW COL VALUE) or nil when no cell is forced."
   (takuzu--playing-only
   (takuzu--check-win)
   (unless takuzu--won
-    (takuzu--set-status
-     (if (takuzu-board-full-p takuzu--board)
-         "The board is full but a rule is broken."
+    (if (takuzu-board-full-p takuzu--board)
+        (takuzu--set-status "The board is full but a rule is broken." 'invalid)
+      (takuzu--set-status
        (format "Not finished -- %d cells left." (takuzu--empty-count)))))
   (takuzu--redraw)))
 
@@ -1161,6 +1151,9 @@ Return (ROW COL VALUE) or nil when no cell is forced."
           (takuzu-board-set takuzu--board r c nil))))
     (setq takuzu--won nil takuzu--proven nil takuzu--history nil
           takuzu--start-time (current-time))
+    ;; the refresh tick cancels its timer at a win; a replay needs it back
+    (unless (timerp takuzu--timer)
+      (takuzu--start-refresh-timer (current-buffer)))
     (takuzu--set-status "")
     (takuzu--redraw))))
 
@@ -1231,17 +1224,42 @@ Shows the three rules over the console shell; any key returns to the game."
   "Cancel the refresh timer if running."
   (takuzu--cancel-timer takuzu--timer))
 
+(defun takuzu--teardown-timers ()
+  "Stop the refresh, spinner, and event-pulse timers."
+  (takuzu--stop-timer)
+  (takuzu--stop-spinner)
+  (takuzu--cancel-timer takuzu--event-timer))
+
+(defun takuzu--reset-play-state ()
+  "Reset the per-game interaction state to its initial values."
+  (setq takuzu--pending nil takuzu--pending-start nil takuzu--generating nil
+        takuzu--cursor '(0 . 0) takuzu--assist nil takuzu--history nil
+        takuzu--won nil takuzu--proven nil takuzu--won-elapsed 0
+        takuzu--status "" takuzu--event nil takuzu--help nil))
+
+(defun takuzu--refresh-tick (buf)
+  "One beat of the refresh timer for BUF.
+Cancels the timer once the game is over (the clock is frozen, so the
+periodic redraw only burns cycles), and skips the redraw while BUF is
+undisplayed -- unlike the event-pulse timer, nothing here needs to expire
+in a buried buffer."
+  (when (buffer-live-p buf)
+    (with-current-buffer buf
+      (cond
+       ((and (or takuzu--won takuzu--proven) (not takuzu--armed))
+        (takuzu--stop-timer))
+       ((get-buffer-window buf t)
+        (takuzu--redraw buf))))))
+
 (defun takuzu--start-refresh-timer (buf)
   "Start the per-redraw-interval refresh timer for BUF."
   (let ((iv (takuzu--refresh-interval)))
-    (setq takuzu--timer (run-at-time iv iv (lambda () (takuzu--redraw buf))))))
+    (setq takuzu--timer (run-at-time iv iv #'takuzu--refresh-tick buf))))
 
 (defun takuzu--cleanup ()
   "Cancel timers and any in-flight generation when the buffer is killed."
-  (takuzu--stop-timer)
-  (takuzu--stop-spinner)
+  (takuzu--teardown-timers)
   (takuzu--cancel-timer takuzu--scale-timer)
-  (takuzu--cancel-timer takuzu--event-timer)
   (when (process-live-p takuzu--gen-process) (delete-process takuzu--gen-process)))
 
 (defun takuzu--on-window-change (&rest _)
@@ -1259,18 +1277,13 @@ Shows the three rules over the console shell; any key returns to the game."
 (defun takuzu--begin-play (buf result)
   "Populate BUF from RESULT, start the clock, and begin play."
   (with-current-buffer buf
+    (takuzu--teardown-timers)
+    (takuzu--reset-play-state)
     (let ((board (plist-get result :board)))
       (setq takuzu--board board takuzu--solution (plist-get result :solution)
             takuzu--grade (plist-get result :grade)
             takuzu--size (takuzu-board-size board)
-            takuzu--armed nil takuzu--pending nil takuzu--pending-start nil
-            takuzu--generating nil takuzu--cursor '(0 . 0) takuzu--assist nil
-            takuzu--history nil takuzu--start-time (current-time)
-            takuzu--won nil takuzu--proven nil takuzu--won-elapsed 0 takuzu--status ""
-            takuzu--event nil takuzu--help nil))
-    (takuzu--stop-spinner)
-    (takuzu--stop-timer)
-    (takuzu--cancel-timer takuzu--event-timer)
+            takuzu--armed nil takuzu--start-time (current-time)))
     (takuzu--start-refresh-timer buf)
     (takuzu--redraw buf)))
 
@@ -1285,7 +1298,7 @@ key was already pressed, or hold the RESULT pending the start key."
        ((null result)
         (takuzu--stop-spinner)
         (setq takuzu--generating nil)
-        (takuzu--set-status "Generation failed -- press n to retry.")
+        (takuzu--set-status "Generation failed -- press n to retry." 'gen-fail)
         (takuzu--redraw buf))
        (takuzu--pending-start
         (takuzu--stop-spinner)
@@ -1299,18 +1312,14 @@ puzzle pre-generates in the background so starting is instant."
   (let ((buf (get-buffer-create "*Takuzu*")))
     (with-current-buffer buf
       (takuzu-mode)
-      (takuzu--stop-timer)
-      (takuzu--stop-spinner)
+      (takuzu--teardown-timers)
       (when (process-live-p takuzu--gen-process) (delete-process takuzu--gen-process))
+      (takuzu--reset-play-state)
       (setq takuzu--size size takuzu--difficulty difficulty
             takuzu--board (takuzu-make-board size)
             takuzu--solution nil takuzu--grade nil
             takuzu--armed (list :size size :difficulty difficulty)
-            takuzu--pending nil takuzu--pending-start nil takuzu--generating nil
-            takuzu--cursor '(0 . 0) takuzu--assist nil takuzu--history nil
-            takuzu--start-time nil takuzu--won nil takuzu--proven nil
-            takuzu--won-elapsed 0 takuzu--status "" takuzu--event nil takuzu--help nil)
-      (takuzu--cancel-timer takuzu--event-timer)
+            takuzu--start-time nil)
       (takuzu--start-refresh-timer buf)
       (setq takuzu--gen-process
             (takuzu-generate-async

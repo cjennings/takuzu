@@ -286,6 +286,16 @@ rounded interior, so the wall does the occluding."
     (should (eql (takuzu-board-ref takuzu--board 0 0) 0))   ; given kept
     (should (null (takuzu-board-ref takuzu--board 0 1)))))   ; placed cleared
 
+(ert-deftest test-takuzu-ui-reset-after-win-restarts-refresh-timer ()
+  "Error: resetting a finished game restarts the stopped refresh timer.
+The tick cancels the timer at the win; without a restart here the clock
+would sit frozen through the replayed game."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4 (copy-sequence test-takuzu-ui--solution-4))
+    (setq takuzu--won t takuzu--timer nil)
+    (takuzu-reset)
+    (should (timerp takuzu--timer))))
+
 (ert-deftest test-takuzu-ui-toggle-assist ()
   "Normal: toggle flips assist and reports it."
   (test-takuzu-ui--with-buffer
@@ -546,23 +556,28 @@ the size-dependent layout and both disc styles (a given and a placed cell)."
 
 ;; --- event machinery ---
 
-(ert-deftest test-takuzu-ui-event-of-mapping ()
-  "Normal: the exact status strings production emits map to their lamps.
-The strings here are copies of the ones the source passes to
-`takuzu--set-status'; rewording one there must break this test, or the
-reworded message silently loses its annunciator lamp."
-  (should (eq (takuzu--event-of "That cell is a given -- it can't change.") 'fixed))
-  (should (eq (takuzu--event-of "Filled a forced cell.") 'hint))
-  (should (eq (takuzu--event-of "No cell is forced right now -- reason further.") 'no-hint))
-  (should (eq (takuzu--event-of "The board is full but a rule is broken.") 'invalid))
-  (should (eq (takuzu--event-of "Nothing to undo.") 'nothing))
-  (should (eq (takuzu--event-of "Generation failed -- press n to retry.") 'gen-fail)))
+(ert-deftest test-takuzu-ui-set-status-signals-explicit-event ()
+  "Normal: an explicit EVENT arg lights that lamp, with no echo."
+  (with-temp-buffer
+    (unwind-protect
+        (let ((captured nil))
+          (cl-letf (((symbol-function 'message)
+                     (lambda (fmt &rest args) (setq captured (apply #'format fmt args)))))
+            (takuzu--set-status "Nothing to undo." 'nothing)
+            (should (eq takuzu--event 'nothing))
+            (should-not captured)))
+      (takuzu--signal-event nil))))
 
-(ert-deftest test-takuzu-ui-event-of-state-messages ()
-  "Boundary: state messages and the empty string map to no event."
-  (should-not (takuzu--event-of ""))
-  (should-not (takuzu--event-of "Solved in 1:23 -- nicely done"))
-  (should-not (takuzu--event-of "Press n to begin.")))
+(ert-deftest test-takuzu-ui-set-status-no-event-clears-lamp ()
+  "Boundary: a status without an EVENT clears any lit lamp."
+  (with-temp-buffer
+    (unwind-protect
+        (progn
+          (takuzu--set-status "Generation failed -- press n to retry." 'gen-fail)
+          (should (eq takuzu--event 'gen-fail))
+          (takuzu--set-status "")
+          (should-not takuzu--event))
+      (takuzu--signal-event nil))))
 
 (ert-deftest test-takuzu-ui-signal-event-sets-and-clears ()
   "Normal: signalling an event records it with a timestamp; nil clears both."
@@ -606,10 +621,58 @@ gives no feedback at all in the graphical UI."
         (takuzu--set-status "Not finished -- 3 cells left.")
         (should (equal captured "Not finished -- 3 cells left."))
         (setq captured nil)
-        (takuzu--set-status "Nothing to undo.")   ; mapped -> lamp, no echo
+        (takuzu--set-status "Nothing to undo." 'nothing) ; lamp, no echo
         (should-not captured)
-        (takuzu--set-status "")                    ; empty -> no echo
+        (takuzu--set-status "")                          ; empty -> no echo
         (should-not captured)))))
+
+(ert-deftest test-takuzu-ui-refresh-tick-stops-once-finished ()
+  "Normal: the refresh tick cancels its own timer once the game is over.
+A won or proven board's clock is frozen, so the per-second redraw only
+burns cycles."
+  (let ((buf (get-buffer-create " *takuzu-refresh-test*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (takuzu-mode)
+          (setq takuzu--won t takuzu--armed nil)
+          (takuzu--start-refresh-timer buf)
+          (should (timerp takuzu--timer))
+          (takuzu--refresh-tick buf)
+          (should-not takuzu--timer))
+      (kill-buffer buf))))
+
+(ert-deftest test-takuzu-ui-refresh-tick-skips-undisplayed-buffer ()
+  "Boundary: an undisplayed buffer is not redrawn, but the timer survives.
+The tick must keep running so the clock resumes the moment the buffer is
+shown again."
+  (let ((buf (get-buffer-create " *takuzu-refresh-test*"))
+        (drawn nil))
+    (unwind-protect
+        (with-current-buffer buf
+          (takuzu-mode)
+          (takuzu--start-refresh-timer buf)
+          (cl-letf (((symbol-function 'takuzu--redraw)
+                     (lambda (&optional _) (setq drawn t))))
+            (takuzu--refresh-tick buf))
+          (should-not drawn)
+          (should (timerp takuzu--timer)))
+      (kill-buffer buf))))
+
+(ert-deftest test-takuzu-ui-refresh-tick-redraws-displayed-buffer ()
+  "Normal: a displayed, in-play buffer redraws on the tick."
+  (let ((buf (get-buffer-create "*takuzu-refresh-test*"))
+        (drawn nil))
+    (unwind-protect
+        (with-current-buffer buf
+          (takuzu-mode)
+          (set-window-buffer (selected-window) buf)
+          (takuzu--start-refresh-timer buf)
+          (cl-letf (((symbol-function 'takuzu--redraw)
+                     (lambda (&optional _) (setq drawn t))))
+            (takuzu--refresh-tick buf))
+          (should drawn)
+          (should (timerp takuzu--timer)))
+      (kill-buffer buf))))
 
 (ert-deftest test-takuzu-ui-check-win-freezes-elapsed-at-win ()
   "Error: winning records the elapsed time at the win, not a stale zero.
