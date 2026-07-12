@@ -60,9 +60,10 @@
     ;; jewels and state lamps
     :jewel-off "#241f1b" :jewel-off-edge "#0e0c0a"
     :lamp-green "#6fce33" :lamp-amber "#ffb43a" :lamp-cyan "#63e6c8"
-    ;; cursor cup: the bead lamps and the leather floor
-    :cursor-lamp "#8f661b" :cursor-glow "#c08a2e"
-    :cup-floor "#170f09" :cup-floor-rim "#1c130c"
+    ;; cursor: the machined brass bezel ring
+    :cursor-bezel-hi "#e8cd76" :cursor-bezel "#b99640"
+    :cursor-bezel-lo "#7a5f24" :cursor-bezel-dk "#57431a"
+    :cursor-spark "#fdf3c9"
     ;; instructions spec plate
     :spec-silver "#74787d" :spec-silver-hi "#909498" :spec-silver-lo "#52565b"
     :spec-ink "#16181c" :spec-name-silver "#9ba0a8")
@@ -72,11 +73,12 @@
   "The palette colour for KEY."
   (plist-get takuzu--colors key))
 
-(defconst takuzu--cursor-pool-stops
-  '(("0" . "0.30") ("0.4" . "0.05") ("1" . "0"))
-  "Falloff of a cursor bead lamp's pool, as (OFFSET . OPACITY) stops.
-Offsets are fractions of the pool's reach; tune these to reshape how fast
-the lamp light dies.")
+(defconst takuzu--cursor-bezel-stops
+  '((0 . :cursor-bezel-hi) (0.30 . :cursor-bezel)
+    (0.68 . :cursor-bezel-lo) (1 . :cursor-bezel-dk))
+  "The bezel ring's turned-metal catch, as (OFFSET . PALETTE-KEY) stops.
+The gradient runs top-left to bottom-right; tune these to move where the
+light falls off the metal.")
 
 ;; --- layout ---
 
@@ -263,53 +265,49 @@ own colour."
           (svg-circle svg cx cy r :fill fill :stroke (takuzu--c :bezel) :stroke-width 1.2))
       (svg-circle svg cx cy r :fill fill :stroke edge :stroke-width 1.2))))
 
-(defun takuzu--draw-cursor-lamps (svg sx sy cell)
-  "Draw the cursor's four corner bead lamps on SVG at SX,SY, cell size CELL.
-They sit at the bottom of the socket's cup; each casts a quarter-fan of
-light into the cup with a true radial falloff, sized to die out before the
-midpoint between lamps.  The cup wall occludes everything behind a bead."
-  ;; the 6px inset keeps a bead inside the clip's rounded corner: any closer
-  ;; to the corner and the bead crosses the corner arc, so the pool's hot
-  ;; core gets clipped away and the lamp reads as mounted on the rim
-  (let ((in 6) (reach (round (* cell 0.30))) (i 0))
-    ;; the cup interior is the clip: light cannot leave it, so each lamp's
-    ;; cast is a plain circular falloff and the wall does the occluding
+(defun takuzu--draw-cursor-bezel (svg sx sy cell)
+  "Draw the cursor on SVG as a machined brass bezel ring on the socket rim.
+The givens' bezel language, applied to the well: a thin turned-metal ring
+seated on the rim at SX,SY (cell size CELL), catching light from the
+top-left with a hard specular flash on that corner's arc."
+  (let ((g "takuzu-cursor-bezel-g"))
+    ;; machined catch: brightest at the top-left, falling to shadowed brass
     (dom-append-child svg
-      (dom-node 'clipPath (list (cons 'id "takuzu-cup"))
-                (dom-node 'rect (list (cons 'x (+ sx 1)) (cons 'y (+ sy 1))
-                                      (cons 'width (- cell 2))
-                                      (cons 'height (- cell 2))
-                                      (cons 'rx 8)))))
-    (dolist (corner (list (list (+ sx in) (+ sy in))
-                          (list (- (+ sx cell) in) (+ sy in))
-                          (list (+ sx in) (- (+ sy cell) in))
-                          (list (- (+ sx cell) in) (- (+ sy cell) in))))
-      (pcase-let ((`(,jx ,jy) corner))
-        (setq i (1+ i))
-        (let ((id (format "takuzu-lamp-%d" i)))
-          ;; a bead-centred gradient in user space: bright at the lamp,
-          ;; transparent well before the next lamp's territory
-          (dom-append-child svg
-            (apply #'dom-node 'radialGradient
-                   (list (cons 'id id)
-                         (cons 'gradientUnits "userSpaceOnUse")
-                         (cons 'cx jx) (cons 'cy jy) (cons 'r reach))
-                   (mapcar (lambda (stop)
-                             (dom-node 'stop
-                                       (list (cons 'offset (car stop))
-                                             (cons 'stop-color (takuzu--c :cursor-glow))
-                                             (cons 'stop-opacity (cdr stop)))))
-                           takuzu--cursor-pool-stops)))
-          (dom-append-child svg
-            (dom-node 'circle
-                      (list (cons 'cx jx) (cons 'cy jy) (cons 'r reach)
-                            (cons 'fill (format "url(#%s)" id))
-                            (cons 'clip-path "url(#takuzu-cup)")))))
-        ;; the bead itself: no circular halo, just the lamp and its catchlight
-        (svg-circle svg jx jy 2 :fill (takuzu--c :cursor-lamp)
-                    :stroke (takuzu--c :shadow) :stroke-width 0.6)
-        (svg-circle svg (- jx 0.7) (- jy 0.7) 0.8
-                    :fill (takuzu--c :white) :fill-opacity 0.6)))))
+      (apply #'dom-node 'linearGradient
+             (list (cons 'id g) (cons 'gradientUnits "userSpaceOnUse")
+                   (cons 'x1 sx) (cons 'y1 sy)
+                   (cons 'x2 (+ sx cell)) (cons 'y2 (+ sy cell)))
+             (mapcar (lambda (stop)
+                       (dom-node 'stop
+                                 (list (cons 'offset (car stop))
+                                       (cons 'stop-color (takuzu--c (cdr stop))))))
+                     takuzu--cursor-bezel-stops)))
+    ;; grounding shadow just outside the ring seats it on the plate
+    (svg-rectangle svg (- sx 2.2) (- sy 2.2) (+ cell 4.4) (+ cell 4.4) :rx 11
+                   :fill "none" :stroke (takuzu--c :ink)
+                   :stroke-width 1.2 :stroke-opacity 0.7)
+    ;; the turned ring, its stroke carrying the metal gradient
+    (svg-rectangle svg (- sx 0.8) (- sy 0.8) (+ cell 1.6) (+ cell 1.6) :rx 9.8
+                   :fill "none" :stroke (format "url(#%s)" g) :stroke-width 3.2)
+    ;; a turning groove scored into the ring face
+    (svg-rectangle svg (- sx 0.8) (- sy 0.8) (+ cell 1.6) (+ cell 1.6) :rx 9.8
+                   :fill "none" :stroke (takuzu--c :ink)
+                   :stroke-width 0.5 :stroke-opacity 0.35)
+    ;; hard specular catch on the top-left corner arc
+    (dom-append-child svg
+      (dom-node 'path
+                (list (cons 'd (format "M %s %s A 9.8 9.8 0 0 1 %s %s"
+                                       (- sx 0.8) (+ sy 9)
+                                       (+ sx 9) (- sy 0.8)))
+                      (cons 'fill "none")
+                      (cons 'stroke (takuzu--c :cursor-spark))
+                      (cons 'stroke-opacity "0.9")
+                      (cons 'stroke-width "1.4")
+                      (cons 'stroke-linecap "round"))))
+    ;; polished inner lip where the ring meets the cup
+    (svg-rectangle svg (+ sx 1.4) (+ sy 1.4) (- cell 2.8) (- cell 2.8) :rx 7.8
+                   :fill "none" :stroke (takuzu--c :white)
+                   :stroke-width 0.7 :stroke-opacity 0.3)))
 
 (defun takuzu--draw-board (svg x y)
   "Draw the board on SVG with its top-left at X,Y."
@@ -326,23 +324,14 @@ midpoint between lamps.  The cup wall occludes everything behind a bead."
                (idx (+ (* r n) c))
                (val (takuzu-board-ref takuzu--board r c))
                (given (takuzu-board-given-p takuzu--board r c)))
-          (when (takuzu--curp r c)
-            ;; the whole cup floor sits just above the wall's darkness, nearly
-            ;; flat; the corner pools are the only strong light
-            (svg-gradient svg "takuzu-cursor-floor" 'radial
-                          (list (cons 0 (takuzu--c :cup-floor)) (cons 100 (takuzu--c :cup-floor-rim)))))
           (let ((stroke (if (and errs (aref errs idx))
                             (takuzu--c :fail) (takuzu--c :socket-edge)))
                 (sw (if (and errs (aref errs idx)) 2 1)))
-            (if (takuzu--curp r c)
-                (svg-rectangle svg sx sy cell cell :rx 9
-                               :gradient "takuzu-cursor-floor"
-                               :stroke stroke :stroke-width sw)
-              (svg-rectangle svg sx sy cell cell :rx 9
-                             :fill (takuzu--c :socket)
-                             :stroke stroke :stroke-width sw)))
+            (svg-rectangle svg sx sy cell cell :rx 9
+                           :fill (takuzu--c :socket)
+                           :stroke stroke :stroke-width sw))
           (when (takuzu--curp r c)
-            (takuzu--draw-cursor-lamps svg sx sy cell))
+            (takuzu--draw-cursor-bezel svg sx sy cell))
           (when val
             (takuzu--draw-disc svg (+ sx (/ cell 2)) (+ sy (/ cell 2))
                                (round (* cell 0.33)) val given)))))

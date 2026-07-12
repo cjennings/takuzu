@@ -105,23 +105,23 @@
   (should (equal (takuzu--glyph 1) "X"))
   (should (equal (takuzu--glyph nil) ".")))
 
-(ert-deftest test-takuzu-ui-draw-cursor-lamps ()
-  "Normal: the cursor draws four corner bead lamps, each with a falloff pool.
-Every lamp gets its own user-space radial gradient (bright at the bead,
-transparent at its reach); the pools are plain circles clipped to the cup's
-rounded interior, so the wall does the occluding."
+(ert-deftest test-takuzu-ui-draw-cursor-bezel ()
+  "Normal: the cursor draws a machined bezel ring on the socket rim.
+The ring's stroke carries a user-space linear gradient (the turned-metal
+catch, bright top-left to shadowed bottom-right); a single path draws the
+specular arc on the top-left corner."
   (let ((svg (svg-create 100 100)))
-    (takuzu--draw-cursor-lamps svg 0 0 50)
-    (should (= (length (dom-by-tag svg 'radialGradient)) 4))
-    (should (= (length (dom-by-tag svg 'clipPath)) 1))
-    (let ((pools (seq-filter (lambda (c) (dom-attr c 'clip-path))
-                             (dom-by-tag svg 'circle))))
-      (should (= (length pools) 4))
-      (dolist (p pools)
-        (should (string-match-p "^url(#takuzu-lamp-" (dom-attr p 'fill)))
-        (should (equal (dom-attr p 'clip-path) "url(#takuzu-cup)"))))
-    ;; per corner: the pool, the bead, and its catchlight
-    (should (= (length (dom-by-tag svg 'circle)) 12))))
+    (takuzu--draw-cursor-bezel svg 10 10 50)
+    (should (= (length (dom-by-tag svg 'linearGradient)) 1))
+    (let ((ring (seq-find (lambda (r)
+                            (equal (dom-attr r 'stroke)
+                                   "url(#takuzu-cursor-bezel-g)"))
+                          (dom-by-tag svg 'rect))))
+      (should ring)
+      (should (equal (dom-attr ring 'fill) "none")))
+    (should (= (length (dom-by-tag svg 'path)) 1))
+    ;; grounding shadow, the ring, its turning groove, the inner lip
+    (should (= (length (dom-by-tag svg 'rect)) 4))))
 
 (ert-deftest test-takuzu-ui-help-toggle ()
   "Normal: help toggles the overlay flag and the help SVG renders."
