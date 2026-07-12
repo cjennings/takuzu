@@ -85,12 +85,6 @@
   (let ((takuzu-flash-period 0.2)) (should (= (takuzu--refresh-interval) 0.2)))
   (let ((takuzu-flash-period 8.0)) (should (= (takuzu--refresh-interval) 1.0))))
 
-(ert-deftest test-takuzu-ui-dial-glow ()
-  "Normal: dial glow returns a hex string, brighter at higher brightness."
-  (should (string-match-p "^#[0-9a-f]\\{6\\}$" (takuzu--dial-glow 0.0)))
-  (should (string-match-p "^#[0-9a-f]\\{6\\}$" (takuzu--dial-glow 1.0)))
-  (should (string-lessp (takuzu--dial-glow 0.1) (takuzu--dial-glow 0.9))))
-
 (ert-deftest test-takuzu-ui-faceplate-dims ()
   "Normal: faceplate width/height are positive and grow with board size."
   (with-temp-buffer
@@ -323,7 +317,7 @@
           takuzu--solution (plist-get g :solution) takuzu--grade grade
           takuzu--difficulty grade takuzu--cursor '(0 . 0)
           takuzu--start-time (current-time) takuzu--status ""
-          takuzu--generating nil takuzu--armed nil takuzu--clock-flash 0)))
+          takuzu--generating nil takuzu--armed nil)))
 
 (ert-deftest test-takuzu-ui-svg-renders-each-size ()
   "Normal: the faceplate builds an SVG DOM for every offered size.
@@ -339,12 +333,12 @@ the size-dependent layout and both disc styles (a given and a placed cell)."
               takuzu--solution (takuzu-make-board n cells) takuzu--grade 'easy
               takuzu--difficulty 'easy takuzu--cursor '(0 . 0)
               takuzu--start-time (current-time) takuzu--status ""
-              takuzu--generating nil takuzu--armed nil takuzu--clock-flash 0))
+              takuzu--generating nil takuzu--armed nil))
       (let ((svg (takuzu--svg)))
         (should svg) (should (eq (car svg) 'svg))))))
 
 (ert-deftest test-takuzu-ui-svg-renders-states ()
-  "Normal: the faceplate builds for won, proven, assist-on, and flashing states."
+  "Normal: the faceplate builds for won, proven, assist-on, and event states."
   (with-temp-buffer
     (test-takuzu-ui--playing-state 6 'medium)
     (setq takuzu--won t takuzu--won-elapsed 30 takuzu--status "Solved.")
@@ -353,7 +347,7 @@ the size-dependent layout and both disc styles (a given and a placed cell)."
     (should (eq (car (takuzu--svg)) 'svg))
     (setq takuzu--proven nil takuzu--assist t)
     (should (eq (car (takuzu--svg)) 'svg))
-    (setq takuzu--clock-flash 3)
+    (setq takuzu--event 'hint takuzu--event-time (current-time))
     (should (eq (car (takuzu--svg)) 'svg))))
 
 (ert-deftest test-takuzu-ui-svg-generating ()
@@ -441,13 +435,13 @@ the size-dependent layout and both disc styles (a given and a placed cell)."
         (should takuzu--armed)
         (should (= takuzu--size 8))))))
 
-(ert-deftest test-takuzu-ui-cycle-difficulty ()
-  "Normal: cycling difficulty arms a fresh game at the next difficulty."
+(ert-deftest test-takuzu-ui-cycle-level ()
+  "Normal: cycling level arms a fresh game at the next level."
   (test-takuzu-ui--arming
     (with-temp-buffer
       (takuzu-mode)
       (setq takuzu--size 6 takuzu--difficulty 'easy)
-      (takuzu-cycle-difficulty)
+      (takuzu-cycle-level)
       (with-current-buffer "*Takuzu*"
         (should takuzu--armed)
         (should (eq takuzu--difficulty 'medium))))))
@@ -482,20 +476,20 @@ the size-dependent layout and both disc styles (a given and a placed cell)."
     (should takuzu--pending-start)
     (should takuzu--generating)))
 
-(ert-deftest test-takuzu-ui-svg-covers-meter-and-legend-branches ()
-  "Normal: renders that hit the amber/green meters, error strokes, armed legend."
+(ert-deftest test-takuzu-ui-svg-covers-gauge-and-legend-branches ()
+  "Normal: renders that hit gauge sweeps, error strokes, and the armed legend."
   (with-temp-buffer
     (setq takuzu--size 4 takuzu--grade 'easy takuzu--difficulty 'easy
           takuzu--cursor '(0 . 0) takuzu--start-time (current-time) takuzu--status ""
-          takuzu--generating nil takuzu--armed nil takuzu--clock-flash 0 takuzu--won nil
+          takuzu--generating nil takuzu--armed nil takuzu--won nil
           takuzu--proven nil takuzu--assist nil
           takuzu--solution (takuzu-make-board 4 test-takuzu-ui--solution-4))
-    ;; near-full valid board -> green lamp + green ring arc
+    ;; near-full valid board -> needle near full sweep
     (let ((c (copy-sequence test-takuzu-ui--solution-4)))
       (aset c 15 nil)
       (setq takuzu--board (takuzu-make-board 4 c)))
     (should (eq (car (takuzu--svg)) 'svg))
-    ;; ~62% board -> amber lamp + amber ring
+    ;; ~62% board -> needle mid-sweep
     (let ((c (copy-sequence test-takuzu-ui--solution-4)))
       (dotimes (i 6) (aset c (+ 10 i) nil))
       (setq takuzu--board (takuzu-make-board 4 c)))
@@ -509,6 +503,249 @@ the size-dependent layout and both disc styles (a given and a placed cell)."
     (setq takuzu--assist nil takuzu--armed '(:size 4 :difficulty easy)
           takuzu--board (takuzu-make-board 4))
     (should (eq (car (takuzu--svg)) 'svg))))
+
+;; --- instrument panel helpers ---
+
+(ert-deftest test-takuzu-ui-lerp-color ()
+  "Normal: colour lerp hits both endpoints exactly and blends between them."
+  (should (equal (takuzu--lerp-color "#141210" "#a8843a" 0) "#141210"))
+  (should (equal (takuzu--lerp-color "#141210" "#a8843a" 1) "#a8843a"))
+  (let ((mid (takuzu--lerp-color "#000000" "#ff0000" 0.5)))
+    (should (string-match-p "^#[0-9a-f]\\{6\\}$" mid))
+    (should (string-lessp "#000000" mid))
+    (should (string-lessp mid "#ff0000"))))
+
+(ert-deftest test-takuzu-ui-game-state ()
+  "Normal: game state maps armed/won/proven flags; armed takes precedence."
+  (with-temp-buffer
+    (setq takuzu--armed nil takuzu--won nil takuzu--proven nil)
+    (should (eq (takuzu--game-state) 'solving))
+    (setq takuzu--won t)
+    (should (eq (takuzu--game-state) 'solved))
+    (setq takuzu--won nil takuzu--proven t)
+    (should (eq (takuzu--game-state) 'shown))
+    (setq takuzu--armed '(:size 4 :difficulty easy))
+    (should (eq (takuzu--game-state) 'ready))))
+
+(ert-deftest test-takuzu-ui-strip-width-grows-with-size ()
+  "Normal: the annunciator strip width is positive and grows with board size."
+  (with-temp-buffer
+    (setq takuzu--size 4)
+    (let ((w4 (takuzu--strip-width)))
+      (should (> w4 0))
+      (setq takuzu--size 12)
+      (should (> (takuzu--strip-width) w4)))))
+
+;; --- event machinery ---
+
+(ert-deftest test-takuzu-ui-event-of-mapping ()
+  "Normal: the exact status strings production emits map to their lamps.
+The strings here are copies of the ones the source passes to
+`takuzu--set-status'; rewording one there must break this test, or the
+reworded message silently loses its annunciator lamp."
+  (should (eq (takuzu--event-of "That cell is a given -- it can't change.") 'fixed))
+  (should (eq (takuzu--event-of "Filled a forced cell.") 'hint))
+  (should (eq (takuzu--event-of "No cell is forced right now -- reason further.") 'no-hint))
+  (should (eq (takuzu--event-of "The board is full but a rule is broken.") 'invalid))
+  (should (eq (takuzu--event-of "Nothing to undo.") 'nothing))
+  (should (eq (takuzu--event-of "Generation failed -- press n to retry.") 'gen-fail)))
+
+(ert-deftest test-takuzu-ui-event-of-state-messages ()
+  "Boundary: state messages and the empty string map to no event."
+  (should-not (takuzu--event-of ""))
+  (should-not (takuzu--event-of "Solved in 1:23 -- nicely done"))
+  (should-not (takuzu--event-of "Press n to begin.")))
+
+(ert-deftest test-takuzu-ui-signal-event-sets-and-clears ()
+  "Normal: signalling an event records it with a timestamp; nil clears both."
+  (with-temp-buffer
+    (takuzu--signal-event 'hint)
+    (should (eq takuzu--event 'hint))
+    (should takuzu--event-time)
+    (takuzu--signal-event nil)
+    (should-not takuzu--event)
+    (should-not takuzu--event-time)))
+
+(ert-deftest test-takuzu-ui-signal-event-expires-without-window ()
+  "Error: an event fired in an undisplayed buffer still gets an expiry timer.
+Without one, a lamp lit while the buffer is buried (a background GEN FAIL,
+say) breathes forever once the player returns."
+  (with-temp-buffer
+    (unwind-protect
+        (progn
+          (takuzu--signal-event 'gen-fail)
+          (should (timerp takuzu--event-timer)))
+      (takuzu--signal-event nil))))
+
+(ert-deftest test-takuzu-ui-event-pulse-ends-dark ()
+  "Boundary: the pulse duration is a whole number of breathing cycles.
+Otherwise the lamp snaps off near peak brightness instead of fading out."
+  (with-temp-buffer
+    (let ((t0 (current-time)))
+      (setq takuzu--event-time t0)
+      (cl-letf (((symbol-function 'current-time)
+                 (lambda () (time-add t0 (seconds-to-time takuzu--event-dur)))))
+        (should (< (takuzu--event-intensity) 0.05))))))
+
+(ert-deftest test-takuzu-ui-set-status-echoes-unmapped ()
+  "Normal: a status with no annunciator lamp echoes so the key isn't silent.
+The check key's \"Not finished\" report has no lamp; without the echo it
+gives no feedback at all in the graphical UI."
+  (with-temp-buffer
+    (let ((captured nil))
+      (cl-letf (((symbol-function 'message)
+                 (lambda (fmt &rest args) (setq captured (apply #'format fmt args)))))
+        (takuzu--set-status "Not finished -- 3 cells left.")
+        (should (equal captured "Not finished -- 3 cells left."))
+        (setq captured nil)
+        (takuzu--set-status "Nothing to undo.")   ; mapped -> lamp, no echo
+        (should-not captured)
+        (takuzu--set-status "")                    ; empty -> no echo
+        (should-not captured)))))
+
+(ert-deftest test-takuzu-ui-legend-renders-in-caps ()
+  "Normal: the control legends render in caps, matching the panel labels.
+Lowercase words were the one typographic outlier on the faceplate."
+  (with-temp-buffer
+    (setq takuzu--armed nil takuzu--assist nil)
+    (let ((svg (svg-create 600 100)))
+      (takuzu--draw-legend svg 0 20 500)
+      (let ((texts (dom-by-tag svg 'text)))
+        (should texts)
+        (dolist (node texts)
+          (let ((s (dom-text node)))
+            (should (string= s (upcase s)))))))))
+
+(ert-deftest test-takuzu-ui-on-generated-failure ()
+  "Error: a failed background generation reports and rearms cleanly.
+The spinner stops, the generating flag clears, and the GEN FAIL lamp fires
+so the player knows to press n again."
+  (test-takuzu-ui--with-buffer
+    (setq takuzu--size 4 takuzu--generating '(:size 4 :difficulty easy)
+          takuzu--spinner 2 takuzu--gen-process nil
+          takuzu--board (takuzu-make-board 4) takuzu--status "")
+    (takuzu--on-generated (current-buffer) nil)
+    (should-not takuzu--generating)
+    (should-not (timerp takuzu--spinner-timer))
+    (should (eq takuzu--event 'gen-fail))
+    (should (string-prefix-p "Generation failed" takuzu--status))))
+
+(ert-deftest test-takuzu-ui-panel-min-height ()
+  "Boundary: every board size leaves the panel at least its minimum height.
+At small sizes the board alone is shorter than the instrument stack, and the
+instruments overprint each other unless the stage grows to fit them."
+  (with-temp-buffer
+    (dolist (n '(4 6 8 10 12))
+      (setq takuzu--size n)
+      (should (>= (- (takuzu--stage-bottom) (takuzu--panel-top))
+                  takuzu--panel-min-h)))))
+
+(ert-deftest test-takuzu-ui-event-pulse-lifecycle ()
+  "Normal: the pulse keeps a fresh event alive and clears an expired one."
+  (with-temp-buffer
+    (setq takuzu--event 'invalid takuzu--event-time (current-time))
+    (takuzu--event-pulse (current-buffer))
+    (should (eq takuzu--event 'invalid))
+    (setq takuzu--event-time
+          (time-subtract (current-time) (seconds-to-time (+ takuzu--event-dur 1))))
+    (takuzu--event-pulse (current-buffer))
+    (should-not takuzu--event)
+    (should-not takuzu--event-time)))
+
+(ert-deftest test-takuzu-ui-event-intensity ()
+  "Boundary: intensity is 0 with no event, ~0 at ignition, ~1 at half period."
+  (with-temp-buffer
+    (setq takuzu--event-time nil)
+    (should (= (takuzu--event-intensity) 0))
+    (let ((t0 (current-time)))
+      (setq takuzu--event-time t0)
+      (cl-letf (((symbol-function 'current-time) (lambda () t0)))
+        (should (< (takuzu--event-intensity) 0.01)))
+      (cl-letf (((symbol-function 'current-time)
+                 (lambda () (time-add t0 (seconds-to-time 1.4)))))
+        (should (> (takuzu--event-intensity) 0.99))))))
+
+;; --- instrument draw helpers (headless DOM builds) ---
+
+(ert-deftest test-takuzu-ui-draw-nixie-time ()
+  "Normal: the nixie clock draws for a running and a finished game."
+  (with-temp-buffer
+    (setq takuzu--won nil takuzu--proven nil
+          takuzu--start-time (time-subtract (current-time) (seconds-to-time 83)))
+    (let ((svg (svg-create 200 60)))
+      (takuzu--draw-nixie-time svg 100 10)
+      (should (eq (car svg) 'svg)))
+    (setq takuzu--won t takuzu--won-elapsed 754)
+    (let ((svg (svg-create 200 60)))
+      (takuzu--draw-nixie-time svg 100 10)
+      (should (eq (car svg) 'svg)))))
+
+(ert-deftest test-takuzu-ui-draw-rotary-level ()
+  "Normal: the LEVEL rotary draws at each level, with grade fallback to difficulty."
+  (with-temp-buffer
+    (dolist (lv '(easy medium hard))
+      (setq takuzu--grade lv takuzu--difficulty lv)
+      (let ((svg (svg-create 120 120)))
+        (takuzu--draw-rotary-level svg 60 60)
+        (should (eq (car svg) 'svg))))
+    (setq takuzu--grade nil takuzu--difficulty 'medium)
+    (let ((svg (svg-create 120 120)))
+      (takuzu--draw-rotary-level svg 60 60)
+      (should (eq (car svg) 'svg)))))
+
+(ert-deftest test-takuzu-ui-draw-needle-gauge ()
+  "Boundary: the needle gauge draws at empty, mid, and full sweep."
+  (dolist (pct '(0 62.5 100))
+    (let ((svg (svg-create 120 120)))
+      (takuzu--draw-needle-gauge svg 60 60 26 pct 7)
+      (should (eq (car svg) 'svg)))))
+
+(ert-deftest test-takuzu-ui-draw-state-lamps ()
+  "Normal: the STATE lamp group draws all five labelled lamps in every state."
+  (with-temp-buffer
+    (dolist (spec '((ready . ((:size 4 :difficulty easy) nil nil))
+                    (solving . (nil nil nil))
+                    (solved . (nil t nil))
+                    (shown . (nil nil t))))
+      (pcase-let ((`(,armed ,won ,proven) (cdr spec)))
+        (setq takuzu--armed armed takuzu--won won takuzu--proven proven
+              takuzu--assist (eq (car spec) 'solving))
+        (should (eq (takuzu--game-state) (car spec)))
+        (let ((svg (svg-create 200 200)))
+          (takuzu--draw-state-lamps svg 8 8 160 118)
+          ;; STATE header + one label per lamp
+          (should (= (length (dom-by-tag svg 'text)) 6)))))))
+
+(ert-deftest test-takuzu-ui-draw-event-annunciator ()
+  "Normal: the annunciator draws six legend cells; the active one lights up."
+  (with-temp-buffer
+    (setq takuzu--size 4)
+    ;; event mid-breath, so the active lamp is near peak brightness
+    (setq takuzu--event 'invalid
+          takuzu--event-time (time-subtract (current-time)
+                                            (seconds-to-time (/ takuzu--event-breath 2))))
+    (let ((svg (svg-create 600 60)))
+      (takuzu--draw-event-annunciator svg 10 10 (takuzu--strip-width) takuzu--event-h)
+      ;; strip background + six legend cells; the lit cell's fill stands out
+      (should (= (length (dom-by-tag svg 'rect)) 7))
+      (should (= (length (dom-by-tag svg 'text)) 6))
+      (let ((fills (mapcar (lambda (r) (dom-attr r 'fill))
+                           (cdr (dom-by-tag svg 'rect)))))
+        (should (= (length (delete-dups (copy-sequence fills))) 2))))
+    (setq takuzu--event nil takuzu--event-time nil)
+    (let ((svg (svg-create 600 60)))
+      (takuzu--draw-event-annunciator svg 10 10 (takuzu--strip-width) takuzu--event-h)
+      ;; with no active event every cell wears the same idle fill
+      (let ((fills (mapcar (lambda (r) (dom-attr r 'fill))
+                           (cdr (dom-by-tag svg 'rect)))))
+        (should (= (length (delete-dups (copy-sequence fills))) 1))))))
+
+(ert-deftest test-takuzu-ui-draw-jewel ()
+  "Normal: the jewel lamp draws lit and unlit."
+  (dolist (on '(t nil))
+    (let ((svg (svg-create 40 40)))
+      (takuzu--draw-jewel svg 20 20 6 "#6fce33" on)
+      (should (eq (car svg) 'svg)))))
 
 (provide 'test-takuzu-ui)
 ;;; test-takuzu-ui.el ends here
