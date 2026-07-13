@@ -17,3 +17,4 @@ todo.org
 
 # coverage artifacts
 .coverage/
+*~
