@@ -155,6 +155,21 @@ The SVG is vector, so this just rasterizes larger; 1.0 is edge-to-edge.")
      (when (timerp ,var) (cancel-timer ,var))
      (setq ,var nil)))
 
+(defun takuzu--run-buffer-timer (secs repeat fn buf)
+  "Run FN with BUF every REPEAT seconds, starting after SECS; return the timer.
+The tick closes over its own timer and cancels it once BUF is dead.
+FN's `buffer-live-p' guard alone cannot do that -- the handle lives in a
+buffer-local variable that is unreachable from a dead buffer -- so a
+missed cleanup path would otherwise leak the repeating timer forever."
+  (let ((cell (make-vector 1 nil)))
+    (aset cell 0
+          (run-at-time secs repeat
+                       (lambda ()
+                         (if (buffer-live-p buf)
+                             (funcall fn buf)
+                           (cancel-timer (aref cell 0))))))
+    (aref cell 0)))
+
 (defun takuzu--elapsed ()
   "Elapsed seconds since the puzzle began (0 until started, frozen once finished)."
   (cond ((or takuzu--won takuzu--proven) takuzu--won-elapsed)
@@ -915,7 +930,8 @@ Kicks off the scale-easing timer when the displayed scale is off target."
     (when (and win (> (abs (- target scale)) 0.01)
                (not (timerp takuzu--scale-timer)))
       (setq takuzu--scale-timer
-            (run-at-time 0 takuzu--scale-interval #'takuzu--ease-scale (current-buffer))))
+            (takuzu--run-buffer-timer 0 takuzu--scale-interval
+                                      #'takuzu--ease-scale (current-buffer))))
     (insert (make-string toplines ?\n))
     (insert (make-string hpad ?\s))
     (insert-image (svg-image (cond (takuzu--help (takuzu--svg-help))
@@ -973,7 +989,8 @@ expiry mechanism, and a lamp lit in a buried buffer must still go dark."
       (setq takuzu--event nil takuzu--event-time nil)
     (setq takuzu--event event takuzu--event-time (current-time))
     (setq takuzu--event-timer
-          (run-at-time 0 takuzu--event-tick #'takuzu--event-pulse (current-buffer)))))
+          (takuzu--run-buffer-timer 0 takuzu--event-tick
+                                    #'takuzu--event-pulse (current-buffer)))))
 
 (defun takuzu--event-pulse (buf)
   "Redraw the event-lamp pulse in BUF; clear and stop once the pulse elapses."
@@ -1172,7 +1189,8 @@ Shows the three rules over the console shell; any key returns to the game."
           takuzu--generating (list :size (plist-get takuzu--armed :size)
                                    :difficulty (plist-get takuzu--armed :difficulty)))
     (takuzu--stop-timer)
-    (setq takuzu--spinner-timer (run-at-time 0 0.1 #'takuzu--spin (current-buffer)))
+    (setq takuzu--spinner-timer
+          (takuzu--run-buffer-timer 0 0.1 #'takuzu--spin (current-buffer)))
     (takuzu--redraw))
    (t (takuzu-ui-arm takuzu--size (takuzu--current-difficulty)))))
 
@@ -1243,7 +1261,8 @@ in a buried buffer."
 (defun takuzu--start-refresh-timer (buf)
   "Start the per-redraw-interval refresh timer for BUF."
   (let ((iv (takuzu--refresh-interval)))
-    (setq takuzu--timer (run-at-time iv iv #'takuzu--refresh-tick buf))))
+    (setq takuzu--timer
+          (takuzu--run-buffer-timer iv iv #'takuzu--refresh-tick buf))))
 
 (defun takuzu--cleanup ()
   "Cancel timers and any in-flight generation when the buffer is killed."

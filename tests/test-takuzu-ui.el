@@ -674,6 +674,68 @@ shown again."
           (should (timerp takuzu--timer)))
       (kill-buffer buf))))
 
+(ert-deftest test-takuzu-ui-run-buffer-timer-runs-fn-on-live-buffer ()
+  "Normal: the self-cancelling buffer timer calls FN with BUF while it lives."
+  (let ((buf (generate-new-buffer " *takuzu-timer-test*"))
+        (got nil)
+        timer)
+    (unwind-protect
+        (progn
+          (setq timer (takuzu--run-buffer-timer 60 60
+                                                (lambda (b) (setq got b)) buf))
+          (should (timerp timer))
+          (apply (timer--function timer) (timer--args timer))
+          (should (eq got buf))
+          (should (memq timer timer-list)))
+      (when (timerp timer) (cancel-timer timer))
+      (kill-buffer buf))))
+
+(ert-deftest test-takuzu-ui-run-buffer-timer-cancels-on-dead-buffer ()
+  "Error: a tick on a dead buffer cancels the timer and never calls FN.
+The buffer-local timer handle is unreachable from a dead buffer, so
+without self-cancel a missed cleanup leaks a repeating timer forever."
+  (let* ((buf (generate-new-buffer " *takuzu-timer-test*"))
+         (called nil)
+         (timer (takuzu--run-buffer-timer 60 60
+                                          (lambda (_) (setq called t)) buf)))
+    (kill-buffer buf)
+    (should (memq timer timer-list))
+    (apply (timer--function timer) (timer--args timer))
+    (should-not called)
+    (should-not (memq timer timer-list))))
+
+(ert-deftest test-takuzu-ui-refresh-timer-self-cancels-when-buffer-killed ()
+  "Error: a refresh tick on a killed buffer cancels its own timer.
+Covers the missed-cleanup path (kill outside the kill-buffer hook): the
+tick must not silently reschedule forever against a dead buffer."
+  (let ((buf (get-buffer-create " *takuzu-refresh-test*"))
+        timer)
+    (with-current-buffer buf
+      (takuzu-mode)
+      (remove-hook 'kill-buffer-hook #'takuzu--cleanup t)
+      (takuzu--start-refresh-timer buf)
+      (setq timer takuzu--timer))
+    (kill-buffer buf)
+    (should (memq timer timer-list))
+    (apply (timer--function timer) (timer--args timer))
+    (should-not (memq timer timer-list))))
+
+(ert-deftest test-takuzu-ui-event-timer-self-cancels-when-buffer-killed ()
+  "Error: an event pulse on a killed buffer cancels its own timer.
+Same missed-cleanup hardening as the refresh tick -- the pulse timer
+must expire with its buffer, not outlive it."
+  (let ((buf (get-buffer-create " *takuzu-event-test*"))
+        timer)
+    (with-current-buffer buf
+      (takuzu-mode)
+      (remove-hook 'kill-buffer-hook #'takuzu--cleanup t)
+      (takuzu--signal-event 'invalid)
+      (setq timer takuzu--event-timer))
+    (kill-buffer buf)
+    (should (memq timer timer-list))
+    (apply (timer--function timer) (timer--args timer))
+    (should-not (memq timer timer-list))))
+
 (ert-deftest test-takuzu-ui-check-win-freezes-elapsed-at-win ()
   "Error: winning records the elapsed time at the win, not a stale zero.
 Flipping the won flag before reading the clock makes `takuzu--elapsed'
