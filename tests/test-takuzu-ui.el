@@ -1308,34 +1308,36 @@ diamond at the hub."
                            (dom-by-tag c0 'circle)))
                   6)))))
 
-(ert-deftest test-takuzu-ui-sovereign-woods-and-hole ()
-  "Normal: the sovereign coin is a coal ring with a beech heart for 0 and
-a beech ring with a coal heart for 1; a fixed coin is an open ring -- the
-socket shows through the pierced centre and no core or pin is drawn."
+(ert-deftest test-takuzu-ui-sovereign-solid-user-two-tone-fixed ()
+  "Normal: a placed sovereign coin is solid one-tone wood -- all coal for
+0, all beech for 1, no hole and no pin; a fixed coin is the two-tone --
+the ring holding a heart of the other wood, with no centre dot."
   (let ((takuzu-coin-skin 'sovereign))
     (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
-          (fx (svg-create 100 100)))
+          (f0 (svg-create 100 100)) (f1 (svg-create 100 100)))
       (takuzu--draw-disc c0 50 50 33 0 nil)
       (takuzu--draw-disc c1 50 50 33 1 nil)
-      (takuzu--draw-disc fx 50 50 33 0 t)
+      (takuzu--draw-disc f0 50 50 33 0 t)
+      (takuzu--draw-disc f1 50 50 33 1 t)
+      ;; user coins: one wood only
       (should (dom-by-id c0 "^m-coal-fill$"))
-      (should (dom-by-id c0 "^m-beech-fill$"))
+      (should-not (dom-by-id c0 "^m-beech-fill$"))
       (should (dom-by-id c1 "^m-beech-fill$"))
-      (should (dom-by-id c1 "^m-coal-fill$"))
-      ;; placed coins pin; the pin is the core's opposite
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'fill) (takuzu--metal 'coal 1)))
-                        (dom-by-tag c0 'circle)))
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'fill) (takuzu--metal 'sunflower 1)))
-                        (dom-by-tag c1 'circle)))
-      ;; fixed: pierced through to the socket, no pin
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'fill) (takuzu--c :socket)))
-                        (dom-by-tag fx 'circle)))
-      (should-not (seq-find (lambda (n)
-                              (equal (dom-attr n 'fill) (takuzu--metal 'coal 1)))
-                            (dom-by-tag fx 'circle))))))
+      (should-not (dom-by-id c1 "^m-coal-fill$"))
+      ;; fixed coins: both woods, ring + heart
+      (should (dom-by-id f0 "^m-coal-fill$"))
+      (should (dom-by-id f0 "^m-beech-fill$"))
+      (should (dom-by-id f1 "^m-beech-fill$"))
+      (should (dom-by-id f1 "^m-coal-fill$"))
+      ;; no hole anywhere, no pin anywhere
+      (dolist (svg (list c0 c1 f0 f1))
+        (should-not (seq-find (lambda (n)
+                                (equal (dom-attr n 'fill) (takuzu--c :socket)))
+                              (dom-by-tag svg 'circle)))
+        (should-not (seq-find (lambda (n)
+                                (or (equal (dom-attr n 'fill) (takuzu--metal 'coal 1))
+                                    (equal (dom-attr n 'fill) (takuzu--metal 'sunflower 1))))
+                              (dom-by-tag svg 'circle)))))))
 
 (ert-deftest test-takuzu-ui-runic-carves-wood ()
   "Normal: the runic coin is oak for 0, walnut for 1, with carved rune lines."
