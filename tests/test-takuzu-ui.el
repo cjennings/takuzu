@@ -1358,13 +1358,34 @@ and at board scale, without error and with visible shapes."
             (should (> (length (dom-children svg)) before))))))))
 
 (ert-deftest test-takuzu-ui-metal-defs-shared-per-metal ()
-  "Boundary: a board of bimetal coins defines each metal's two defs once."
+  "Boundary: a board of bimetal coins defines each metal's two defs once.
+The Dupre bimetal uses four metals (blue+silver, terracotta+gold), so four
+coins define exactly four fills and four edges -- shared, not per-coin."
   (let ((takuzu-coin-skin 'bimetal)
         (svg (svg-create 200 100)))
     (dotimes (i 4)
       (takuzu--draw-disc svg (+ 30 (* i 40)) 50 16 (mod i 2) nil))
-    (should (= (length (dom-by-tag svg 'radialGradient)) 2))
-    (should (= (length (dom-by-tag svg 'linearGradient)) 2))))
+    (should (= (length (dom-by-tag svg 'radialGradient)) 4))
+    (should (= (length (dom-by-tag svg 'linearGradient)) 4))))
+
+(ert-deftest test-takuzu-ui-bimetal-wears-dupre-colours ()
+  "Normal: the bimetal coin strikes the Dupre palette -- a blue ring with a
+silver core and olive accents for 0, a terracotta ring with a gold core and
+regal accents for 1."
+  (let ((takuzu-coin-skin 'bimetal))
+    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
+      (takuzu--draw-disc c0 50 50 33 0 nil)
+      (takuzu--draw-disc c1 50 50 33 1 nil)
+      (should (dom-by-id c0 "^m-blue-fill$"))
+      (should (dom-by-id c0 "^m-silver-fill$"))
+      (should (dom-by-id c1 "^m-copper-fill$"))
+      (should (dom-by-id c1 "^m-gold-fill$"))
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'stroke) (takuzu--metal 'olive 2)))
+                        (dom-by-tag c0 'circle)))
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'stroke) (takuzu--metal 'regal 2)))
+                        (dom-by-tag c1 'circle))))))
 
 (ert-deftest test-takuzu-ui-cash-has-square-hole ()
   "Normal: the cash coin carries its square hole at both scales."

@@ -306,7 +306,7 @@ omits it)."
     (guilloche takuzu--draw-disc-guilloche silver   gold)
     (runic     takuzu--draw-disc-runic     oak      walnut)
     (scallop   takuzu--draw-disc-scallop   iron     bronze)
-    (bimetal   takuzu--draw-disc-bimetal   silver   gold)
+    (bimetal   takuzu--draw-disc-bimetal   blue     copper)
     (matrix    takuzu--draw-disc-matrix    bronze   silver)
     (split     takuzu--draw-disc-split     gunmetal copper)
     (rosette   takuzu--draw-disc-rosette   iron     copper))
@@ -339,7 +339,10 @@ thumbwheel through it in order."
     (bronze   "#e0c266" "#ab8d2e" "#7e671f" "#2d2306")
     (gunmetal "#788da6" "#54677d" "#303842" "#202327")
     (oak      "#e7d3a4" "#cbaa6d" "#a17c46" "#513a1c")
-    (walnut   "#a98a68" "#755837" "#4a3520" "#1f150b"))
+    (walnut   "#a98a68" "#755837" "#4a3520" "#1f150b")
+    (blue     "#9ba8bb" "#788da6" "#54677d" "#303842")
+    (olive    "#98ac86" "#809c50" "#627b2c" "#3f4c23")
+    (regal    "#bea9dc" "#8255b5" "#6624a0" "#2f0c4e"))
   "Coin metals as (NAME GLINT HI BASE DEEP), light to dark.
 Every ramp is drawn from the Dupre (WIP) theme palette so the coins sit in
 the faceplate's own colour world: silver/nickel from the silver and ground
@@ -758,10 +761,14 @@ on a twelve-lobed planchet with its own lit rim."
     (svg-circle svg cx cy (* r 0.10) :fill ink :fill-opacity 0.9)))
 
 (defun takuzu--draw-disc-bimetal (svg cx cy r val given)
-  "Draw the bimetallic coin of VAL at CX,CY radius R on SVG: a silver ring
-holding a gold core, mirrored for the other colour."
+  "Draw the bimetallic coin of VAL at CX,CY radius R on SVG.
+Struck in the Dupre palette: colour 0 is a blue ring (the blue-1 body)
+holding a silver core with olive accents; colour 1 a terracotta ring
+holding a gold core with regal accents.  The accents are the dotted
+joint ring and the centre pin."
   (let* ((ring (takuzu--coin-pair-metal 'bimetal val))
-         (core (takuzu--coin-pair-metal 'bimetal (- 1 val))))
+         (core (if (eql val 0) 'silver 'gold))
+         (accent (if (eql val 0) 'olive 'regal)))
     (takuzu--ensure-metal svg ring)
     (takuzu--ensure-metal svg core)
     (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" ring)
@@ -776,11 +783,11 @@ holding a gold core, mirrored for the other colour."
     (when (>= r 20)
       (let ((seg (/ (* 2 float-pi r 0.80) 44)))
         (svg-circle svg cx cy (* r 0.80) :fill "none"
-                    :stroke (takuzu--metal ring 3)
-                    :stroke-width (* r 0.045) :stroke-opacity 0.55
+                    :stroke (takuzu--metal accent 2)
+                    :stroke-width (* r 0.045) :stroke-opacity 0.8
                     :stroke-dasharray (format "%.2f %.2f" (* seg 0.4) (* seg 0.6)))))
     (takuzu--metal-sheen svg cx cy r)
-    (svg-circle svg cx cy (* r 0.06) :fill (takuzu--metal ring 2)
+    (svg-circle svg cx cy (* r 0.07) :fill (takuzu--metal accent 1)
                 :stroke (takuzu--c :ink) :stroke-width 0.5)
     (when given (takuzu--metal-given-ring svg cx cy r ring))))
 

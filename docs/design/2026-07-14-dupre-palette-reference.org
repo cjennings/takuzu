@@ -1,0 +1,147 @@
+#+TITLE: Dupre (WIP) Palette Reference
+#+AUTHOR: Craig Jennings
+#+DATE: 2026-07-14
+
+Reference copy of the Dupre theme palette the faceplate and coin ramps draw
+from. Canonical source: the theme-studio WIP palette; a trimmed JSON copy
+sits beside this file as [[file:dupre-palette.json][dupre-palette.json]].
+Saved 2026-07-14 during the coin-recolour session.
+
+* silver
+
+| Name     | Hex     |
+|----------+---------|
+| silver-4 | #0a0c0d |
+| silver-3 | #2c2f32 |
+| silver-2 | #53575c |
+| silver-1 | #7c838a |
+| silver   | #a9b2bb |
+| silver+1 | #bac1c8 |
+| silver+2 | #cbd0d6 |
+| silver+3 | #dce0e3 |
+| silver+4 | #edeff1 |
+
+* blue
+
+| Name   | Hex     |
+|--------+---------|
+| blue-4 | #202327 |
+| blue-3 | #303842 |
+| blue-2 | #424f5e |
+| blue-1 | #54677d |
+| blue   | #67809c |
+| blue+1 | #788da6 |
+| blue+2 | #899bb1 |
+| blue+3 | #9ba8bb |
+| blue+4 | #adb6c6 |
+
+* gold
+
+| Name   | Hex     |
+|--------+---------|
+| gold-5 | #0b0701 |
+| gold-4 | #2d2306 |
+| gold-3 | #544412 |
+| gold-2 | #7e671f |
+| gold-1 | #ab8d2e |
+| gold   | #dab53d |
+| gold+1 | #e0c266 |
+| gold+2 | #e6ce88 |
+| gold+3 | #eddba7 |
+| gold+4 | #f3e7c5 |
+| gold+5 | #f9f3e2 |
+
+* terracotta
+
+| Name         | Hex     |
+|--------------+---------|
+| terracotta-5 | #2b1d19 |
+| terracotta-4 | #482c23 |
+| terracotta-3 | #663b2e |
+| terracotta-2 | #864a38 |
+| terracotta-1 | #a85b42 |
+| terracotta   | #cb6b4d |
+| terracotta+1 | #cb7b64 |
+| terracotta+2 | #cb8b7a |
+| terracotta+3 | #c99990 |
+| terracotta+4 | #c7a8a5 |
+| terracotta+5 | #c3b6bb |
+
+* regal
+
+| Name    | Hex     |
+|---------+---------|
+| regal-4 | #040009 |
+| regal-3 | #170429 |
+| regal-2 | #2f0c4e |
+| regal-1 | #4a1876 |
+| regal   | #6624a0 |
+| regal+1 | #8255b5 |
+| regal+2 | #9f80c9 |
+| regal+3 | #bea9dc |
+| regal+4 | #ded4ee |
+
+* ground
+
+| Name     | Hex     |
+|----------+---------|
+| ground   | #100f0f |
+| ground+1 | #222223 |
+| ground+2 | #363638 |
+| ground+3 | #4a4b4f |
+| ground+4 | #606267 |
+| ground+5 | #777980 |
+| ground+6 | #8e919a |
+| ground+7 | #a6aab4 |
+| fg       | #bfc4d0 |
+
+* olive-drab
+
+| Name         | Hex     |
+|--------------+---------|
+| olive-drab-5 | #1f2217 |
+| olive-drab-4 | #2e361d |
+| olive-drab-3 | #3f4c23 |
+| olive-drab-2 | #506328 |
+| olive-drab-1 | #627b2c |
+| olive-drab   | #74932f |
+| olive-drab+1 | #809c50 |
+| olive-drab+2 | #8ca46c |
+| olive-drab+3 | #98ac86 |
+| olive-drab+4 | #a5b49f |
+| olive-drab+5 | #b2bcb7 |
+
+* dark-cyan
+
+| Name         | Hex     |
+|--------------+---------|
+| aquamarine-4 | #18272a |
+| aquamarine-3 | #1d4049 |
+| aquamarine-2 | #1e5b69 |
+| aquamarine-1 | #18788c |
+| aquamarine   | #0096b0 |
+| aquamarine+1 | #47a0b7 |
+| aquamarine+2 | #6ba9bd |
+| aquamarine+3 | #88b2c3 |
+| aquamarine+4 | #a4bbca |
+
+* sky
+
+| Name  | Hex     |
+|-------+---------|
+| sky-4 | #282f36 |
+| sky-3 | #425262 |
+| sky-2 | #5e7892 |
+| sky-1 | #7ba1c5 |
+| sky   | #9acbfb |
+| sky+1 | #a2caf3 |
+| sky+2 | #aac9ea |
+| sky+3 | #b1c7e1 |
+| sky+4 | #b8c6d9 |
+
+* link
+
+| Name | Hex     |
+|------+---------|
+| link | #5178db |
+
