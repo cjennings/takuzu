@@ -164,6 +164,33 @@ specular arc on the top-left corner."
       (should (string-match-p "\\[.\\]" out))
       (should (= (1+ (cl-count ?\n out)) 5)))))
 
+(ert-deftest test-takuzu-ui-render-text-marks-rule-breaks-with-assist ()
+  "Normal: assist on, the text fallback wears the error face on a broken row."
+  (with-temp-buffer
+    (test-takuzu-ui--setup-4 (vector 0 0 0 nil nil nil nil nil
+                                     nil nil nil nil nil nil nil nil))
+    (setq takuzu--assist t)
+    (let* ((out (takuzu--render-text))
+           (first-glyph (string-match (takuzu--glyph 0) out)))
+      (should first-glyph)
+      (should (eq (get-text-property first-glyph 'face out) 'error))
+      ;; a cell on a clean row stays unfaced (row 0 is marked whole,
+      ;; empties included, so probe past its newline)
+      (let ((clean (string-match (regexp-quote (takuzu--glyph nil)) out
+                                 (string-match "\n" out))))
+        (should clean)
+        (should (null (get-text-property clean 'face out)))))))
+
+(ert-deftest test-takuzu-ui-render-text-no-face-with-assist-off ()
+  "Boundary: assist off, the same broken board renders with no error faces."
+  (with-temp-buffer
+    (test-takuzu-ui--setup-4 (vector 0 0 0 nil nil nil nil nil
+                                     nil nil nil nil nil nil nil nil))
+    (setq takuzu--assist nil)
+    (let* ((out (takuzu--render-text))
+           (first-glyph (string-match (takuzu--glyph 0) out)))
+      (should (null (get-text-property first-glyph 'face out))))))
+
 (ert-deftest test-takuzu-ui-error-vector-off ()
   "Normal: with assist off, no errors are reported even on a broken board."
   (with-temp-buffer

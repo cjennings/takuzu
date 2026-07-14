@@ -774,13 +774,18 @@ extra room."
   (cond ((eql val 0) "O") ((eql val 1) "X") (t ".")))
 
 (defun takuzu--render-text ()
-  "Return a plain-text board for terminals."
-  (let ((n takuzu--size) (out ""))
+  "Return a plain-text board for terminals.
+With assist on, cells in a rule-breaking line wear the `error' face --
+the tty counterpart of the SVG board's stroked cups."
+  (let ((n takuzu--size) (errs (takuzu--error-vector)) (out ""))
     (dotimes (r n)
       (dotimes (c n)
-        (let ((v (takuzu-board-ref takuzu--board r c)))
+        (let* ((v (takuzu-board-ref takuzu--board r c))
+               (glyph (takuzu--glyph v)))
+          (when (and errs (aref errs (+ (* r n) c)))
+            (setq glyph (propertize glyph 'face 'error)))
           (setq out (concat out (if (takuzu--curp r c) "[" " ")
-                            (takuzu--glyph v)
+                            glyph
                             (if (takuzu--curp r c) "]" " ")))))
       (setq out (concat out "\n")))
     out))
