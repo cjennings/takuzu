@@ -94,14 +94,13 @@ nil/0/1, GIVENS holds non-nil for locked cells.  Both default to all-nil."
 ;; --- line rules ---
 
 (defun takuzu--line-has-triple-p (line)
-  "Non-nil if LINE has three equal, non-nil values in consecutive positions."
-  (let* ((v (vconcat line))
-         (found nil))
-    (dotimes (i (max 0 (- (length v) 2)))
-      (let ((a (aref v i)))
-        (when (and a (eql a (aref v (1+ i))) (eql a (aref v (+ i 2))))
-          (setq found t))))
-    found))
+  "Non-nil if LINE has three equal, non-nil values in consecutive positions.
+Returns at the first triple found: this is the solver's hottest predicate,
+called for every candidate placement."
+  (let ((v (vconcat line)))
+    (cl-loop for i from 0 to (- (length v) 3)
+             thereis (let ((a (aref v i)))
+                       (and a (eql a (aref v (1+ i))) (eql a (aref v (+ i 2))))))))
 
 (defun takuzu--line-count-legal-p (line size)
   "Non-nil if neither color in LINE exceeds SIZE/2.  Nils are ignored."
