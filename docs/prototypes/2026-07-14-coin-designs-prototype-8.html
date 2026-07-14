@@ -149,11 +149,13 @@ function bimetal(svg, cx, cy, r, spec, given) {
 }
 
 // the design-9 iteration: wood and porcelain only.  The wood band widens
-// (core drops from 0.60r to 0.44r), dark walnut against beechwood tells the
-// colours apart, and the FIXED marking is a hole pierced through the
-// porcelain -- placed coins stay solid.  No outer given ring, no pin.
+// (core drops from 0.60r to 0.44r) and dark walnut against beechwood tells
+// the colours apart.  A PLACED coin holds a porcelain heart; a FIXED coin
+// has no fill at all -- an open wooden ring, the centre pierced through to
+// the socket, its inner lip turned and rounded like the outer rim.
 function drawWoodPorcelain(svg, cx, cy, r, val, given) {
   const wood = val === 0 ? "walnut" : "beech";
+  const h = r * 0.44;
   ensureMat(svg, wood); ensureMat(svg, "porcelain");
   circle(svg, cx, cy, r, { fill: mfill(wood), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
   circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.09 });
@@ -162,13 +164,17 @@ function drawWoodPorcelain(svg, cx, cy, r, val, given) {
     circle(svg, cx, cy, r * k, { fill: "none", stroke: deep(wood), "stroke-opacity": 0.30, "stroke-width": 0.7 });
     circle(svg, cx, cy, r * k - 0.9, { fill: "none", stroke: glint(wood), "stroke-opacity": 0.18, "stroke-width": 0.5 });
   }
-  circle(svg, cx, cy, r * 0.44, { fill: mfill("porcelain"), stroke: deep(wood), "stroke-width": 1 });
-  circle(svg, cx, cy, r * 0.44, { fill: "none", stroke: medge("porcelain"), "stroke-width": r * 0.04, "stroke-opacity": 0.8 });
-  metalSheen(svg, cx, cy, r);
   if (given) {
-    circle(svg, cx, cy, r * 0.17, { fill: c("socket"), stroke: deep(wood), "stroke-width": 1.3 });
-    circle(svg, cx, cy, r * 0.17 + 1.4, { fill: "none", stroke: glint(wood), "stroke-width": 0.8, "stroke-opacity": 0.7 });
+    // the open ring: socket through the centre, inner lip rounded like
+    // the outer rim -- same edge gradient, seated just outside the hole
+    circle(svg, cx, cy, h, { fill: c("socket"), stroke: c("ink"), "stroke-width": 0.8 });
+    circle(svg, cx, cy, h + r * 0.045, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.09 });
+    circle(svg, cx, cy, h + r * 0.005, { fill: "none", stroke: deep(wood), "stroke-width": 0.8, "stroke-opacity": 0.7 });
+  } else {
+    circle(svg, cx, cy, h, { fill: mfill("porcelain"), stroke: deep(wood), "stroke-width": 1 });
+    circle(svg, cx, cy, h, { fill: "none", stroke: medge("porcelain"), "stroke-width": r * 0.04, "stroke-opacity": 0.8 });
   }
+  metalSheen(svg, cx, cy, r);
 }
 
 // the design-10 iteration: Sovereign gone wood.  Same widened band as the
@@ -240,7 +246,7 @@ const VARIANTS = [
    "The B-palette inverse pair, cousin to Ink and Page: sunflower around carbon flipped to carbon around porcelain, sunflower pinning both. Maximum contrast, gold-first."],
   ["11  WALNUT AND BEECH (9 ITERATED)",
    drawWoodPorcelain, null,
-   "Design 9 rebuilt to the brief: wood and porcelain only. The wood band widens (porcelain core shrinks to 0.44r), dark walnut against pale beechwood tells the colours apart, and a fixed coin is pierced -- a hole through the porcelain heart -- while placed coins stay solid. No other fixed marking."],
+   "Design 9 rebuilt to the brief: wood and porcelain only, dark walnut against pale beechwood. A placed coin holds a porcelain heart; a fixed coin holds nothing -- an open wooden ring pierced through to the socket, its inner lip turned and rounded like the outer rim. No other fixed marking."],
   ["12  SOVEREIGN IN WOOD (10 ITERATED)",
    drawWoodSovereign, null,
    "Sovereign gone wood, accents flipped for contrast. A sunflower heart in dark walnut with sunflower dots riding the band -- the gold pinning now reads -- against a coal heart in pale beech with coal dots. The pin is always the core's opposite: coal on gold, sunflower on coal. Fixed is the pierced hole, matching 11."],
