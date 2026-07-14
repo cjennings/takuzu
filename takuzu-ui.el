@@ -296,7 +296,8 @@ omits it)."
 ;; --- coin skins ---
 
 (defconst takuzu--coin-skin-registry
-  '((pierced   takuzu--draw-disc-pierced   blue     oxblood)
+  '((sovereign takuzu--draw-disc-sovereign coal     beech)
+    (pierced   takuzu--draw-disc-pierced   blue     oxblood)
     (machined  takuzu--draw-disc-machined  nickel   gold)
     (cash      takuzu--draw-disc-cash      iron     gold)
     (gems      takuzu--draw-disc-gems      silver   gold)
@@ -314,8 +315,10 @@ omits it)."
 This one table is the whole configuration -- the cycle order (favourites
 first), the selector counter, the defcustom choices, the dispatch, and
 each struck-metal skin's pair all read from it.  Adding a coin is one row
-here plus its draw function; nothing is ever removed, only added.  The
-lamp/jewel/compass skins carry their own colours, so their metals are nil.")
+here plus its draw function; nothing is ever removed, only added -- and a
+new skin always enters at the HEAD of the table (drum position 01),
+shifting every other design down one.  The lamp/jewel/compass skins carry
+their own colours, so their metals are nil.")
 
 (defcustom takuzu-coin-skin 'pierced
   "The coin skin drawn on the board.
@@ -343,7 +346,10 @@ thumbwheel through it in order."
     (blue     "#9ba8bb" "#788da6" "#54677d" "#303842")
     (olive    "#98ac86" "#809c50" "#627b2c" "#3f4c23")
     (regal    "#bea9dc" "#8255b5" "#6624a0" "#2f0c4e")
-    (oxblood  "#b3676c" "#8f4046" "#6b2e33" "#331417"))
+    (oxblood  "#b3676c" "#8f4046" "#6b2e33" "#331417")
+    (beech    "#f0dfc4" "#ddc19a" "#c4a377" "#6b5133")
+    (coal     "#6e6c68" "#454340" "#252422" "#0b0b0a")
+    (sunflower "#ffe3a4" "#ffd274" "#ffc145" "#94691f"))
   "Coin metals as (NAME GLINT HI BASE DEEP), light to dark.
 Every ramp is drawn from the Dupre (WIP) theme palette so the coins sit in
 the faceplate's own colour world: silver/nickel from the silver and ground
@@ -364,7 +370,7 @@ registry, the gradient defs, and the fixed-ink contrast all work unchanged.")
 Amethyst, topaz, and aqua come straight from the Dupre regal, gold, and
 aquamarine ramps; ruby, sapphire, emerald, and diamond are jewel-vivid.")
 
-(defconst takuzu--coin-light-metals '(silver nickel gold oak)
+(defconst takuzu--coin-light-metals '(silver nickel gold oak beech sunflower)
   "Metals light enough that fixed markings contrast in iron, not silver.")
 
 (defun takuzu--coin-pair-metal (skin val)
@@ -702,6 +708,73 @@ GIVEN rings the coin in the contrasting metal."
     (takuzu--draw-rune svg cx cy (* r (if detailed 0.42 0.62))
                        (if (eql val 0) 'tir 'daeg) ink hi 0)
     (when given (takuzu--metal-given-ring svg cx cy r m))))
+
+(defun takuzu--draw-pierced-recess (svg cx cy r h wood)
+  "Cut an open centre of radius H in a WOOD coin at CX,CY radius R on SVG.
+Drawn after the sheen so the opening stays matte.  The inner wall shades
+as a recess: a turned lip seating the hole in the band, a shadow crescent
+toward the light at the top-left, and a faint catch on the far wall."
+  (svg-circle svg cx cy h :fill (takuzu--c :socket)
+              :stroke (takuzu--c :ink) :stroke-width 0.8)
+  (svg-circle svg cx cy (+ h (* r 0.045)) :fill "none"
+              :stroke (format "url(#m-%s-edge)" wood) :stroke-width (* r 0.09))
+  (svg-circle svg cx cy h :fill "none"
+              :stroke (takuzu--metal wood 0) :stroke-width (* r 0.02)
+              :stroke-opacity 0.5)
+  (let* ((hr (* h 0.86))
+         (s1 (takuzu--coin-pt cx cy hr 245))
+         (s2 (takuzu--coin-pt cx cy hr 25))
+         (g1 (takuzu--coin-pt cx cy hr 90))
+         (g2 (takuzu--coin-pt cx cy hr 180)))
+    (takuzu--coin-path
+     svg (format "M %.1f %.1f A %.1f %.1f 0 0 1 %.1f %.1f"
+                 (car s1) (cdr s1) hr hr (car s2) (cdr s2))
+     'fill "none" 'stroke (takuzu--c :ink) 'stroke-width (* r 0.07)
+     'stroke-opacity 0.75 'stroke-linecap "round")
+    (takuzu--coin-path
+     svg (format "M %.1f %.1f A %.1f %.1f 0 0 1 %.1f %.1f"
+                 (car g1) (cdr g1) hr hr (car g2) (cdr g2))
+     'fill "none" 'stroke (takuzu--metal wood 0) 'stroke-width (* r 0.04)
+     'stroke-opacity 0.45 'stroke-linecap "round")))
+
+(defun takuzu--draw-disc-sovereign (svg cx cy r val given)
+  "Draw the sovereign wood coin of VAL at CX,CY radius R on SVG.
+An inverse pair from one palette: a coal ring holding a beech heart for
+0, a beech ring holding a coal heart for 1, sunflower dots riding the
+dark band and the pin always the core's opposite (coal on beech,
+sunflower on coal).  A fixed coin holds no core at all -- an open wooden
+ring, the socket showing through the pierced centre, the inner wall
+shaded as a recess.  From the v8 colourway gallery, panel 13."
+  (let* ((wood (takuzu--coin-pair-metal 'sovereign val))
+         (core (if (eql val 0) 'beech 'coal))
+         (dots (if (eql val 0) 'sunflower 'coal))
+         (pin (if (eql val 0) 'coal 'sunflower))
+         (h (* r 0.44))
+         (ink (takuzu--metal wood 3)))
+    (takuzu--ensure-metal svg wood)
+    (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" wood)
+                :stroke (takuzu--c :ink) :stroke-width 0.8 :stroke-opacity 0.85)
+    (svg-circle svg cx cy (- r (* r 0.045)) :fill "none"
+                :stroke (format "url(#m-%s-edge)" wood) :stroke-width (* r 0.09))
+    (svg-circle svg cx cy (* r 0.84) :fill "none"
+                :stroke ink :stroke-opacity 0.30 :stroke-width 0.7)
+    (when (>= r 20)
+      (let ((seg (/ (* 2 float-pi r 0.66) 36)))
+        (svg-circle svg cx cy (* r 0.66) :fill "none"
+                    :stroke (takuzu--metal dots 2)
+                    :stroke-width (* r 0.05) :stroke-opacity 0.9
+                    :stroke-dasharray (format "%.2f %.2f" (* seg 0.4) (* seg 0.6)))))
+    (takuzu--metal-sheen svg cx cy r)
+    (if given
+        (takuzu--draw-pierced-recess svg cx cy r h wood)
+      (takuzu--ensure-metal svg core)
+      (svg-circle svg cx cy h :fill (format "url(#m-%s-fill)" core)
+                  :stroke ink :stroke-width 1)
+      (svg-circle svg cx cy h :fill "none"
+                  :stroke (format "url(#m-%s-edge)" core)
+                  :stroke-width (* r 0.04) :stroke-opacity 0.8)
+      (svg-circle svg cx cy (* r 0.08) :fill (takuzu--metal pin 1)
+                  :stroke (takuzu--c :ink) :stroke-width 0.5))))
 
 (defun takuzu--draw-disc-pierced (svg cx cy r val given)
   "Draw the pierced coin of VAL at CX,CY radius R on SVG: blue vs deep

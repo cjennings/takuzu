@@ -460,10 +460,10 @@ const state = {
   coinSkin: "pierced", // mirror of takuzu-coin-skin (pierced is the default)
 };
 
-// the favourites lead: pierced (the default) 01, machined 02, cash 03, gems 04
-const COIN_SKINS = ["pierced", "machined", "cash", "gems", "lamp", "jewel",
-                    "compass", "guilloche", "runic", "scallop", "bimetal",
-                    "matrix", "split", "rosette"];
+// a new skin always enters at the head (drum 01), shifting the rest down
+const COIN_SKINS = ["sovereign", "pierced", "machined", "cash", "gems", "lamp",
+                    "jewel", "compass", "guilloche", "runic", "scallop",
+                    "bimetal", "matrix", "split", "rosette"];
 
 // --- the struck-metal engine (mirror of takuzu--coin-metal-tones etc.) ---
 
@@ -486,6 +486,10 @@ const COIN_METAL = {
   olive:    ["#98ac86", "#809c50", "#627b2c", "#3f4c23"],
   regal:    ["#bea9dc", "#8255b5", "#6624a0", "#2f0c4e"],
   oxblood:  ["#b3676c", "#8f4046", "#6b2e33", "#331417"],
+  // the sovereign skin's woods and gold
+  beech:     ["#f0dfc4", "#ddc19a", "#c4a377", "#6b5133"],
+  coal:      ["#6e6c68", "#454340", "#252422", "#0b0b0a"],
+  sunflower: ["#ffe3a4", "#ffd274", "#ffc145", "#94691f"],
 };
 
 // gem cuts for the gems skin (amethyst/topaz/aqua from the Dupre ramps)
@@ -887,6 +891,50 @@ function drawDiscRunic(svg, cx, cy, r, val, given) {
   if (given) metalGivenRing(svg, cx, cy, r, m);
 }
 
+// SOVEREIGN -- an inverse wood pair from one palette: coal ring / beech
+// heart vs beech ring / coal heart, sunflower dots on the dark band, pin
+// always the core's opposite.  Fixed = an open ring pierced to the socket,
+// the hole drawn after the sheen and shaded as a recess.
+function drawPiercedRecess(svg, cx, cy, r, h, wood) {
+  circle(svg, cx, cy, h, { fill: c("socket"), stroke: c("ink"), "stroke-width": 0.8 });
+  circle(svg, cx, cy, h + r * 0.045, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.09 });
+  circle(svg, cx, cy, h, { fill: "none", stroke: mGlint(wood), "stroke-width": r * 0.02, "stroke-opacity": 0.5 });
+  const hr = h * 0.86;
+  const [s1x, s1y] = coinPt(cx, cy, hr, 245), [s2x, s2y] = coinPt(cx, cy, hr, 25);
+  const [g1x, g1y] = coinPt(cx, cy, hr, 90), [g2x, g2y] = coinPt(cx, cy, hr, 180);
+  pathEl(svg, `M ${s1x} ${s1y} A ${hr} ${hr} 0 0 1 ${s2x} ${s2y}`,
+    { fill: "none", stroke: c("ink"), "stroke-width": r * 0.07, "stroke-opacity": 0.75, "stroke-linecap": "round" });
+  pathEl(svg, `M ${g1x} ${g1y} A ${hr} ${hr} 0 0 1 ${g2x} ${g2y}`,
+    { fill: "none", stroke: mGlint(wood), "stroke-width": r * 0.04, "stroke-opacity": 0.45, "stroke-linecap": "round" });
+}
+function drawDiscSovereign(svg, cx, cy, r, val, given) {
+  const wood = val === 0 ? "coal" : "beech";
+  const core = val === 0 ? "beech" : "coal";
+  const dots = val === 0 ? "sunflower" : "coal";
+  const pin = val === 0 ? "coal" : "sunflower";
+  const h = r * 0.44, ink = mDeep(wood);
+  ensureMetal(svg, wood);
+  circle(svg, cx, cy, r, { fill: mfill(wood), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
+  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.09 });
+  circle(svg, cx, cy, r * 0.84, { fill: "none", stroke: ink, "stroke-opacity": 0.30, "stroke-width": 0.7 });
+  if (r >= 20) {
+    const seg = (2 * Math.PI * r * 0.66) / 36;
+    circle(svg, cx, cy, r * 0.66, {
+      fill: "none", stroke: mBase(dots), "stroke-width": r * 0.05, "stroke-opacity": 0.9,
+      "stroke-dasharray": `${(seg * 0.4).toFixed(2)} ${(seg * 0.6).toFixed(2)}`,
+    });
+  }
+  metalSheen(svg, cx, cy, r);
+  if (given) {
+    drawPiercedRecess(svg, cx, cy, r, h, wood);
+  } else {
+    ensureMetal(svg, core);
+    circle(svg, cx, cy, h, { fill: mfill(core), stroke: ink, "stroke-width": 1 });
+    circle(svg, cx, cy, h, { fill: "none", stroke: medge(core), "stroke-width": r * 0.04, "stroke-opacity": 0.8 });
+    circle(svg, cx, cy, r * 0.08, { fill: mHi(pin), stroke: c("ink"), "stroke-width": 0.5 });
+  }
+}
+
 // PIERCED -- blue vs deep oxblood, round hole and chrysanthemum radial
 function drawDiscPierced(svg, cx, cy, r, val, given) {
   const m = val === 0 ? "blue" : "oxblood";
@@ -1064,11 +1112,11 @@ function drawDiscMachined(svg, cx, cy, r, val, given) {
 
 // Mirror of takuzu--draw-disc: dispatch on the current skin.
 const COIN_DRAWERS = {
-  jewel: drawDiscJewel, compass: drawDiscCompass, guilloche: drawDiscGuilloche,
-  runic: drawDiscRunic, pierced: drawDiscPierced, scallop: drawDiscScallop,
-  bimetal: drawDiscBimetal, cash: drawDiscCash, matrix: drawDiscMatrix,
-  gems: drawDiscGems, split: drawDiscSplit, rosette: drawDiscRosette,
-  machined: drawDiscMachined,
+  sovereign: drawDiscSovereign, jewel: drawDiscJewel, compass: drawDiscCompass,
+  guilloche: drawDiscGuilloche, runic: drawDiscRunic, pierced: drawDiscPierced,
+  scallop: drawDiscScallop, bimetal: drawDiscBimetal, cash: drawDiscCash,
+  matrix: drawDiscMatrix, gems: drawDiscGems, split: drawDiscSplit,
+  rosette: drawDiscRosette, machined: drawDiscMachined,
 };
 function drawDisc(svg, cx, cy, r, val, given) {
   (COIN_DRAWERS[state.coinSkin] || drawDiscLamp)(svg, cx, cy, r, val, given);

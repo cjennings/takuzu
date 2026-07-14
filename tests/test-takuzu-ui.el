@@ -1283,8 +1283,37 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to pierced; favourites lead the cycle."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'pierced))
   (should (equal takuzu--coin-skins
-                 '(pierced machined cash gems lamp jewel compass
+                 '(sovereign pierced machined cash gems lamp jewel compass
                    guilloche runic scallop bimetal matrix split rosette))))
+
+(ert-deftest test-takuzu-ui-sovereign-woods-and-hole ()
+  "Normal: the sovereign coin is a coal ring with a beech heart for 0 and
+a beech ring with a coal heart for 1; a fixed coin is an open ring -- the
+socket shows through the pierced centre and no core or pin is drawn."
+  (let ((takuzu-coin-skin 'sovereign))
+    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
+          (fx (svg-create 100 100)))
+      (takuzu--draw-disc c0 50 50 33 0 nil)
+      (takuzu--draw-disc c1 50 50 33 1 nil)
+      (takuzu--draw-disc fx 50 50 33 0 t)
+      (should (dom-by-id c0 "^m-coal-fill$"))
+      (should (dom-by-id c0 "^m-beech-fill$"))
+      (should (dom-by-id c1 "^m-beech-fill$"))
+      (should (dom-by-id c1 "^m-coal-fill$"))
+      ;; placed coins pin; the pin is the core's opposite
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'fill) (takuzu--metal 'coal 1)))
+                        (dom-by-tag c0 'circle)))
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'fill) (takuzu--metal 'sunflower 1)))
+                        (dom-by-tag c1 'circle)))
+      ;; fixed: pierced through to the socket, no pin
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'fill) (takuzu--c :socket)))
+                        (dom-by-tag fx 'circle)))
+      (should-not (seq-find (lambda (n)
+                              (equal (dom-attr n 'fill) (takuzu--metal 'coal 1)))
+                            (dom-by-tag fx 'circle))))))
 
 (ert-deftest test-takuzu-ui-runic-carves-wood ()
   "Normal: the runic coin is oak for 0, walnut for 1, with carved rune lines."
@@ -1526,8 +1555,8 @@ two-piece needle instead of the sixteen rays."
   "Normal: the skin selector shows the tape-counter index and never a name."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((pierced . "01") (machined . "02") (cash . "03")
-                    (gems . "04") (lamp . "05")))
+    (dolist (case '((sovereign . "01") (pierced . "02") (machined . "03")
+                    (cash . "04") (gems . "05")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
         (should (member (cdr case) texts))
