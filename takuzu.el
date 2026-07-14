@@ -22,6 +22,7 @@
 (require 'takuzu-solver)
 (require 'takuzu-generator)
 (require 'takuzu-async)
+(require 'takuzu-stats)
 (require 'takuzu-ui)
 
 (defgroup takuzu nil

@@ -27,6 +27,7 @@
 (require 'takuzu-board)
 (require 'takuzu-solver)
 (require 'takuzu-async)
+(require 'takuzu-stats)
 
 ;; Config knobs live in takuzu.el; forward-declare so this compiles clean.
 (defvar takuzu-default-difficulty)
@@ -1144,7 +1145,8 @@ The elapsed time is read before the won flag flips: once the flag is set,
 the stale zero instead of the solve time."
   (when (and (not takuzu--won) (takuzu-board-solved-p takuzu--board))
     (let ((elapsed (takuzu--elapsed)))
-      (setq takuzu--won t takuzu--won-elapsed elapsed))
+      (setq takuzu--won t takuzu--won-elapsed elapsed)
+      (takuzu-stats-record takuzu--size takuzu--grade 'win elapsed))
     (takuzu--set-status (format "Solved in %s -- nicely done" (takuzu--fmt-time takuzu--won-elapsed)))))
 
 (defun takuzu--current-given-p ()
@@ -1247,9 +1249,34 @@ honestly at each tier."
           (copy-sequence (takuzu-board-cells takuzu--solution)))
     ;; read the clock before the proven flag freezes `takuzu--elapsed'
     (let ((elapsed (takuzu--elapsed)))
-      (setq takuzu--proven t takuzu--won-elapsed elapsed))
+      (setq takuzu--proven t takuzu--won-elapsed elapsed)
+      ;; a proven board is a failed solve
+      (takuzu-stats-record takuzu--size takuzu--grade 'loss elapsed))
     (takuzu--set-status "Solution shown.")
     (takuzu--redraw))))
+
+(defun takuzu--stats-summary ()
+  "One-line record for the current size/grade plus the overall tally."
+  (let ((stats (takuzu-stats-load)))
+    (if (null stats)
+        "No games recorded yet."
+      (let* ((grade (or takuzu--grade takuzu--difficulty))
+             (entry (and grade (takuzu-stats-entry stats takuzu--size grade)))
+             (best (plist-get entry :best))
+             (totals (takuzu-stats-totals stats)))
+        (if (null grade)
+            (format "Overall %dW %dL" (car totals) (cdr totals))
+          (format "%dx%d %s -- %dW %dL%s | overall %dW %dL"
+                  takuzu--size takuzu--size grade
+                  (or (plist-get entry :wins) 0)
+                  (or (plist-get entry :losses) 0)
+                  (if best (format ", best %s" (takuzu--fmt-time best)) "")
+                  (car totals) (cdr totals)))))))
+
+(defun takuzu-stats ()
+  "Show the win/loss record and best time for this size and grade."
+  (interactive)
+  (message "%s" (takuzu--stats-summary)))
 
 (defun takuzu-reset ()
   "Clear every non-given cell."
@@ -1349,6 +1376,7 @@ unlabelled on the faceplate -- discoverable by feel, like the hjkl keys."
   "l" #'takuzu-cycle-level
   "n" #'takuzu-new
   "i" #'takuzu-help
+  "t" #'takuzu-stats
   "1" #'takuzu-jump-size
   "4" #'takuzu-jump-size
   "6" #'takuzu-jump-size

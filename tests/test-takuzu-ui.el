@@ -1150,5 +1150,102 @@ events get, so the pulse timer must not cut it short."
       (takuzu--draw-jewel svg 20 20 6 "#6fce33" on)
       (should (eq (car svg) 'svg)))))
 
+;; --- stats wiring ---
+
+(defmacro test-takuzu-ui--with-stats-file (&rest body)
+  "Run BODY with `takuzu-stats-file' bound to a fresh temp path, cleaned after."
+  (declare (indent 0))
+  `(let ((takuzu-stats-file (make-temp-file "takuzu-stats-" nil ".eld")))
+     (unwind-protect
+         (progn (delete-file takuzu-stats-file) ,@body)
+       (ignore-errors (delete-file takuzu-stats-file)))))
+
+(ert-deftest test-takuzu-ui-check-win-records-win ()
+  "Normal: completing the board records a win for the puzzle's size and grade."
+  (test-takuzu-ui--with-stats-file
+    (test-takuzu-ui--with-buffer
+      (test-takuzu-ui--setup-4 (copy-sequence test-takuzu-ui--solution-4))
+      (setq takuzu--grade 'easy)
+      (takuzu--check-win)
+      (should takuzu--won)
+      (let ((entry (takuzu-stats-entry (takuzu-stats-load) 4 'easy)))
+        (should (= (plist-get entry :wins) 1))
+        (should (numberp (plist-get entry :best)))))))
+
+(ert-deftest test-takuzu-ui-check-win-no-win-records-nothing ()
+  "Boundary: an unsolved board records nothing."
+  (test-takuzu-ui--with-stats-file
+    (test-takuzu-ui--with-buffer
+      (test-takuzu-ui--setup-4)
+      (setq takuzu--grade 'easy)
+      (takuzu--check-win)
+      (should-not takuzu--won)
+      (should (null (takuzu-stats-load))))))
+
+(ert-deftest test-takuzu-ui-prove-records-loss ()
+  "Normal: proving the board records a loss and never a best time."
+  (test-takuzu-ui--with-stats-file
+    (test-takuzu-ui--with-buffer
+      (test-takuzu-ui--setup-4)
+      (setq takuzu--grade 'medium)
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_) t)))
+        (takuzu-prove))
+      (should takuzu--proven)
+      (let ((entry (takuzu-stats-entry (takuzu-stats-load) 4 'medium)))
+        (should (= (plist-get entry :losses) 1))
+        (should (= (plist-get entry :wins) 0))
+        (should (null (plist-get entry :best)))))))
+
+(ert-deftest test-takuzu-ui-prove-declined-records-nothing ()
+  "Boundary: declining the prove prompt records nothing."
+  (test-takuzu-ui--with-stats-file
+    (test-takuzu-ui--with-buffer
+      (test-takuzu-ui--setup-4)
+      (setq takuzu--grade 'medium)
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_) nil)))
+        (takuzu-prove))
+      (should-not takuzu--proven)
+      (should (null (takuzu-stats-load))))))
+
+(ert-deftest test-takuzu-ui-stats-summary ()
+  "Normal/Boundary: the summary names the current key and overall totals;
+with no games recorded it says so."
+  (test-takuzu-ui--with-stats-file
+    (test-takuzu-ui--with-buffer
+      (test-takuzu-ui--setup-4)
+      (setq takuzu--grade 'hard)
+      (should (string-match-p "No games recorded" (takuzu--stats-summary)))
+      (takuzu-stats-record 4 'hard 'win 75)
+      (takuzu-stats-record 4 'hard 'loss 30)
+      (takuzu-stats-record 6 'easy 'win 10)
+      (let ((s (takuzu--stats-summary)))
+        (should (string-match-p "4x4 hard" s))
+        (should (string-match-p "1W 1L" s))
+        (should (string-match-p "01:15" s))
+        (should (string-match-p "2W 1L" s))))))
+
+(ert-deftest test-takuzu-ui-stats-summary-no-grade-overall-only ()
+  "Boundary: with no grade yet (armed, nothing generated) only the overall tally shows."
+  (test-takuzu-ui--with-stats-file
+    (test-takuzu-ui--with-buffer
+      (test-takuzu-ui--setup-4)
+      (setq takuzu--grade nil takuzu--difficulty nil)
+      (takuzu-stats-record 6 'easy 'win 10)
+      (let ((s (takuzu--stats-summary)))
+        (should (string-match-p "overall 1W 0L" s))
+        (should-not (string-match-p "nil" s))))))
+
+(ert-deftest test-takuzu-ui-stats-summary-unplayed-key ()
+  "Boundary: games on other keys still summarize; the current key shows 0W 0L."
+  (test-takuzu-ui--with-stats-file
+    (test-takuzu-ui--with-buffer
+      (test-takuzu-ui--setup-4)
+      (setq takuzu--grade 'easy)
+      (takuzu-stats-record 12 'hard 'loss 5)
+      (let ((s (takuzu--stats-summary)))
+        (should (string-match-p "4x4 easy" s))
+        (should (string-match-p "0W 0L" s))
+        (should (string-match-p "0W 1L" s))))))
+
 (provide 'test-takuzu-ui)
 ;;; test-takuzu-ui.el ends here
