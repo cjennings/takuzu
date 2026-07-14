@@ -10,21 +10,66 @@ even-sized square grid. Fill every cell with one of two colors so that:
 Every puzzle ships with some cells pre-colored and has exactly one solution
 reachable by logic alone.
 
-* Status
+* Features
 
-Early development. The engine (board rules, grading solver, uniqueness-guaranteeing
-generator) is built first and tested headless; the interactive =takuzu-mode= buffer
-follows. Design notes: [[file:docs/design/takuzu-design.org][docs/design/takuzu-design.org]].
+- Board sizes 4, 6, 8, 10, and 12; difficulty easy, medium, and hard. The
+  grader reports the technique a puzzle actually needs: easy solves by forced
+  cells alone, medium needs one-cell hypothesis, hard stalls both.
+- The generator proves uniqueness before it hands you a board, and it runs in
+  a background child Emacs so the editor never freezes; a fresh puzzle
+  pre-generates while the game waits for the start key.
+- A retro instrument-console faceplate rendered as one SVG: lamp-socket
+  board, nixie-tube clock and size display, chicken-head level selector,
+  needle gauge for cells left, annunciator lamps for game events, and
+  READY/SOLVING/SOLVED state lamps.
+- An escalating hint: a forced cell when one exists, a hypothesis cell when
+  logic needs a what-if, and an honest fill from the solution as the last
+  resort — each labelled for what it is.
+- Assist mode highlights rule breaks live; check reports progress; prove
+  reveals the full solution (and scores the game as a reveal, not a win).
+- A plain-text fallback keeps the game playable in a terminal.
+
+* Install
+
+Clone the repository and point =use-package= at it:
+
+#+begin_src emacs-lisp
+(use-package takuzu
+  :load-path "~/path/to/takuzu"
+  :commands (takuzu))
+#+end_src
+
+Requires Emacs 29.1 or later. The SVG faceplate needs a graphical Emacs with
+SVG support; a tty session gets the text board automatically.
 
 * Play
 
 : M-x takuzu
 
-Pick a board size (4, 6, 8, 10, or 12) and a difficulty. Navigate cells and cycle
-a cell's color; givens are locked.
+Pick a board size and difficulty, then press n to start the clock.
+
+- arrows / hjkl :: move the cursor
+- SPC :: cycle the cell's color (empty, first, second)
+- u :: undo
+- ? :: hint (escalates: forced cell, hypothesis, solution)
+- c :: check progress
+- a :: toggle assist (live rule-break highlighting)
+- n :: new game, r :: reset board, p :: prove (reveal the solution)
+- s / l :: cycle size / level; 1, 4, 6, 8 jump straight to a size
+- i :: instructions overlay, q :: quit
 
 * Develop
 
 : make test        # run the ERT suite
-: make compile      # byte-compile, warnings as errors
-: make lint         # checkdoc
+: make compile     # byte-compile, warnings as errors
+: make lint        # checkdoc + package-lint (when installed)
+: make coverage    # ERT suite under undercover, SimpleCov report
+
+The engine (board rules, grading solver, uniqueness-proving generator) is
+fully unit-tested headless; the SVG faceplate builds a DOM with no display,
+so the draw helpers run under =emacs --batch= too. Design notes:
+[[file:docs/design/takuzu-design.org][docs/design/takuzu-design.org]].
+
+* License
+
+GPL-3.0-or-later. Copyright (c) Craig Jennings.
