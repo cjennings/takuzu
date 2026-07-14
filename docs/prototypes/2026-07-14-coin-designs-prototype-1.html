@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Takuzu coin-design gallery: six replacement-coin directions in the
+     instrument-console aesthetic.  Each panel shows both colours at 2x with
+     their FIXED (given) variants, then a real-scale board strip in context.
+     Fixed coins keep their colour's normal look and add one modest marking.
+     Same palette and socket rendering as takuzu-hifi.html; librsvg-safe
+     primitives only, so the winner ports 1:1 to svg.el. -->
+<title>Takuzu — Coin Prototypes</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 0 60px;
+    display: flex; flex-direction: column; align-items: center;
+    background: #0b0a08; font-family: ui-monospace, Menlo, Consolas, monospace;
+  }
+  #stage svg { display: block; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<script>
+"use strict";
+(function () {
+
+// --- palette (mirror of takuzu--colors) ---
+
+const COLORS = {
+  "plate": "#1b1710", "plate-edge": "#2c2620", "panel-edge": "#201d17",
+  "well": "#0a0c0d", "board-bg": "#14110c",
+  "socket": "#0c0a07", "socket-edge": "#05040a",
+  "ink": "#000000", "white": "#ffffff", "shadow": "#00000055",
+  "gold": "#b99640", "gold-hi": "#dcc061", "cream": "#f3e7c5",
+  "steel": "#969385", "dim": "#7c838a", "wash": "#2c2f32",
+  "disc0": "#4d5f75", "disc1": "#8f5236", "bezel": "#a8aeb5",
+  "disc0-edge": "#6f839c", "disc1-edge": "#b8734f",
+  "disc0-deep": "#2c3745", "disc1-deep": "#4f2c1c",
+  "disc0-label": "#3a4859", "disc1-label": "#6b3d28",
+};
+const c = k => COLORS[k];
+
+// per-colour lookups: base fill, lit edge, deep shade, label shade
+const disc = v => c(v === 0 ? "disc0" : "disc1");
+const edge = v => c(v === 0 ? "disc0-edge" : "disc1-edge");
+const deep = v => c(v === 0 ? "disc0-deep" : "disc1-deep");
+const label = v => c(v === 0 ? "disc0-label" : "disc1-label");
+
+// --- svg string helpers (as in takuzu-hifi.html) ---
+
+const attrs = o => Object.entries(o)
+  .filter(([, v]) => v != null)
+  .map(([k, v]) => ` ${k}="${v}"`).join("");
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const rect = (svg, x, y, w, h, o) => svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}"${attrs(o)}/>`);
+const circle = (svg, cx, cy, r, o) => svg.push(`<circle cx="${cx}" cy="${cy}" r="${r}"${attrs(o)}/>`);
+const ellipse = (svg, cx, cy, rx, ry, o) => svg.push(`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"${attrs(o)}/>`);
+const line = (svg, x1, y1, x2, y2, o) => svg.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${attrs(o)}/>`);
+const pathEl = (svg, d, o) => svg.push(`<path d="${d}"${attrs(o)}/>`);
+function txt(svg, x, y, str, size, color, anchor, weight) {
+  svg.push(`<text x="${x}" y="${y}" font-family="monospace" font-size="${size}"`
+    + ` fill="${color}" text-anchor="${anchor || "start"}"`
+    + ` font-weight="${weight || "normal"}">${esc(str)}</text>`);
+}
+
+// unique gradient ids: every coin instance mints its own (multiple boards per
+// page is exactly the id-collision trap the parity notes warn about)
+let uid = 0;
+const gid = () => `coin-g${++uid}`;
+
+// --- shared context: socket cup, sized like the real board ---
+
+function socket(svg, sx, sy, cell) {
+  rect(svg, sx, sy, cell, cell, {
+    rx: cell * 0.18, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1,
+  });
+}
+
+// =====================================================================
+// The six coin directions.  Each is drawCoin(svg, cx, cy, r, val, given):
+// same signature as the faceplate's drawDisc, so the winner drops in.
+// =====================================================================
+
+// 1 BAKELITE CHIP — matte disc with a turned groove ring and a top-left
+//   sheen, like a machined bakelite instrument knob face.
+//   FIXED: a small centre hub with a screw slot, silver like the hardware.
+function coinBakelite(svg, cx, cy, r, val, given) {
+  circle(svg, cx, cy, r, { fill: disc(val), stroke: edge(val), "stroke-width": 1.2 });
+  // turned groove: engraved pair (shadow ring over highlight ring)
+  circle(svg, cx, cy, r * 0.72, { fill: "none", stroke: c("white"), "stroke-opacity": 0.10, "stroke-width": 1.6 });
+  circle(svg, cx, cy, r * 0.74, { fill: "none", stroke: c("ink"), "stroke-opacity": 0.35, "stroke-width": 1 });
+  // top-left sheen arc
+  pathEl(svg, `M ${cx - r * 0.62} ${cy - r * 0.28} A ${r * 0.68} ${r * 0.68} 0 0 1 ${cx - r * 0.10} ${cy - r * 0.66}`,
+    { fill: "none", stroke: c("white"), "stroke-opacity": 0.22, "stroke-width": r * 0.14, "stroke-linecap": "round" });
+  if (given) {
+    circle(svg, cx, cy, r * 0.26, { fill: "none", stroke: c("bezel"), "stroke-width": 1.1, "stroke-opacity": 0.9 });
+    line(svg, cx - r * 0.18, cy, cx + r * 0.18, cy,
+      { stroke: c("bezel"), "stroke-width": 1.4, "stroke-linecap": "round" });
+  }
+}
+
+// 2 JEWEL DOME — a domed pilot-lamp jewel of the coin's colour: radial depth,
+//   hard specular catch, dark rim seat.
+//   FIXED: a thin brass collar seated around the jewel.
+function coinJewel(svg, cx, cy, r, val, given) {
+  const g = gid();
+  svg.push(`<radialGradient id="${g}" cx="0.38" cy="0.32" r="0.85">`
+    + `<stop offset="0" stop-color="${edge(val)}"/>`
+    + `<stop offset="0.45" stop-color="${disc(val)}"/>`
+    + `<stop offset="1" stop-color="${deep(val)}"/>`
+    + `</radialGradient>`);
+  circle(svg, cx, cy, r, { fill: `url(#${g})`, stroke: c("ink"), "stroke-width": 1 });
+  ellipse(svg, cx - r * 0.34, cy - r * 0.38, r * 0.16, r * 0.10,
+    { fill: c("white"), "fill-opacity": 0.55 });
+  if (given) {
+    circle(svg, cx, cy, r + 1.6, { fill: "none", stroke: c("gold"), "stroke-width": 1.6 });
+    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("gold-hi"), "stroke-width": 0.6, "stroke-opacity": 0.6 });
+  }
+}
+
+// 3 LAMP LIP — the shipped coin refined: matte disc, its colour's lit lip,
+//   plus a faint inner rim glow that seats it in the cup.
+//   FIXED: a small silver rivet at dead centre.
+function coinLampLip(svg, cx, cy, r, val, given) {
+  circle(svg, cx, cy, r, { fill: disc(val), stroke: edge(val), "stroke-width": 1.2 });
+  circle(svg, cx, cy, r - 2.2, { fill: "none", stroke: edge(val), "stroke-width": 1, "stroke-opacity": 0.45 });
+  if (given) {
+    circle(svg, cx, cy, r * 0.14, { fill: c("bezel"), stroke: c("ink"), "stroke-width": 0.8 });
+    circle(svg, cx - r * 0.05, cy - r * 0.05, r * 0.045, { fill: c("white"), "fill-opacity": 0.7 });
+  }
+}
+
+// 4 TURNTABLE — a pressed record: fine concentric grooves and a centre label
+//   in the coin's own deeper shade, spindle dot at the middle.
+//   FIXED: the centre label is stamped brass instead.
+function coinTurntable(svg, cx, cy, r, val, given) {
+  circle(svg, cx, cy, r, { fill: disc(val), stroke: edge(val), "stroke-width": 1.2 });
+  for (const k of [0.82, 0.64, 0.46])
+    circle(svg, cx, cy, r * k, { fill: "none", stroke: c("ink"), "stroke-opacity": 0.28, "stroke-width": 0.8 });
+  circle(svg, cx, cy, r * 0.24, {
+    fill: given ? c("gold") : label(val), stroke: c("ink"), "stroke-width": 0.6, "stroke-opacity": 0.6,
+  });
+  circle(svg, cx, cy, 1.2, { fill: c("ink"), "fill-opacity": 0.8 });
+}
+
+// 5 KEYCAP — a convex button cap: lit from above, falling to shadow, with a
+//   sheen crescent across the crown.
+//   FIXED: an engraved steel index tick at twelve o'clock.
+function coinKeycap(svg, cx, cy, r, val, given) {
+  const g = gid();
+  svg.push(`<linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="${edge(val)}"/>`
+    + `<stop offset="0.55" stop-color="${disc(val)}"/>`
+    + `<stop offset="1" stop-color="${deep(val)}"/>`
+    + `</linearGradient>`);
+  circle(svg, cx, cy, r, { fill: `url(#${g})`, stroke: c("ink"), "stroke-width": 1 });
+  ellipse(svg, cx, cy - r * 0.52, r * 0.52, r * 0.20, { fill: c("white"), "fill-opacity": 0.18 });
+  if (given) {
+    line(svg, cx, cy - r + 1, cx, cy - r * 0.55,
+      { stroke: c("steel"), "stroke-width": 2, "stroke-linecap": "round" });
+    line(svg, cx, cy - r + 1, cx, cy - r * 0.55,
+      { stroke: c("ink"), "stroke-width": 0.6, "stroke-opacity": 0.5 });
+  }
+}
+
+// 6 PORTHOLE — the coin recessed behind a dark retaining ring, a glass
+//   highlight sweeping the upper half like a meter window.
+//   FIXED: three engraved silver ticks on the retaining ring.
+function coinPorthole(svg, cx, cy, r, val, given) {
+  circle(svg, cx, cy, r * 0.86, { fill: disc(val), stroke: c("ink"), "stroke-width": 0.8 });
+  pathEl(svg, `M ${cx - r * 0.62} ${cy - r * 0.30} A ${r * 0.72} ${r * 0.72} 0 0 1 ${cx + r * 0.62} ${cy - r * 0.30} `
+    + `A ${r * 1.15} ${r * 1.15} 0 0 0 ${cx - r * 0.62} ${cy - r * 0.30} Z`,
+    { fill: c("white"), "fill-opacity": 0.10 });
+  circle(svg, cx, cy, r, { fill: "none", stroke: c("wash"), "stroke-width": 2.6 });
+  circle(svg, cx, cy, r, { fill: "none", stroke: edge(val), "stroke-width": 0.7, "stroke-opacity": 0.5 });
+  if (given) {
+    for (const deg of [-90, 30, 150]) {
+      const a = deg * Math.PI / 180;
+      line(svg,
+        (cx + (r - 1.6) * Math.cos(a)).toFixed(1), (cy + (r - 1.6) * Math.sin(a)).toFixed(1),
+        (cx + (r + 1.6) * Math.cos(a)).toFixed(1), (cy + (r + 1.6) * Math.sin(a)).toFixed(1),
+        { stroke: c("bezel"), "stroke-width": 1.4, "stroke-linecap": "round" });
+    }
+  }
+}
+
+const VARIANTS = [
+  ["1  BAKELITE CHIP", "fixed: silver screw hub at centre", coinBakelite],
+  ["2  JEWEL DOME", "fixed: brass collar around the jewel", coinJewel],
+  ["3  LAMP LIP", "fixed: silver rivet at centre (shipped coin, refined)", coinLampLip],
+  ["4  TURNTABLE", "fixed: brass centre label", coinTurntable],
+  ["5  KEYCAP", "fixed: engraved index tick at twelve", coinKeycap],
+  ["6  PORTHOLE", "fixed: three silver ticks on the ring", coinPorthole],
+];
+
+// --- panel layout ---
+
+const ZCELL = 96;   // 2x showcase sockets
+const RCELL = 50;   // real-scale strip sockets
+const GAP = 8, RGAP = 6;
+const PANEL_W = 4 * ZCELL + 3 * GAP + 2 * 24;
+const PANEL_H = 264;
+
+// engraved frame with the caption etched into a break in the top edge
+function frame(svg, x, y, w, h, label) {
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  rect(svg, x + 3, y + 3, w - 6, h - 6, { rx: 6, fill: "none", stroke: c("wash"), "stroke-width": 1, "stroke-opacity": 0.6 });
+  const lw = label.length * 7 + 10;
+  rect(svg, x + 18, y - 6, lw, 12, { fill: c("plate") });
+  txt(svg, x + 23, y + 3, label, 10, c("cream"), "start", "bold");
+}
+
+function drawVariantPanel(svg, x, y, title, note, drawCoin) {
+  frame(svg, x, y, PANEL_W, PANEL_H, title);
+  txt(svg, x + 23, y + 24, note, 9, c("dim"));
+
+  // showcase row at 2x: placed A, placed B, fixed A, fixed B
+  const combos = [[0, false], [1, false], [0, true], [1, true]];
+  const labels = ["PLACED", "PLACED", "FIXED", "FIXED"];
+  const rowx = x + 24, rowy = y + 40;
+  combos.forEach(([val, given], i) => {
+    const sx = rowx + i * (ZCELL + GAP);
+    socket(svg, sx, rowy, ZCELL);
+    drawCoin(svg, sx + ZCELL / 2, rowy + ZCELL / 2, Math.round(ZCELL * 0.33), val, given);
+    txt(svg, sx + ZCELL / 2, rowy + ZCELL + 16, labels[i], 8.5,
+      given ? c("gold") : c("steel"), "middle");
+  });
+
+  // real-scale strip on the board background: givens open the row, the
+  // player's coins fill in around them, one cell still empty
+  const strip = [[0, true], [1, false], [1, true], [0, false], null, [1, false], [0, true], [1, true]];
+  const spanw = strip.length * RCELL + (strip.length - 1) * RGAP + 2 * 12;
+  const bx = x + Math.round((PANEL_W - spanw) / 2), by = rowy + ZCELL + 34;
+  rect(svg, bx, by, spanw, RCELL + 24, { rx: 10, fill: c("board-bg"), stroke: c("ink") });
+  strip.forEach((cellv, i) => {
+    const sx = bx + 12 + i * (RCELL + RGAP), sy = by + 12;
+    socket(svg, sx, sy, RCELL);
+    if (cellv != null)
+      drawCoin(svg, sx + RCELL / 2, sy + RCELL / 2, Math.round(RCELL * 0.33), cellv[0], cellv[1]);
+  });
+  txt(svg, x + PANEL_W - 22, by + RCELL + 36, "AT BOARD SCALE", 8, c("dim"), "end");
+}
+
+// --- page assembly: one column of six panels on a console plate ---
+
+const MARGIN = 34, TITLE_H = 74, VGAP = 26;
+const W = PANEL_W + 2 * MARGIN;
+const H = TITLE_H + VARIANTS.length * (PANEL_H + VGAP) + MARGIN;
+
+const svg = [];
+rect(svg, 0, 0, W, H, { rx: 16, fill: c("plate"), stroke: c("plate-edge") });
+txt(svg, MARGIN, 44, "TAKUZU", 30, c("gold"), "start", "bold");
+txt(svg, MARGIN + 132, 44, "/", 30, c("gold-hi"));
+txt(svg, MARGIN + 152, 32, "COIN PROTOTYPES", 11, c("steel"));
+txt(svg, MARGIN + 152, 46, "SIX DIRECTIONS - TWO COLOURS - FIXED MARKINGS", 9, c("dim"));
+txt(svg, W - MARGIN, 32, "2026-07-14", 10, c("steel"), "end");
+
+VARIANTS.forEach(([title, note, fn], i) => {
+  drawVariantPanel(svg, MARGIN, TITLE_H + i * (PANEL_H + VGAP), title, note, fn);
+});
+
+document.getElementById("stage").innerHTML =
+  `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" `
+  + `xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Takuzu coin prototypes">`
+  + svg.join("") + `</svg>`;
+
+})();
+</script>
+</body>
+</html>
