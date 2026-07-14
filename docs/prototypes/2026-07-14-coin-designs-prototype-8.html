@@ -171,6 +171,39 @@ function drawWoodPorcelain(svg, cx, cy, r, val, given) {
   }
 }
 
+// the design-10 iteration: Sovereign gone wood.  Same widened band as the
+// walnut/beech coin, but the cores carry the inverse pair (sunflower heart
+// in walnut, coal heart in beech) and the accents are placed for contrast:
+// sunflower dots ride the dark walnut, coal dots ride the pale beech, and
+// the pin is always the core's opposite (coal pin on gold, sunflower pin
+// on coal) so the pinning reads everywhere.  Fixed = the pierced hole.
+function drawWoodSovereign(svg, cx, cy, r, val, given) {
+  const wood = val === 0 ? "walnut" : "beech";
+  const core = val === 0 ? "sunflower" : "coal";
+  const dots = val === 0 ? "sunflower" : "coal";
+  const pin = val === 0 ? "coal" : "sunflower";
+  ensureMat(svg, wood); ensureMat(svg, core);
+  circle(svg, cx, cy, r, { fill: mfill(wood), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
+  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.09 });
+  circle(svg, cx, cy, r * 0.84, { fill: "none", stroke: deep(wood), "stroke-opacity": 0.30, "stroke-width": 0.7 });
+  circle(svg, cx, cy, r * 0.44, { fill: mfill(core), stroke: deep(wood), "stroke-width": 1 });
+  circle(svg, cx, cy, r * 0.44, { fill: "none", stroke: medge(core), "stroke-width": r * 0.04, "stroke-opacity": 0.8 });
+  if (r >= 20) {
+    const seg = (2 * Math.PI * r * 0.66) / 36;
+    circle(svg, cx, cy, r * 0.66, {
+      fill: "none", stroke: base(dots), "stroke-width": r * 0.05, "stroke-opacity": 0.9,
+      "stroke-dasharray": `${(seg * 0.4).toFixed(2)} ${(seg * 0.6).toFixed(2)}`,
+    });
+  }
+  metalSheen(svg, cx, cy, r);
+  if (given) {
+    circle(svg, cx, cy, r * 0.17, { fill: c("socket"), stroke: deep(wood), "stroke-width": 1.3 });
+    circle(svg, cx, cy, r * 0.17 + 1.4, { fill: "none", stroke: glint(wood), "stroke-width": 0.8, "stroke-opacity": 0.7 });
+  } else {
+    circle(svg, cx, cy, r * 0.08, { fill: hi(pin), stroke: c("ink"), "stroke-width": 0.5 });
+  }
+}
+
 // each variant: [title, spec for colour 0, spec for colour 1, caption];
 // a function in the spec-0 slot draws the whole coin itself
 // spec = [ring, core, accent]
@@ -208,6 +241,9 @@ const VARIANTS = [
   ["11  WALNUT AND BEECH (9 ITERATED)",
    drawWoodPorcelain, null,
    "Design 9 rebuilt to the brief: wood and porcelain only. The wood band widens (porcelain core shrinks to 0.44r), dark walnut against pale beechwood tells the colours apart, and a fixed coin is pierced -- a hole through the porcelain heart -- while placed coins stay solid. No other fixed marking."],
+  ["12  SOVEREIGN IN WOOD (10 ITERATED)",
+   drawWoodSovereign, null,
+   "Sovereign gone wood, accents flipped for contrast. A sunflower heart in dark walnut with sunflower dots riding the band -- the gold pinning now reads -- against a coal heart in pale beech with coal dots. The pin is always the core's opposite: coal on gold, sunflower on coal. Fixed is the pierced hole, matching 11."],
 ];
 
 const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
