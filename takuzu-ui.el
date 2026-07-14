@@ -755,13 +755,13 @@ recoloured to gem variety on the two silver bodies."
   "Draw the sovereign wood coin of VAL at CX,CY radius R on SVG.
 A placed coin is solid one-tone wood -- all coal for 0, all beech for 1
 -- with sunflower dots riding the dark band and coal dots the pale one.
-A fixed coin is the two-tone: the ring holding a heart of the other
-wood, no centre dot.  No holes, no pins.  From the v8 colourway
+A fixed coin is the two-tone: the ring holding a small heart of the
+other wood, no centre dot.  No holes, no pins.  From the v8 colourway
 gallery, panel 13, iterated live."
   (let* ((wood (takuzu--coin-pair-metal 'sovereign val))
          (core (if (eql val 0) 'beech 'coal))
          (dots (if (eql val 0) 'sunflower 'coal))
-         (h (* r 0.44))
+         (h (* r 0.30))
          (ink (takuzu--metal wood 3)))
     (takuzu--ensure-metal svg wood)
     (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" wood)

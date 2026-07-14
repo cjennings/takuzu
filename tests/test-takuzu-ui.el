@@ -1329,6 +1329,12 @@ the ring holding a heart of the other wood, with no centre dot."
       (should (dom-by-id f0 "^m-beech-fill$"))
       (should (dom-by-id f1 "^m-beech-fill$"))
       (should (dom-by-id f1 "^m-coal-fill$"))
+      ;; the heart stays small -- well inside the dotted band
+      (let ((heart (seq-find (lambda (n)
+                               (equal (dom-attr n 'fill) "url(#m-beech-fill)"))
+                             (dom-by-tag f0 'circle))))
+        (should heart)
+        (should (<= (dom-attr heart 'r) (* 33 0.32))))
       ;; no hole anywhere, no pin anywhere
       (dolist (svg (list c0 c1 f0 f1))
         (should-not (seq-find (lambda (n)

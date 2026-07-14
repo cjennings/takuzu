@@ -928,7 +928,7 @@ function drawDiscSovereign(svg, cx, cy, r, val, given) {
   const wood = val === 0 ? "coal" : "beech";
   const core = val === 0 ? "beech" : "coal";
   const dots = val === 0 ? "sunflower" : "coal";
-  const h = r * 0.44, ink = mDeep(wood);
+  const h = r * 0.30, ink = mDeep(wood);
   ensureMetal(svg, wood);
   circle(svg, cx, cy, r, { fill: mfill(wood), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
   circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.09 });
