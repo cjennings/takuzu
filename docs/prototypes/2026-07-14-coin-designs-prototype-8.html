@@ -70,8 +70,11 @@ const MAT = {
   porcelain: ["#ffffff", "#fffffd", "#fffffb", "#9b9b93"],
   coal:      ["#6e6c68", "#454340", "#252422", "#0b0b0a"],
   olivewood: ["#c49a67", "#9d7647", "#7a542e", "#3b2814"],
+  // the driftwood iteration's woods
+  walnut:    ["#a98a68", "#755837", "#4a3520", "#1f150b"],
+  beech:     ["#f0dfc4", "#ddc19a", "#c4a377", "#6b5133"],
 };
-const LIGHT = new Set(["sand", "parchment", "sunflower", "porcelain"]);
+const LIGHT = new Set(["sand", "parchment", "sunflower", "porcelain", "beech"]);
 const glint = m => MAT[m][0], hi = m => MAT[m][1];
 const base = m => MAT[m][2], deep = m => MAT[m][3];
 
@@ -145,7 +148,31 @@ function bimetal(svg, cx, cy, r, spec, given) {
   if (given) givenRing(svg, cx, cy, r, ring);
 }
 
-// each variant: [title, spec for colour 0, spec for colour 1, caption]
+// the design-9 iteration: wood and porcelain only.  The wood band widens
+// (core drops from 0.60r to 0.44r), dark walnut against beechwood tells the
+// colours apart, and the FIXED marking is a hole pierced through the
+// porcelain -- placed coins stay solid.  No outer given ring, no pin.
+function drawWoodPorcelain(svg, cx, cy, r, val, given) {
+  const wood = val === 0 ? "walnut" : "beech";
+  ensureMat(svg, wood); ensureMat(svg, "porcelain");
+  circle(svg, cx, cy, r, { fill: mfill(wood), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
+  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.09 });
+  // lathe-turning rings keep the wide band reading as turned wood
+  for (const k of [0.82, 0.64]) {
+    circle(svg, cx, cy, r * k, { fill: "none", stroke: deep(wood), "stroke-opacity": 0.30, "stroke-width": 0.7 });
+    circle(svg, cx, cy, r * k - 0.9, { fill: "none", stroke: glint(wood), "stroke-opacity": 0.18, "stroke-width": 0.5 });
+  }
+  circle(svg, cx, cy, r * 0.44, { fill: mfill("porcelain"), stroke: deep(wood), "stroke-width": 1 });
+  circle(svg, cx, cy, r * 0.44, { fill: "none", stroke: medge("porcelain"), "stroke-width": r * 0.04, "stroke-opacity": 0.8 });
+  metalSheen(svg, cx, cy, r);
+  if (given) {
+    circle(svg, cx, cy, r * 0.17, { fill: c("socket"), stroke: deep(wood), "stroke-width": 1.3 });
+    circle(svg, cx, cy, r * 0.17 + 1.4, { fill: "none", stroke: glint(wood), "stroke-width": 0.8, "stroke-opacity": 0.7 });
+  }
+}
+
+// each variant: [title, spec for colour 0, spec for colour 1, caption];
+// a function in the spec-0 slot draws the whole coin itself
 // spec = [ring, core, accent]
 const VARIANTS = [
   ["1  INK AND PAGE",
@@ -178,6 +205,9 @@ const VARIANTS = [
   ["10  SOVEREIGN",
    ["sunflower", "coal", "porcelain"], ["coal", "porcelain", "sunflower"],
    "The B-palette inverse pair, cousin to Ink and Page: sunflower around carbon flipped to carbon around porcelain, sunflower pinning both. Maximum contrast, gold-first."],
+  ["11  WALNUT AND BEECH (9 ITERATED)",
+   drawWoodPorcelain, null,
+   "Design 9 rebuilt to the brief: wood and porcelain only. The wood band widens (porcelain core shrinks to 0.44r), dark walnut against pale beechwood tells the colours apart, and a fixed coin is pierced -- a hole through the porcelain heart -- while placed coins stay solid. No other fixed marking."],
 ];
 
 const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
@@ -194,8 +224,10 @@ function frame(svg, x, y, w, h, label) {
 function variantSvg(title, spec0, spec1) {
   const svg = [];
   const W = PANEL_W + 20, H = PANEL_H + 24;
-  const draw = (x, y, r, val, given) =>
-    bimetal(svg, x, y, r, val === 0 ? spec0 : spec1, given);
+  const draw = typeof spec0 === "function"
+    ? (x, y, r, val, given) => spec0(svg, x, y, r, val, given)
+    : (x, y, r, val, given) =>
+        bimetal(svg, x, y, r, val === 0 ? spec0 : spec1, given);
   rect(svg, 0, 0, W, H, { rx: 8, fill: c("plate"), stroke: c("plate-edge") });
   frame(svg, 10, 12, PANEL_W, PANEL_H, title);
   const combos = [[0, false], [1, false], [0, true], [1, true]];
