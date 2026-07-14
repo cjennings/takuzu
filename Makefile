@@ -25,10 +25,17 @@ compile:
 	  --eval '(setq byte-compile-error-on-warn t)' \
 	  -f batch-byte-compile $(SRC)
 
-# checkdoc pass.
+# checkdoc pass, plus package-lint when it is installed.
 lint:
 	$(EMACS) -Q --batch -L . \
 	  --eval "(dolist (f (file-expand-wildcards \"takuzu*.el\")) (checkdoc-file f))"
+	$(EMACS) -Q --batch -L . \
+	  --eval '(package-initialize)' \
+	  --eval '(setq package-lint-main-file "takuzu.el")' \
+	  --eval "(if (require 'package-lint nil t) \
+	              (package-lint-batch-and-exit) \
+	            (message \"package-lint not installed -- skipping\"))" \
+	  $(SRC)
 
 # Run the suite under undercover, writing a SimpleCov report.
 # Sources must load from .el (not .elc) for instrumentation to attach, and
