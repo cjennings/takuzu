@@ -93,9 +93,9 @@ light falls off the metal.")
 (defconst takuzu--ppad 24 "Faceplate padding.")
 (defconst takuzu--stage-gap 16 "Gap between the board and the right panel.")
 (defconst takuzu--panel-w 100 "Right panel width.")
-(defconst takuzu--panel-min-h 406
+(defconst takuzu--panel-min-h 470
   "Minimum height of the instrument panel.
-Below this the five framed instruments overprint each other, so small
+Below this the six framed instruments overprint each other, so small
 boards stretch the stage to keep it.")
 (defconst takuzu--title-h 78 "Title band height.")
 (defconst takuzu--legend-h 64 "Legend (control rows) band height.")
@@ -408,21 +408,20 @@ GIVEN draws the skin's fixed-coin marking."
     (takuzu--set-status (format "Coin skin: %s." next)))
   (takuzu--redraw))
 
-(defun takuzu--draw-skin-selector (svg x y)
-  "Draw the coin-skin selector on SVG at X,Y: a tape counter and thumbwheel.
-The counter window shows the skin's index on the drum, the skin's name is
-etched beside it, and the ridged thumbwheel names the key that turns it."
+(defun takuzu--draw-skin-selector (svg cx fy)
+  "Draw the COIN frame's innards on SVG, centred on CX with the frame top at FY.
+A tape counter shows the skin's index on the drum, a ridged thumbwheel sits
+beside it with the key that turns it, and the skin's name reads underneath."
   (let* ((pos (or (cl-position takuzu-coin-skin takuzu--coin-skins) 0))
-         (wx (+ x 46)) (wy (+ y 10)))
-    (takuzu--txt svg x (+ y 6) "COIN" 9 (takuzu--c :steel))
+         (x0 (- cx 32)) (wx (+ x0 41)) (wy (+ fy 10)))
     ;; tape-counter window: dark drum glass, amber index, drum separator
-    (svg-rectangle svg x (+ y 10) 36 22 :rx 3
+    (svg-rectangle svg x0 (+ fy 12) 36 22 :rx 3
                    :fill (takuzu--c :tube-glass) :stroke (takuzu--c :tube-edge))
-    (takuzu--txt svg (+ x 18) (+ y 26) (format "%02d" (1+ pos))
+    (takuzu--txt svg (+ x0 18) (+ fy 28) (format "%02d" (1+ pos))
                  13 (takuzu--c :amber) "middle")
-    (svg-line svg (+ x 18) (+ y 12) (+ x 18) (+ y 30)
+    (svg-line svg (+ x0 18) (+ fy 14) (+ x0 18) (+ fy 32)
               :stroke (takuzu--c :ink) :stroke-width 0.6 :stroke-opacity 0.6)
-    (svg-rectangle svg (+ x 1.5) (+ y 11.5) 33 6 :rx 2
+    (svg-rectangle svg (+ x0 1.5) (+ fy 13.5) 33 6 :rx 2
                    :fill (takuzu--c :white) :fill-opacity 0.05)
     ;; the thumbwheel: a ridged edge proud of the plate
     (svg-rectangle svg wx wy 11 26 :rx 5
@@ -434,9 +433,9 @@ etched beside it, and the ridged thumbwheel names the key that turns it."
         (svg-line svg (+ wx 1.5) (1+ ly) (+ wx 9.5) (1+ ly)
                   :stroke (takuzu--c :white) :stroke-opacity 0.10 :stroke-width 0.8)))
     ;; the key that turns the wheel, and the skin on the drum
-    (takuzu--legend-glyph svg (+ wx 16) (+ y 26) 10 "W" (takuzu--c :gold) t)
-    (takuzu--txt svg x (+ y 42) (upcase (symbol-name takuzu-coin-skin))
-                 8 (takuzu--c :dim))))
+    (takuzu--legend-glyph svg (+ wx 16) (+ fy 28) 10 "W" (takuzu--c :gold) t)
+    (takuzu--txt svg cx (+ fy 48) (upcase (symbol-name takuzu-coin-skin))
+                 8 (takuzu--c :dim) "middle")))
 
 (defun takuzu--draw-cursor-bezel (svg sx sy cell)
   "Draw the cursor on SVG as a machined brass bezel ring on the socket rim.
@@ -660,8 +659,8 @@ frame's top break.  The frames have fixed heights sized to their contents;
 whatever height is left spreads as even gaps between them."
   (let* ((w takuzu--panel-w) (cx (+ x (/ w 2)))
          (fx (+ x 8)) (fw (- w 16))
-         (time-h 44) (size-h 46) (level-h 84) (left-h 62) (state-h 78)
-         (gap (/ (- h 12 8 time-h size-h level-h left-h state-h) 4.0))
+         (time-h 44) (size-h 46) (level-h 84) (left-h 62) (coin-h 56) (state-h 78)
+         (gap (/ (- h 12 8 time-h size-h level-h left-h coin-h state-h) 5.0))
          (fy (+ y 12.0)))
     (svg-rectangle svg x y w h :rx 10 :fill (takuzu--c :well) :stroke (takuzu--c :panel-edge))
     (takuzu--draw-frame svg fx (round fy) fw time-h "TIME")
@@ -677,6 +676,9 @@ whatever height is left spreads as even gaps between them."
     (takuzu--draw-needle-gauge svg cx (+ (round fy) 38) 28
                                (takuzu--fill-pct) (takuzu--empty-count))
     (setq fy (+ fy left-h gap))
+    (takuzu--draw-frame svg fx (round fy) fw coin-h "COIN")
+    (takuzu--draw-skin-selector svg cx (round fy))
+    (setq fy (+ fy coin-h gap))
     (takuzu--draw-state-lamps svg fx (round fy) fw (- (+ y h) 8 (round fy)))))
 
 (defun takuzu--legend-glyph (svg cx y size key color &optional underline)
@@ -914,8 +916,6 @@ extra room."
     (takuzu--draw-board svg ppad boardy)
     (let* ((px (+ ppad boardw takuzu--stage-gap))
            (ptop (takuzu--panel-top)))
-      ;; the skin selector sits in the title band, clear of the panel column
-      (takuzu--draw-skin-selector svg (- px 96) (+ ppad 2))
       (takuzu--draw-panel svg px ptop (- bottom ptop)))
     (let ((evy (+ bottom 12)))
       (takuzu--draw-event-annunciator svg ppad evy (takuzu--strip-width) takuzu--event-h)

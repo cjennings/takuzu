@@ -365,6 +365,11 @@ const COLORS = {
   // board coins
   "disc0": "#4d5f75", "disc1": "#8f5236", "bezel": "#a8aeb5",
   "disc0-edge": "#6f839c", "disc1-edge": "#b8734f",
+  "disc0-deep": "#2c3745", "disc1-deep": "#4f2c1c",
+  // coin-skin metals (compass medallions) and the fixed-coin rim
+  "coin-iron-hi": "#5a5f66", "coin-iron": "#33363b", "coin-iron-deep": "#1a1c20",
+  "coin-copper-hi": "#d99a5e", "coin-copper": "#b87333", "coin-copper-deep": "#6f4218",
+  "rim-silver": "#c3c9d1",
   // nixie tubes
   "amber": "#ff9a3c", "amber-off": "#3a2a1c", "amber-hi": "#ffbf7a",
   "tube-glass": "#0b0807", "tube-edge": "#2c261d", "tube-halo": "#ff8c32",
@@ -399,7 +404,7 @@ const BPAD = 14;           // board inner padding
 const PPAD = 24;           // faceplate padding
 const STAGE_GAP = 16;      // gap between the board and the right panel
 const PANEL_W = 100;       // right panel width
-const PANEL_MIN_H = 406;   // minimum instrument-panel height
+const PANEL_MIN_H = 470;   // minimum instrument-panel height (six frames)
 const TITLE_H = 78;        // title band height
 const LEGEND_H = 64;       // legend band height
 const EVENT_H = 30;        // event annunciator strip height
@@ -443,7 +448,10 @@ const state = {
   pendingStart: false,
   difficulty: null,
   help: false,
+  coinSkin: "lamp",   // mirror of takuzu-coin-skin
 };
+
+const COIN_SKINS = ["lamp", "jewel", "compass"];
 const timers = { refresh: null, event: null, spinner: null };
 let genToken = 0;
 
@@ -557,8 +565,27 @@ function drawFaceplateShell(svg, w, h, noTitle) {
   if (!noTitle) drawTitle(svg, PPAD, PPAD);
 }
 
+// --- coin skins (mirror of the takuzu-coin-skin dispatch) ---
+
+// the point at DEG degrees (12 o'clock = 0) and radius RR around CX,CY
+const coinPt = (cx, cy, rr, deg) => {
+  const a = (deg - 90) * Math.PI / 180;
+  return [+(cx + rr * Math.cos(a)).toFixed(2), +(cy + rr * Math.sin(a)).toFixed(2)];
+};
+
+// Define radial gradient ID once per build: objectBoundingBox fractions, so
+// every coin that fills with the id gets it scaled to its own circle.
+function ensureCoinGradient(svg, id, gcx, gcy, gr, stops) {
+  if (!svg.coinGrads) svg.coinGrads = new Set();
+  if (svg.coinGrads.has(id)) return;
+  svg.coinGrads.add(id);
+  svg.push(`<radialGradient id="${id}" cx="${gcx}" cy="${gcy}" r="${gr}">`
+    + stops.map(([off, key]) => `<stop offset="${off}" stop-color="${c(key)}"/>`).join("")
+    + `</radialGradient>`);
+}
+
 // Givens wear a thin dulled-silver bezel; placed discs a lighter lip of their colour.
-function drawDisc(svg, cx, cy, r, val, given) {
+function drawDiscLamp(svg, cx, cy, r, val, given) {
   const fill = val === 0 ? c("disc0") : c("disc1");
   const edge = val === 0 ? c("disc0-edge") : c("disc1-edge");
   if (given) {
@@ -567,6 +594,91 @@ function drawDisc(svg, cx, cy, r, val, given) {
   } else {
     circle(svg, cx, cy, r, { fill, stroke: edge, "stroke-width": 1.2 });
   }
+}
+
+// A domed pilot-lamp jewel: radial depth, hard specular catch; a given seats
+// a thin brass collar around the jewel.
+function drawDiscJewel(svg, cx, cy, r, val, given) {
+  const id = `takuzu-coin-jewel-${val}`;
+  ensureCoinGradient(svg, id, 0.38, 0.32, 0.85, val === 0
+    ? [[0, "disc0-edge"], [0.45, "disc0"], [1, "disc0-deep"]]
+    : [[0, "disc1-edge"], [0.45, "disc1"], [1, "disc1-deep"]]);
+  circle(svg, cx, cy, r, { fill: `url(#${id})`, stroke: c("ink"), "stroke-width": 1 });
+  ellipse(svg, cx - r * 0.34, cy - r * 0.38, r * 0.16, r * 0.10,
+    { fill: c("white"), "fill-opacity": 0.55 });
+  if (given) {
+    circle(svg, cx, cy, r + 1.6, { fill: "none", stroke: c("gold"), "stroke-width": 1.6 });
+    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("gold-hi"), "stroke-width": 0.6, "stroke-opacity": 0.6 });
+  }
+}
+
+// An iron-and-copper compass-rose medallion; val 0 is dark iron with copper
+// rays, val 1 its mirror.  The dentate border only draws when r is large
+// enough to keep it legible; a given adds a bright silver rim ring.
+function drawDiscCompass(svg, cx, cy, r, val, given) {
+  const iron = val === 0;
+  const id = `takuzu-coin-body-${val}`;
+  const bodyBase = c(iron ? "coin-iron" : "coin-copper");
+  const bodyDeep = c(iron ? "coin-iron-deep" : "coin-copper-deep");
+  const ink = c(iron ? "coin-copper" : "coin-iron");
+  const glint = c(iron ? "coin-copper-hi" : "coin-iron-hi");
+  const detailed = r >= 20;
+  ensureCoinGradient(svg, id, 0.36, 0.30, 0.95, iron
+    ? [[0, "coin-iron-hi"], [0.5, "coin-iron"], [1, "coin-iron-deep"]]
+    : [[0, "coin-copper-hi"], [0.5, "coin-copper"], [1, "coin-copper-deep"]]);
+  circle(svg, cx, cy, r, { fill: `url(#${id})`, stroke: bodyDeep, "stroke-width": 1.2 });
+  if (given) {
+    circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: c("rim-silver"), "stroke-width": 1.6 });
+    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.35 });
+  }
+  if (detailed) {
+    const teeth = [];
+    for (let i = 0; i < 32; i++)
+      teeth.push(coinPt(cx, cy, r * (i % 2 ? 0.87 : 0.78), i * 11.25));
+    polygon(svg, teeth, { fill: "none", stroke: ink, "stroke-opacity": 0.8, "stroke-width": 0.7 });
+  }
+  const big = r * (detailed ? 0.68 : 0.74);
+  for (let i = 0; i < 8; i++) {
+    const a = i * 45;
+    polygon(svg, [coinPt(cx, cy, big, a),
+                  coinPt(cx, cy, r * 0.14, a + 22),
+                  coinPt(cx, cy, r * 0.14, a - 22)], { fill: ink });
+  }
+  for (let i = 0; i < 8; i++) {
+    const a = i * 45 + 22.5;
+    polygon(svg, [coinPt(cx, cy, big * 0.62, a),
+                  coinPt(cx, cy, r * 0.10, a + 30),
+                  coinPt(cx, cy, r * 0.10, a - 30)], { fill: glint, "fill-opacity": 0.85 });
+  }
+  circle(svg, cx, cy, r * 0.10, { fill: bodyBase, stroke: ink, "stroke-width": r * 0.04 });
+}
+
+// Mirror of takuzu--draw-disc: dispatch on the current skin.
+function drawDisc(svg, cx, cy, r, val, given) {
+  if (state.coinSkin === "jewel") drawDiscJewel(svg, cx, cy, r, val, given);
+  else if (state.coinSkin === "compass") drawDiscCompass(svg, cx, cy, r, val, given);
+  else drawDiscLamp(svg, cx, cy, r, val, given);
+}
+
+// Mirror of takuzu--draw-skin-selector: the COIN frame's innards, centred on
+// cx with the frame top at fy.  A tape counter shows the skin's index, a
+// ridged thumbwheel names the key that turns it, the skin reads underneath.
+function drawSkinSelector(svg, cx, fy) {
+  const pos = Math.max(0, COIN_SKINS.indexOf(state.coinSkin));
+  const x0 = cx - 32, wx = x0 + 41, wy = fy + 10;
+  rect(svg, x0, fy + 12, 36, 22, { rx: 3, fill: c("tube-glass"), stroke: c("tube-edge") });
+  txt(svg, x0 + 18, fy + 28, String(pos + 1).padStart(2, "0"), 13, c("amber"), "middle");
+  line(svg, x0 + 18, fy + 14, x0 + 18, fy + 32,
+    { stroke: c("ink"), "stroke-width": 0.6, "stroke-opacity": 0.6 });
+  rect(svg, x0 + 1.5, fy + 13.5, 33, 6, { rx: 2, fill: c("white"), "fill-opacity": 0.05 });
+  rect(svg, wx, wy, 11, 26, { rx: 5, fill: c("knob"), stroke: c("knob-edge"), "stroke-width": 0.8 });
+  for (let i = 0; i < 4; i++) {
+    const ly = wy + 5 + i * 5.4;
+    line(svg, wx + 1.5, ly, wx + 9.5, ly, { stroke: c("ink"), "stroke-opacity": 0.55, "stroke-width": 1 });
+    line(svg, wx + 1.5, ly + 1, wx + 9.5, ly + 1, { stroke: c("white"), "stroke-opacity": 0.10, "stroke-width": 0.8 });
+  }
+  legendGlyph(svg, wx + 16, fy + 28, 10, "W", c("gold"), true);
+  txt(svg, cx, fy + 48, state.coinSkin.toUpperCase(), 8, c("dim"), "middle");
 }
 
 // The cursor: a machined brass bezel ring seated on the socket rim, catching
@@ -745,8 +857,8 @@ function drawNeedleGauge(svg, cx, cy, r, pct, value) {
 function drawPanel(svg, x, y, h) {
   const w = PANEL_W, cx = x + Math.floor(w / 2);
   const fx = x + 8, fw = w - 16;
-  const timeH = 44, sizeH = 46, levelH = 84, leftH = 62, stateH = 78;
-  const gap = (h - 12 - 8 - timeH - sizeH - levelH - leftH - stateH) / 4;
+  const timeH = 44, sizeH = 46, levelH = 84, leftH = 62, coinH = 56, stateH = 78;
+  const gap = (h - 12 - 8 - timeH - sizeH - levelH - leftH - coinH - stateH) / 5;
   let fy = y + 12;
   rect(svg, x, y, w, h, { rx: 10, fill: c("well"), stroke: c("panel-edge") });
   drawFrame(svg, fx, Math.round(fy), fw, timeH, "TIME");
@@ -761,6 +873,9 @@ function drawPanel(svg, x, y, h) {
   drawFrame(svg, fx, Math.round(fy), fw, leftH, "LEFT");
   drawNeedleGauge(svg, cx, Math.round(fy) + 38, 28, fillPct(), emptyCount());
   fy += leftH + gap;
+  drawFrame(svg, fx, Math.round(fy), fw, coinH, "COIN");
+  drawSkinSelector(svg, cx, Math.round(fy));
+  fy += coinH + gap;
   drawStateLamps(svg, fx, Math.round(fy), fw, (y + h) - 8 - Math.round(fy));
 }
 
@@ -1336,6 +1451,14 @@ function toggleAssist() {
   redraw();
 }
 
+// Mirror of takuzu-cycle-skin: turn the thumbwheel to the next coin skin.
+function cycleSkin() {
+  const pos = Math.max(0, COIN_SKINS.indexOf(state.coinSkin));
+  state.coinSkin = COIN_SKINS[(pos + 1) % COIN_SKINS.length];
+  setStatus(`Coin skin: ${state.coinSkin}.`);
+  redraw();
+}
+
 function help() {
   state.help = !state.help;
   redraw();
@@ -1494,6 +1617,7 @@ document.addEventListener("keydown", e => {
     case "n": newGame(); return;
     case "i": help(); return;
     case "q": message("Close the tab to quit."); return;
+    case "w": cycleSkin(); return;
     case "1": case "4": case "6": case "8": jumpSize(e.key); return;
   }
 });
