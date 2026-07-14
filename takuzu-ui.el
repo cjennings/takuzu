@@ -328,6 +328,23 @@ top-left with a hard specular flash on that corner's arc."
                    :fill "none" :stroke (takuzu--c :white)
                    :stroke-width 0.7 :stroke-opacity 0.3)))
 
+(defun takuzu--draw-socket (svg sx sy cell r c err-p)
+  "Draw the socket for board cell R,C on SVG with its cup at SX,SY size CELL.
+ERR-P strokes the cup in the fail colour (assist highlighting).  Draws the
+cursor bezel when R,C is the cursor cell, and the coin when it holds a
+value."
+  (svg-rectangle svg sx sy cell cell :rx 9
+                 :fill (takuzu--c :socket)
+                 :stroke (if err-p (takuzu--c :fail) (takuzu--c :socket-edge))
+                 :stroke-width (if err-p 2 1))
+  (when (takuzu--curp r c)
+    (takuzu--draw-cursor-bezel svg sx sy cell))
+  (let ((val (takuzu-board-ref takuzu--board r c)))
+    (when val
+      (takuzu--draw-disc svg (+ sx (/ cell 2)) (+ sy (/ cell 2))
+                         (round (* cell 0.33)) val
+                         (takuzu-board-given-p takuzu--board r c)))))
+
 (defun takuzu--draw-board (svg x y)
   "Draw the board on SVG with its top-left at X,Y."
   (let* ((n takuzu--size) (cell (takuzu--cell-size n))
@@ -338,22 +355,11 @@ top-left with a hard specular flash on that corner's arc."
                    :fill (takuzu--c :board-bg) :stroke (takuzu--c :ink))
     (dotimes (r n)
       (dotimes (c n)
-        (let* ((sx (+ x bpad (* c (+ cell gap))))
-               (sy (+ y bpad (* r (+ cell gap))))
-               (idx (+ (* r n) c))
-               (val (takuzu-board-ref takuzu--board r c))
-               (given (takuzu-board-given-p takuzu--board r c)))
-          (let ((stroke (if (and errs (aref errs idx))
-                            (takuzu--c :fail) (takuzu--c :socket-edge)))
-                (sw (if (and errs (aref errs idx)) 2 1)))
-            (svg-rectangle svg sx sy cell cell :rx 9
-                           :fill (takuzu--c :socket)
-                           :stroke stroke :stroke-width sw))
-          (when (takuzu--curp r c)
-            (takuzu--draw-cursor-bezel svg sx sy cell))
-          (when val
-            (takuzu--draw-disc svg (+ sx (/ cell 2)) (+ sy (/ cell 2))
-                               (round (* cell 0.33)) val given)))))
+        (takuzu--draw-socket svg
+                             (+ x bpad (* c (+ cell gap)))
+                             (+ y bpad (* r (+ cell gap)))
+                             cell r c
+                             (and errs (aref errs (+ (* r n) c)) t))))
     span))
 
 (defun takuzu--draw-nixie-tube (svg x y w h ch lit)
@@ -383,12 +389,22 @@ convention for every panel instrument."
                    :fill (takuzu--c :well))
     (takuzu--txt svg (round cx) (+ y 3) label 9 (takuzu--c :steel) "middle")))
 
+;; Tube metrics.  Both instruments share the glass height; the SIZE pair is
+;; a touch wider than the TIME digits because it holds only two tubes, while
+;; TIME must fit four digits plus a colon in the same column.
+(defconst takuzu--tube-h 23 "Nixie tube glass height, shared by both instruments.")
+(defconst takuzu--size-tube-w 16 "SIZE tube width.")
+(defconst takuzu--size-tube-gap 4 "Gap between the two SIZE tubes.")
+(defconst takuzu--time-tube-w 14 "TIME tube width.")
+(defconst takuzu--time-tube-gap 3 "Gap between TIME tubes.")
+(defconst takuzu--time-colon-w 6 "Width reserved for the TIME colon.")
+
 (defun takuzu--draw-nixie-size (svg cx y size)
   "Draw board SIZE on SVG as two nixie tubes centred at CX with their top at Y.
 A single-digit size shows a ghost 0 in the tens tube so it reads as an idle
 tube rather than a dead socket.  Up/down chevrons to the right hint that the
 size is adjustable (the s key)."
-  (let* ((tw 16) (th 23) (g 4)
+  (let* ((tw takuzu--size-tube-w) (th takuzu--tube-h) (g takuzu--size-tube-gap)
          (s (format "%02d" size))
          (x0 (round (- cx 23)))
          (ax (+ x0 (* 2 tw) g 7)))
@@ -402,7 +418,8 @@ size is adjustable (the s key)."
 (defun takuzu--draw-nixie-time (svg cx y)
   "Draw elapsed time on SVG as MM:SS nixie tubes centred at CX, top at Y."
   (let* ((str (takuzu--fmt-time (takuzu--elapsed)))
-         (tw 14) (th 23) (g 3) (colw 6) (total 0))
+         (tw takuzu--time-tube-w) (th takuzu--tube-h)
+         (g takuzu--time-tube-gap) (colw takuzu--time-colon-w) (total 0))
     (dotimes (i (length str))
       (setq total (+ total (if (eq (aref str i) ?:) colw tw) (if (> i 0) g 0))))
     (let ((x (- cx (/ total 2))))
@@ -658,23 +675,49 @@ a failed solve."
                (takuzu--txt svg (+ jx 13) (+ ly 3) lab 7
                             (if on (takuzu--c :cream) (takuzu--c :steel)) "start")))))
 
+(defconst takuzu--legend
+  '((game . ((word "NEW" flash) (word "RESET") (word "SIZE") (word "LEVEL")
+             (word "PROVE") (word "INSTRUCTIONS") (word "QUIT")))
+    (play . ((keyed "SPC" "CYCLE") (word "UNDO") (keyed "?" "HINT")
+             (word "CHECK") (word "ASSIST" lit))))
+  "The key legend: one table drives the SVG legend and the tty fallback.
+Each item is (word LABEL [MODE]) -- the key is the label's first letter --
+or (keyed KEY LABEL) for keys that aren't a first letter.  MODE `flash'
+flashes the word while the game is armed; MODE `lit' lights the word while
+assist is on.")
+
+(defun takuzu--legend-items (section)
+  "The SVG legend draw items for SECTION, with live flash/lit state resolved."
+  (mapcar (lambda (it)
+            (pcase it
+              (`(word ,lab flash) (if takuzu--armed
+                                      (list 'flashword lab (takuzu--flash-on-p))
+                                    (list 'word lab)))
+              (`(word ,lab lit) (list 'litword lab takuzu--assist))
+              (_ it)))
+          (alist-get section takuzu--legend)))
+
+(defun takuzu--tty-legend ()
+  "The tty key-legend line, derived from `takuzu--legend'."
+  (concat "arrows move  "
+          (mapconcat (lambda (it)
+                       (pcase it
+                         (`(keyed ,k ,lab) (format "%s %s" k (downcase lab)))
+                         (`(word ,lab . ,_)
+                          (format "%s %s" (downcase (substring lab 0 1))
+                                  (downcase lab)))))
+                     (append (alist-get 'play takuzu--legend)
+                             (alist-get 'game takuzu--legend))
+                     "  ")))
+
 (defun takuzu--draw-legend (svg x y width)
   "Draw the two engraved control sections on SVG at X,Y across WIDTH.
-GAME (session keys) sits on top, PLAY (solving keys) below.  While armed, the
-New key flashes to prompt the start."
-  (let ((new-item (if takuzu--armed
-                      (list 'flashword "NEW" (takuzu--flash-on-p))
-                    '(word "NEW"))))
-    (takuzu--draw-engrave svg x y width "GAME")
-    (takuzu--draw-legend-line
-     svg x (+ y 16) width 10
-     `(,new-item (word "RESET") (word "SIZE") (word "LEVEL")
-       (word "PROVE") (word "INSTRUCTIONS") (word "QUIT")))
-    (takuzu--draw-engrave svg x (+ y 36) width "PLAY")
-    (takuzu--draw-legend-line
-     svg x (+ y 52) width 10
-     `((keyed "SPC" "CYCLE") (word "UNDO") (keyed "?" "HINT")
-       (word "CHECK") (litword "ASSIST" ,takuzu--assist)))))
+GAME (session keys) sits on top, PLAY (solving keys) below; the items come
+from `takuzu--legend'."
+  (takuzu--draw-engrave svg x y width "GAME")
+  (takuzu--draw-legend-line svg x (+ y 16) width 10 (takuzu--legend-items 'game))
+  (takuzu--draw-engrave svg x (+ y 36) width "PLAY")
+  (takuzu--draw-legend-line svg x (+ y 52) width 10 (takuzu--legend-items 'play)))
 
 (defun takuzu--faceplate-width ()
   "Pixel width of the faceplate for the current board size."
@@ -877,14 +920,17 @@ The line is sized down so the full name fits within the plate."
               :fill silver :text-anchor "start" :font-weight "bold")
     (takuzu--txt svg ne y post size (takuzu--c :ink))))
 
-(defun takuzu--draw-help-card (svg x y w h ink hi d0 d1 fail)
+(defun takuzu--draw-help-card (svg x y w h)
   "Draw the spec-plate card into SVG filling the box X,Y,W,H.
-Frame, brushed plate, header (title + model/serial + aliases), the three rules
-each with a diagram, the compliance footer, and the dedication.  Callers scale
-and position the card with a group transform, so all offsets here are relative
-to the box.  INK/HI are the etch colours; D0/D1/FAIL the rule-diagram colours."
+Frame, brushed plate, header (title + model/serial + aliases), the rules
+each with a diagram, the compliance footer, and the dedication.  Callers
+scale and position the card with a group transform, so all offsets here are
+relative to the box.  Colours come straight from the palette."
   (let* ((lx (+ x 26)) (rx (- (+ x w) 26)) (cx (+ x (/ w 2)))
-         (wx (+ lx 20)) (tx (+ lx 80)))
+         (wx (+ lx 20)) (tx (+ lx 80))
+         (ink (takuzu--c :spec-ink)) (hi (takuzu--c :white))
+         (d0 (takuzu--c :disc0)) (d1 (takuzu--c :disc1))
+         (fail (takuzu--c :fail)))
     ;; faceplating: an engraved frame the plate is set into
     (svg-rectangle svg (- x 6) (- y 6) (+ w 12) (+ h 12) :rx 13 :fill "none"
                    :stroke (takuzu--c :plate-edge) :stroke-width 1.2)
@@ -906,7 +952,10 @@ to the box.  INK/HI are the etch colours; D0/D1/FAIL the rule-diagram colours."
     (takuzu--txt svg lx (+ y h -50) "MADE IN NEW ORLEANS, LA, USA  -  (c) CRAIG JENNINGS 2026" 10 (takuzu--c :ink) "start")
     (takuzu--draw-help-dedication svg cx (+ y h -26))
     ;; rules block, centred between the two dividers
-    (let* ((rtop (+ y 92)) (rbot (+ y h -112)) (blockh 165)
+    (let* ((rtop (+ y 92)) (rbot (+ y h -112))
+           ;; title + subtitle head the block (50), then one 48px row per rule
+           ;; minus the last row's trailing gap (29)
+           (blockh (+ 50 (* 48 (length takuzu--rules)) -29))
            (y0 (+ rtop (max 0 (/ (- (- rbot rtop) blockh) 2)))))
       (takuzu--txt svg lx y0 "HOW TO PLAY" 12 (takuzu--c :ink) "start" "bold")
       (takuzu--txt svg lx (+ y0 18) "Fill the grid with two colours so that:" 11 (takuzu--c :ink) "start")
@@ -928,8 +977,6 @@ Border and screws match the board view so they never move; the board,
 instruments, and title give way to a large plate centred in the faceplate."
   (let* ((w (takuzu--faceplate-width)) (h (takuzu--faceplate-height))
          (svg (svg-create w h))
-         (ink (takuzu--c :spec-ink)) (hi (takuzu--c :white))
-         (d0 (takuzu--c :disc0)) (d1 (takuzu--c :disc1)) (fail (takuzu--c :fail))
          (cw takuzu--help-card-w) (ch takuzu--help-card-h)
          (s (/ (* takuzu--help-card-frac w) cw))
          (gx (round (/ (- w (* cw s)) 2)))
@@ -937,7 +984,7 @@ instruments, and title give way to a large plate centred in the faceplate."
          (card (dom-node 'g (list (cons 'transform
                                         (format "translate(%d %d) scale(%s)" gx gy s))))))
     (takuzu--draw-faceplate-shell svg w h t)
-    (takuzu--draw-help-card card 0 0 cw ch ink hi d0 d1 fail)
+    (takuzu--draw-help-card card 0 0 cw ch)
     (dom-append-child svg card)
     svg))
 
@@ -1012,8 +1059,7 @@ Kicks off the scale-easing timer when the displayed scale is off target."
    (t
     (insert (format "Takuzu  %dx%d  %s\n\n" takuzu--size takuzu--size takuzu--grade)
             (takuzu--render-text)
-            (format "\n%s\n\narrows move  SPC cycle  u undo  ? hint  c check  a assist  n new  r reset  s size  l level  p prove  i instructions  q quit\n"
-                    takuzu--status)))))
+            (format "\n%s\n\n%s\n" takuzu--status (takuzu--tty-legend))))))
 
 (defun takuzu--redraw (&optional buffer)
   "Redraw BUFFER (or the current buffer) from state."

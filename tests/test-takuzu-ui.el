@@ -826,6 +826,42 @@ Lowercase words were the one typographic outlier on the faceplate."
           (let ((s (dom-text node)))
             (should (string= s (upcase s)))))))))
 
+(ert-deftest test-takuzu-ui-tty-legend-derives-from-table ()
+  "Normal: the tty key legend is generated from the shared legend table.
+One data table drives the SVG legend and the tty fallback, so a key added
+to one surface cannot silently miss the other."
+  (with-temp-buffer
+    (let ((line (takuzu--tty-legend)))
+      (should (string-prefix-p "arrows move" line))
+      (dolist (frag '("SPC cycle" "u undo" "? hint" "c check" "a assist"
+                      "n new" "r reset" "s size" "l level" "p prove"
+                      "i instructions" "q quit"))
+        (should (string-search frag line))))))
+
+(ert-deftest test-takuzu-ui-draw-socket ()
+  "Normal/Error: one socket renders its cup, disc, cursor, and error stroke."
+  (with-temp-buffer
+    (setq takuzu--size 4 takuzu--cursor '(0 . 0)
+          takuzu--board (takuzu-make-board 4 (vector 0 nil nil nil
+                                                     nil nil nil nil
+                                                     nil nil nil nil
+                                                     nil nil nil nil)))
+    ;; cursor cell with a disc: cup rect + bezel + disc circles
+    (let ((svg (svg-create 100 100)))
+      (takuzu--draw-socket svg 10 10 50 0 0 nil)
+      (should (dom-by-tag svg 'rect))
+      (should (dom-by-tag svg 'circle)))
+    ;; error stroke: the cup rect carries the fail colour (non-cursor cell,
+    ;; so the cup is the only rect drawn)
+    (let ((svg (svg-create 100 100)))
+      (takuzu--draw-socket svg 10 10 50 0 1 t)
+      (let ((cup (car (dom-by-tag svg 'rect))))
+        (should (equal (dom-attr cup 'stroke) (takuzu--c :fail)))))
+    ;; empty non-cursor cell: no disc
+    (let ((svg (svg-create 100 100)))
+      (takuzu--draw-socket svg 10 10 50 1 1 nil)
+      (should-not (dom-by-tag svg 'circle)))))
+
 (ert-deftest test-takuzu-ui-on-generated-failure ()
   "Error: a failed background generation reports and rearms cleanly.
 The spinner stops, the generating flag clears, and the GEN FAIL lamp fires
