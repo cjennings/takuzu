@@ -385,6 +385,9 @@ const COLORS = {
   "cursor-bezel-hi": "#e8cd76", "cursor-bezel": "#b99640",
   "cursor-bezel-lo": "#7a5f24", "cursor-bezel-dk": "#57431a",
   "cursor-spark": "#fdf3c9",
+  "cursor-iron-hi": "#d3d7dc", "cursor-iron": "#8a9097",
+  "cursor-iron-lo": "#4a4f56", "cursor-iron-dk": "#2e3136",
+  "cursor-iron-spark": "#eef2f6",
   // instructions spec plate
   "spec-silver": "#74787d", "spec-silver-hi": "#909498", "spec-silver-lo": "#52565b",
   "spec-ink": "#16181c", "spec-name-silver": "#9ba0a8",
@@ -395,6 +398,12 @@ const c = key => COLORS[key];
 const CURSOR_BEZEL_STOPS = [
   [0, "cursor-bezel-hi"], [0.30, "cursor-bezel"],
   [0.68, "cursor-bezel-lo"], [1, "cursor-bezel-dk"],
+];
+
+// the metal coin sets (jewel, compass) seat an iron cursor ring instead
+const CURSOR_IRON_STOPS = [
+  [0, "cursor-iron-hi"], [0.30, "cursor-iron"],
+  [0.68, "cursor-iron-lo"], [1, "cursor-iron-dk"],
 ];
 
 // --- layout constants (mirror of the takuzu-- layout defconsts) ---
@@ -597,8 +606,7 @@ function drawDiscLamp(svg, cx, cy, r, val, given) {
 }
 
 // A domed pilot-lamp jewel: radial depth, hard specular catch; a given seats
-// a thin iron collar around the jewel -- brass read as copper against the
-// warm jewel, so the collar contrasts in iron instead.
+// a thin brass collar around the jewel.
 function drawDiscJewel(svg, cx, cy, r, val, given) {
   const id = `takuzu-coin-jewel-${val}`;
   ensureCoinGradient(svg, id, 0.38, 0.32, 0.85, val === 0
@@ -608,8 +616,8 @@ function drawDiscJewel(svg, cx, cy, r, val, given) {
   ellipse(svg, cx - r * 0.34, cy - r * 0.38, r * 0.16, r * 0.10,
     { fill: c("white"), "fill-opacity": 0.55 });
   if (given) {
-    circle(svg, cx, cy, r + 1.6, { fill: "none", stroke: c("coin-iron-hi"), "stroke-width": 1.6 });
-    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.3 });
+    circle(svg, cx, cy, r + 1.6, { fill: "none", stroke: c("gold"), "stroke-width": 1.6 });
+    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("gold-hi"), "stroke-width": 0.6, "stroke-opacity": 0.6 });
   }
 }
 
@@ -629,8 +637,8 @@ function drawDiscCompass(svg, cx, cy, r, val, given) {
     : [[0, "coin-copper-hi"], [0.5, "coin-copper"], [1, "coin-copper-deep"]]);
   circle(svg, cx, cy, r, { fill: `url(#${id})`, stroke: bodyDeep, "stroke-width": 1.2 });
   if (given) {
-    circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: c("coin-iron-hi"), "stroke-width": 1.6 });
-    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.3 });
+    circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: c("rim-silver"), "stroke-width": 1.6 });
+    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.35 });
   }
   if (detailed) {
     const teeth = [];
@@ -684,14 +692,17 @@ function drawSkinSelector(svg, cx, fy) {
     txt(svg, cx, fy + 48, state.coinSkin.toUpperCase(), 8, c("dim"), "middle");
 }
 
-// The cursor: a machined brass bezel ring seated on the socket rim, catching
-// light from the top-left with a hard specular flash on that corner's arc.
+// The cursor: a machined bezel ring seated on the socket rim, catching light
+// from the top-left with a hard specular flash on that corner's arc.  The
+// metal follows the coin set: brass with the original lamp coins, polished
+// iron with the jewel and compass sets.
 function drawCursorBezel(svg, sx, sy, cell) {
   const g = "takuzu-cursor-bezel-g";
-  // machined catch: brightest at the top-left, falling to shadowed brass
+  const stops = state.coinSkin === "lamp" ? CURSOR_BEZEL_STOPS : CURSOR_IRON_STOPS;
+  // machined catch: brightest at the top-left, falling to shadowed metal
   svg.push(`<linearGradient id="${g}" gradientUnits="userSpaceOnUse" `
     + `x1="${sx}" y1="${sy}" x2="${sx + cell}" y2="${sy + cell}">`
-    + CURSOR_BEZEL_STOPS.map(([off, key]) =>
+    + stops.map(([off, key]) =>
         `<stop offset="${off}" stop-color="${c(key)}"/>`).join("")
     + `</linearGradient>`);
   // grounding shadow just outside the ring seats it on the plate
@@ -710,7 +721,9 @@ function drawCursorBezel(svg, sx, sy, cell) {
   });
   // hard specular catch on the top-left corner arc
   pathEl(svg, `M ${sx - 0.8} ${sy + 9} A 9.8 9.8 0 0 1 ${sx + 9} ${sy - 0.8}`, {
-    fill: "none", stroke: c("cursor-spark"), "stroke-opacity": 0.9,
+    fill: "none",
+    stroke: c(state.coinSkin === "lamp" ? "cursor-spark" : "cursor-iron-spark"),
+    "stroke-opacity": 0.9,
     "stroke-width": 1.4, "stroke-linecap": "round",
   });
   // polished inner lip where the ring meets the cup

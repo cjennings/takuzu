@@ -66,10 +66,14 @@
     ;; jewels and state lamps
     :jewel-off "#241f1b" :jewel-off-edge "#0e0c0a"
     :lamp-green "#6fce33" :lamp-amber "#ffb43a" :lamp-cyan "#63e6c8"
-    ;; cursor: the machined brass bezel ring
+    ;; cursor: the machined bezel ring -- brass on the original lamp set,
+    ;; polished iron on the metal coin sets
     :cursor-bezel-hi "#e8cd76" :cursor-bezel "#b99640"
     :cursor-bezel-lo "#7a5f24" :cursor-bezel-dk "#57431a"
     :cursor-spark "#fdf3c9"
+    :cursor-iron-hi "#d3d7dc" :cursor-iron "#8a9097"
+    :cursor-iron-lo "#4a4f56" :cursor-iron-dk "#2e3136"
+    :cursor-iron-spark "#eef2f6"
     ;; instructions spec plate
     :spec-silver "#74787d" :spec-silver-hi "#909498" :spec-silver-lo "#52565b"
     :spec-ink "#16181c" :spec-name-silver "#9ba0a8")
@@ -82,9 +86,16 @@
 (defconst takuzu--cursor-bezel-stops
   '((0 . :cursor-bezel-hi) (0.30 . :cursor-bezel)
     (0.68 . :cursor-bezel-lo) (1 . :cursor-bezel-dk))
-  "The bezel ring's turned-metal catch, as (OFFSET . PALETTE-KEY) stops.
+  "The brass bezel ring's turned-metal catch, as (OFFSET . PALETTE-KEY) stops.
 The gradient runs top-left to bottom-right; tune these to move where the
 light falls off the metal.")
+
+(defconst takuzu--cursor-iron-stops
+  '((0 . :cursor-iron-hi) (0.30 . :cursor-iron)
+    (0.68 . :cursor-iron-lo) (1 . :cursor-iron-dk))
+  "The iron bezel ring's stops, same shape as `takuzu--cursor-bezel-stops'.
+The metal coin sets (jewel, compass) seat this ring; the original lamp set
+keeps the brass one.")
 
 ;; --- layout ---
 
@@ -325,8 +336,7 @@ their own colour."
 (defun takuzu--draw-disc-jewel (svg cx cy r val given)
   "Draw the jewel-dome disc of VAL on SVG at CX,CY radius R.
 A domed pilot-lamp jewel: radial depth and a hard specular catch.
-GIVEN seats a thin iron collar around the jewel -- brass read as copper
-against the warm jewel, so the collar contrasts in iron instead."
+GIVEN seats a thin brass collar around the jewel."
   (let ((id (format "takuzu-coin-jewel-%d" val)))
     (takuzu--ensure-coin-gradient
      svg id 0.38 0.32 0.85
@@ -339,9 +349,9 @@ against the warm jewel, so the collar contrasts in iron instead."
                  :fill (takuzu--c :white) :fill-opacity 0.55)
     (when given
       (svg-circle svg cx cy (+ r 1.6) :fill "none"
-                  :stroke (takuzu--c :coin-iron-hi) :stroke-width 1.6)
+                  :stroke (takuzu--c :gold) :stroke-width 1.6)
       (svg-circle svg cx cy (+ r 2.6) :fill "none"
-                  :stroke (takuzu--c :white) :stroke-width 0.5 :stroke-opacity 0.3))))
+                  :stroke (takuzu--c :gold-hi) :stroke-width 0.6 :stroke-opacity 0.6))))
 
 (defun takuzu--draw-disc-compass (svg cx cy r val given)
   "Draw the compass-rose medallion of VAL on SVG at CX,CY radius R.
@@ -366,9 +376,9 @@ showcase scale, not board scale).  GIVEN adds a bright silver rim ring."
                 :stroke body-deep :stroke-width 1.2)
     (when given
       (svg-circle svg cx cy (+ r 1.5) :fill "none"
-                  :stroke (takuzu--c :coin-iron-hi) :stroke-width 1.6)
+                  :stroke (takuzu--c :rim-silver) :stroke-width 1.6)
       (svg-circle svg cx cy (+ r 2.6) :fill "none"
-                  :stroke (takuzu--c :white) :stroke-width 0.5 :stroke-opacity 0.3))
+                  :stroke (takuzu--c :white) :stroke-width 0.5 :stroke-opacity 0.35))
     (when detailed
       (let (teeth)
         (dotimes (i 32)
@@ -441,12 +451,17 @@ beside it with the key that turns it, and the skin's name reads underneath."
                    8 (takuzu--c :dim) "middle"))))
 
 (defun takuzu--draw-cursor-bezel (svg sx sy cell)
-  "Draw the cursor on SVG as a machined brass bezel ring on the socket rim.
+  "Draw the cursor on SVG as a machined bezel ring on the socket rim.
 The givens' bezel language, applied to the well: a thin turned-metal ring
 seated on the rim at SX,SY (cell size CELL), catching light from the
-top-left with a hard specular flash on that corner's arc."
-  (let ((g "takuzu-cursor-bezel-g"))
-    ;; machined catch: brightest at the top-left, falling to shadowed brass
+top-left with a hard specular flash on that corner's arc.  The metal
+follows the coin set: brass with the original lamp coins, polished iron
+with the jewel and compass sets."
+  (let ((g "takuzu-cursor-bezel-g")
+        (stops (if (eq takuzu-coin-skin 'lamp)
+                   takuzu--cursor-bezel-stops
+                 takuzu--cursor-iron-stops)))
+    ;; machined catch: brightest at the top-left, falling to shadowed metal
     (dom-append-child svg
       (apply #'dom-node 'linearGradient
              (list (cons 'id g) (cons 'gradientUnits "userSpaceOnUse")
@@ -456,7 +471,7 @@ top-left with a hard specular flash on that corner's arc."
                        (dom-node 'stop
                                  (list (cons 'offset (car stop))
                                        (cons 'stop-color (takuzu--c (cdr stop))))))
-                     takuzu--cursor-bezel-stops)))
+                     stops)))
     ;; grounding shadow just outside the ring seats it on the plate
     (svg-rectangle svg (- sx 2.2) (- sy 2.2) (+ cell 4.4) (+ cell 4.4) :rx 11
                    :fill "none" :stroke (takuzu--c :ink)
@@ -475,7 +490,9 @@ top-left with a hard specular flash on that corner's arc."
                                        (- sx 0.8) (+ sy 9)
                                        (+ sx 9) (- sy 0.8)))
                       (cons 'fill "none")
-                      (cons 'stroke (takuzu--c :cursor-spark))
+                      (cons 'stroke (takuzu--c (if (eq takuzu-coin-skin 'lamp)
+                                                   :cursor-spark
+                                                 :cursor-iron-spark)))
                       (cons 'stroke-opacity "0.9")
                       (cons 'stroke-width "1.4")
                       (cons 'stroke-linecap "round"))))
