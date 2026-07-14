@@ -679,7 +679,9 @@ function drawSkinSelector(svg, cx, fy) {
     line(svg, wx + 1.5, ly + 1, wx + 9.5, ly + 1, { stroke: c("white"), "stroke-opacity": 0.10, "stroke-width": 0.8 });
   }
   legendGlyph(svg, wx + 16, fy + 28, 10, "W", c("gold"), true);
-  txt(svg, cx, fy + 48, state.coinSkin.toUpperCase(), 8, c("dim"), "middle");
+  // the default lamp skin goes unnamed, like factory hardware before any swap
+  if (state.coinSkin !== "lamp")
+    txt(svg, cx, fy + 48, state.coinSkin.toUpperCase(), 8, c("dim"), "middle");
 }
 
 // The cursor: a machined brass bezel ring seated on the socket rim, catching

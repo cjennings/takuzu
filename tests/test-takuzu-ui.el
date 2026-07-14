@@ -1366,7 +1366,11 @@ iron instead."
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
         (should (member (cdr case) texts))
-        (should (member "COIN" texts))))))
+        (should (member "COIN" texts))
+        ;; the default skin shows no name on the drum; the others do
+        (if (eq (car case) 'lamp)
+            (should-not (member "LAMP" texts))
+          (should (member (upcase (symbol-name (car case))) texts)))))))
 
 (provide 'test-takuzu-ui)
 ;;; test-takuzu-ui.el ends here

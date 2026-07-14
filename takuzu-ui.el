@@ -433,10 +433,12 @@ beside it with the key that turns it, and the skin's name reads underneath."
                   :stroke (takuzu--c :ink) :stroke-opacity 0.55 :stroke-width 1)
         (svg-line svg (+ wx 1.5) (1+ ly) (+ wx 9.5) (1+ ly)
                   :stroke (takuzu--c :white) :stroke-opacity 0.10 :stroke-width 0.8)))
-    ;; the key that turns the wheel, and the skin on the drum
+    ;; the key that turns the wheel, and the skin on the drum -- the default
+    ;; lamp skin goes unnamed, like factory hardware before any swap
     (takuzu--legend-glyph svg (+ wx 16) (+ fy 28) 10 "W" (takuzu--c :gold) t)
-    (takuzu--txt svg cx (+ fy 48) (upcase (symbol-name takuzu-coin-skin))
-                 8 (takuzu--c :dim) "middle")))
+    (unless (eq takuzu-coin-skin 'lamp)
+      (takuzu--txt svg cx (+ fy 48) (upcase (symbol-name takuzu-coin-skin))
+                   8 (takuzu--c :dim) "middle"))))
 
 (defun takuzu--draw-cursor-bezel (svg sx sy cell)
   "Draw the cursor on SVG as a machined brass bezel ring on the socket rim.
