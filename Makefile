@@ -11,12 +11,15 @@ COVERAGE_SUMMARY ?= .claude/scripts/coverage-summary.el
 # Run the full ERT suite headless.
 test:
 	$(EMACS) -Q --batch -L . -L tests \
+	  --eval '(setq load-prefer-newer t)' \
 	  $(foreach t,$(TESTS),-l $(t)) \
 	  -f ert-run-tests-batch-and-exit
 
 # Run one test file: make test-file FILE=tests/test-takuzu-board.el
 test-file:
-	$(EMACS) -Q --batch -L . -L tests -l $(FILE) \
+	$(EMACS) -Q --batch -L . -L tests \
+	  --eval '(setq load-prefer-newer t)' \
+	  -l $(FILE) \
 	  -f ert-run-tests-batch-and-exit
 
 # Byte-compile all sources, warnings are errors.

@@ -65,5 +65,16 @@ Components integrated:
           (with-current-buffer b (ignore-errors (takuzu--cleanup)))
           (ignore-errors (kill-buffer b)))))))
 
+(ert-deftest test-takuzu-make-test-prefers-newer-source ()
+  "Error: test targets load newer source instead of stale bytecode."
+  (let* ((root (locate-dominating-file default-directory "Makefile"))
+         (makefile (with-temp-buffer
+                     (insert-file-contents (expand-file-name "Makefile" root))
+                     (buffer-string))))
+    (dolist (target '("test" "test-file"))
+      (should (string-match-p
+               (format "^%s:\n\\(?:\t.*\n\\)*?\t.*load-prefer-newer t" target)
+               makefile)))))
+
 (provide 'test-takuzu)
 ;;; test-takuzu.el ends here
