@@ -9,35 +9,28 @@
 
 (require 'ert)
 (require 'takuzu-stats)
+(require 'testutil-takuzu)
 
 ;; Belt and suspenders alongside the per-test binding: a future test that
-;; forgets `test-takuzu-stats--with-file' still can't touch the real file.
+;; forgets `takuzu-testutil-with-stats-file' still can't touch the real file.
 (setq takuzu-stats-file (make-temp-file "takuzu-stats-suite-" nil ".eld"))
-
-(defmacro test-takuzu-stats--with-file (&rest body)
-  "Run BODY with `takuzu-stats-file' bound to a fresh temp path, cleaned after."
-  (declare (indent 0))
-  `(let ((takuzu-stats-file (make-temp-file "takuzu-stats-" nil ".eld")))
-     (unwind-protect
-         (progn (delete-file takuzu-stats-file) ,@body)
-       (ignore-errors (delete-file takuzu-stats-file)))))
 
 ;; --- load / save ---
 
 (ert-deftest test-takuzu-stats-load-missing-file-empty ()
   "Boundary: a missing stats file loads as empty stats."
-  (test-takuzu-stats--with-file
+  (takuzu-testutil-with-stats-file
     (should (null (takuzu-stats-load)))))
 
 (ert-deftest test-takuzu-stats-load-corrupt-file-empty ()
   "Error: a corrupt stats file loads as empty stats instead of erroring."
-  (test-takuzu-stats--with-file
+  (takuzu-testutil-with-stats-file
     (with-temp-file takuzu-stats-file (insert "(((4 . easy"))
     (should (null (takuzu-stats-load)))))
 
 (ert-deftest test-takuzu-stats-save-load-round-trip ()
   "Normal: saved stats read back structurally equal."
-  (test-takuzu-stats--with-file
+  (takuzu-testutil-with-stats-file
     (let ((stats '(((6 . medium) :wins 2 :losses 1 :best 133))))
       (takuzu-stats-save stats)
       (should (equal (takuzu-stats-load) stats)))))
@@ -46,7 +39,7 @@
 
 (ert-deftest test-takuzu-stats-record-first-win ()
   "Normal: the first win creates the entry with a best time."
-  (test-takuzu-stats--with-file
+  (takuzu-testutil-with-stats-file
     (takuzu-stats-record 6 'medium 'win 90)
     (let ((entry (takuzu-stats-entry (takuzu-stats-load) 6 'medium)))
       (should (= (plist-get entry :wins) 1))
@@ -55,7 +48,7 @@
 
 (ert-deftest test-takuzu-stats-record-loss-keeps-best-unset ()
   "Normal: a loss increments losses and never sets a best time."
-  (test-takuzu-stats--with-file
+  (takuzu-testutil-with-stats-file
     (takuzu-stats-record 4 'easy 'loss 45)
     (let ((entry (takuzu-stats-entry (takuzu-stats-load) 4 'easy)))
       (should (= (plist-get entry :wins) 0))
@@ -64,7 +57,7 @@
 
 (ert-deftest test-takuzu-stats-record-best-is-minimum ()
   "Normal: a slower second win keeps the faster best; a faster one replaces it."
-  (test-takuzu-stats--with-file
+  (takuzu-testutil-with-stats-file
     (takuzu-stats-record 6 'hard 'win 120)
     (takuzu-stats-record 6 'hard 'win 200)
     (should (= (plist-get (takuzu-stats-entry (takuzu-stats-load) 6 'hard) :best) 120))
@@ -75,7 +68,7 @@
 
 (ert-deftest test-takuzu-stats-record-loss-then-win-sets-best ()
   "Boundary: a win after losses sets the entry's first best time."
-  (test-takuzu-stats--with-file
+  (takuzu-testutil-with-stats-file
     (takuzu-stats-record 8 'medium 'loss 30)
     (takuzu-stats-record 8 'medium 'win 210)
     (let ((entry (takuzu-stats-entry (takuzu-stats-load) 8 'medium)))
@@ -85,13 +78,13 @@
 
 (ert-deftest test-takuzu-stats-record-zero-second-win ()
   "Boundary: a zero-second elapsed still records as a valid best."
-  (test-takuzu-stats--with-file
+  (takuzu-testutil-with-stats-file
     (takuzu-stats-record 4 'easy 'win 0)
     (should (= (plist-get (takuzu-stats-entry (takuzu-stats-load) 4 'easy) :best) 0))))
 
 (ert-deftest test-takuzu-stats-record-separate-keys ()
   "Normal: size/grade pairs tally independently."
-  (test-takuzu-stats--with-file
+  (takuzu-testutil-with-stats-file
     (takuzu-stats-record 4 'easy 'win 10)
     (takuzu-stats-record 6 'easy 'loss 20)
     (takuzu-stats-record 4 'hard 'win 30)

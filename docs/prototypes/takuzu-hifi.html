@@ -457,23 +457,38 @@ const state = {
   pendingStart: false,
   difficulty: null,
   help: false,
-  coinSkin: "lamp",   // mirror of takuzu-coin-skin
+  coinSkin: "pierced", // mirror of takuzu-coin-skin (pierced is the default)
 };
 
-const COIN_SKINS = ["lamp", "jewel", "compass", "guilloche", "cross", "pierced",
-                    "scallop", "bimetal", "cash", "matrix", "split", "rosette",
-                    "machined"];
+// the two favourites lead: pierced (the default) at 01, cash at 02
+const COIN_SKINS = ["pierced", "cash", "lamp", "jewel", "compass", "guilloche",
+                    "cross", "scallop", "bimetal", "matrix", "gems", "split",
+                    "rosette", "machined"];
 
 // --- the struck-metal engine (mirror of takuzu--coin-metal-tones etc.) ---
 
+// every ramp drawn from the Dupre (WIP) theme palette, so the coins sit in
+// the faceplate's own colour world (copper rides the terracotta ramp -- real
+// copper is red-brown, not orange)
 const COIN_METAL = {
-  silver:   ["#f4f6f8", "#dfe3e7", "#aab0b7", "#62676e"],
-  nickel:   ["#eef1f3", "#c9ced4", "#99a0a8", "#565c63"],
-  gold:     ["#f8e7ae", "#e8cd76", "#b99640", "#6d5520"],
-  copper:   ["#f4c193", "#d99a5e", "#b87333", "#6f4218"],
-  iron:     ["#8e949b", "#5a5f66", "#33363b", "#191b1e"],
-  bronze:   ["#e0b184", "#c89858", "#8c6a3f", "#4e3319"],
-  gunmetal: ["#7f868e", "#565d66", "#363b42", "#1d2024"],
+  silver:   ["#edeff1", "#cbd0d6", "#a9b2bb", "#53575c"],
+  nickel:   ["#dce0e3", "#bac1c8", "#8e919a", "#4a4b4f"],
+  gold:     ["#eddba7", "#dab53d", "#ab8d2e", "#544412"],
+  copper:   ["#cb8b7a", "#cb6b4d", "#a85b42", "#482c23"],
+  iron:     ["#8e919a", "#606267", "#363638", "#100f0f"],
+  bronze:   ["#e0c266", "#ab8d2e", "#7e671f", "#2d2306"],
+  gunmetal: ["#788da6", "#54677d", "#303842", "#202327"],
+};
+
+// gem cuts for the gems skin (amethyst/topaz/aqua from the Dupre ramps)
+const COIN_GEM = {
+  ruby:     ["#e05a70", "#a81e3c", "#5c0f22"],
+  sapphire: ["#6f8fd6", "#2b4d92", "#142a55"],
+  emerald:  ["#5fc98e", "#1e7a4f", "#0d3d27"],
+  diamond:  ["#ffffff", "#dfe9f0", "#9fb2c2"],
+  amethyst: ["#9f80c9", "#6624a0", "#2f0c4e"],
+  topaz:    ["#e0c266", "#ab8d2e", "#544412"],
+  aqua:     ["#6ba9bd", "#0096b0", "#1d4049"],
 };
 const COIN_LIGHT = new Set(["silver", "nickel", "gold"]);
 const mGlint = m => COIN_METAL[m][0], mHi = m => COIN_METAL[m][1];
@@ -717,8 +732,52 @@ function metalBlank(svg, cx, cy, r, m, given) {
   circle(svg, cx, cy, r, { fill: mfill(m), stroke: c("ink"), "stroke-width": 0.7, "stroke-opacity": 0.8 });
   circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(m), "stroke-width": r * 0.09 });
   circle(svg, cx, cy, r - r * 0.10, { fill: "none", stroke: mDeep(m), "stroke-width": 0.6, "stroke-opacity": 0.5 });
+  // faint turning rings keep the field from reading as smooth plastic
+  for (const k of [0.62, 0.40]) {
+    circle(svg, cx, cy, r * k, { fill: "none", stroke: mDeep(m), "stroke-opacity": 0.22, "stroke-width": 0.6 });
+    circle(svg, cx, cy, r * k - 0.8, { fill: "none", stroke: mGlint(m), "stroke-opacity": 0.12, "stroke-width": 0.5 });
+  }
   metalSheen(svg, cx, cy, r);
   if (given) metalGivenRing(svg, cx, cy, r, m);
+}
+
+// GEMS -- multicolour stones set in precious metal (silver for 0, gold for 1)
+function ensureGem(svg, gem) {
+  if (!svg.gems) svg.gems = new Set();
+  if (svg.gems.has(gem)) return;
+  svg.gems.add(gem);
+  const [hi2, base2, deep2] = COIN_GEM[gem];
+  svg.push(`<radialGradient id="takuzu-gem-${gem}" cx="0.35" cy="0.30" r="0.9">`
+    + `<stop offset="0" stop-color="${hi2}"/>`
+    + `<stop offset="0.55" stop-color="${base2}"/>`
+    + `<stop offset="1" stop-color="${deep2}"/>`
+    + `</radialGradient>`);
+}
+const GEMS_LAYOUT = ["ruby", "sapphire", null, "emerald",
+                     null, "diamond", "amethyst", null,
+                     "topaz", null, "ruby", "aqua",
+                     null, "sapphire", null, "diamond"];
+function drawDiscGems(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "gold";
+  metalBlank(svg, cx, cy, r, m, given);
+  const g = r * 0.28, r0 = r * 0.085;
+  for (let i = 0; i < 16; i++) {
+    const gx = cx + ((i % 4) - 1.5) * g, gy = cy + (Math.floor(i / 4) - 1.5) * g;
+    const gem = GEMS_LAYOUT[i];
+    if (gem) {
+      ensureGem(svg, gem);
+      circle(svg, gx, gy, r0 * 1.3, { fill: "none", stroke: mDeep(m), "stroke-width": r0 * 0.35 });
+      circle(svg, gx, gy, r0 * 1.3, { fill: "none", stroke: mGlint(m), "stroke-width": r0 * 0.15, "stroke-opacity": 0.6 });
+      circle(svg, gx, gy, r0, { fill: `url(#takuzu-gem-${gem})` });
+      circle(svg, gx - r0 * 0.3, gy - r0 * 0.35, r0 * 0.28, { fill: c("white"), "fill-opacity": 0.85 });
+    } else {
+      circle(svg, gx, gy, r0 * 0.9, {
+        fill: mDeep(m), "fill-opacity": 0.5, stroke: mDeep(m), "stroke-width": r0 * 0.3,
+      });
+    }
+  }
+  if (given)
+    circle(svg, cx, cy, r * 0.72, { fill: "none", stroke: mFixedInk(m), "stroke-width": 1.2, "stroke-opacity": 0.95 });
 }
 
 // GUILLOCHE -- silver vs gold, engine-turned wave rings
@@ -874,13 +933,13 @@ function drawDiscSplit(svg, cx, cy, r, val, given) {
     const half = Math.sqrt(Math.max(0, r * r * 0.72 - y * y));
     if (half > r * 0.08)
       line(svg, cx - half, cy + y, cx - r * 0.06, cy + y,
-        { stroke: ink, "stroke-opacity": 0.7, "stroke-width": r * 0.03 });
+        { stroke: ink, "stroke-opacity": 0.45, "stroke-width": r * 0.025 });
   }
   for (let x = step; x < r; x += step) {
     const half = Math.sqrt(Math.max(0, r * r * 0.72 - x * x));
     if (half > r * 0.08)
       line(svg, cx + x, cy - half, cx + x, cy + half,
-        { stroke: ink, "stroke-opacity": 0.7, "stroke-width": r * 0.03 });
+        { stroke: ink, "stroke-opacity": 0.45, "stroke-width": r * 0.025 });
   }
   line(svg, cx, cy - r * 0.82, cx, cy + r * 0.82,
     { stroke: given ? mFixedInk(m) : mHi(m), "stroke-width": r * 0.07, "stroke-linecap": "round" });
@@ -937,7 +996,8 @@ const COIN_DRAWERS = {
   jewel: drawDiscJewel, compass: drawDiscCompass, guilloche: drawDiscGuilloche,
   cross: drawDiscCross, pierced: drawDiscPierced, scallop: drawDiscScallop,
   bimetal: drawDiscBimetal, cash: drawDiscCash, matrix: drawDiscMatrix,
-  split: drawDiscSplit, rosette: drawDiscRosette, machined: drawDiscMachined,
+  gems: drawDiscGems, split: drawDiscSplit, rosette: drawDiscRosette,
+  machined: drawDiscMachined,
 };
 function drawDisc(svg, cx, cy, r, val, given) {
   (COIN_DRAWERS[state.coinSkin] || drawDiscLamp)(svg, cx, cy, r, val, given);

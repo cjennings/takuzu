@@ -9,6 +9,7 @@
 
 (require 'ert)
 (require 'takuzu)
+(require 'testutil-takuzu)
 
 ;; Redirect stats writes for the whole batch: the win/prove tests record
 ;; results, and without this every suite and hook run would write the
@@ -1188,17 +1189,10 @@ events get, so the pulse timer must not cut it short."
 
 ;; --- stats wiring ---
 
-(defmacro test-takuzu-ui--with-stats-file (&rest body)
-  "Run BODY with `takuzu-stats-file' bound to a fresh temp path, cleaned after."
-  (declare (indent 0))
-  `(let ((takuzu-stats-file (make-temp-file "takuzu-stats-" nil ".eld")))
-     (unwind-protect
-         (progn (delete-file takuzu-stats-file) ,@body)
-       (ignore-errors (delete-file takuzu-stats-file)))))
 
 (ert-deftest test-takuzu-ui-check-win-records-win ()
   "Normal: completing the board records a win for the puzzle's size and grade."
-  (test-takuzu-ui--with-stats-file
+  (takuzu-testutil-with-stats-file
     (test-takuzu-ui--with-buffer
       (test-takuzu-ui--setup-4 (copy-sequence test-takuzu-ui--solution-4))
       (setq takuzu--grade 'easy)
@@ -1210,7 +1204,7 @@ events get, so the pulse timer must not cut it short."
 
 (ert-deftest test-takuzu-ui-check-win-no-win-records-nothing ()
   "Boundary: an unsolved board records nothing."
-  (test-takuzu-ui--with-stats-file
+  (takuzu-testutil-with-stats-file
     (test-takuzu-ui--with-buffer
       (test-takuzu-ui--setup-4)
       (setq takuzu--grade 'easy)
@@ -1220,7 +1214,7 @@ events get, so the pulse timer must not cut it short."
 
 (ert-deftest test-takuzu-ui-prove-records-loss ()
   "Normal: proving the board records a loss and never a best time."
-  (test-takuzu-ui--with-stats-file
+  (takuzu-testutil-with-stats-file
     (test-takuzu-ui--with-buffer
       (test-takuzu-ui--setup-4)
       (setq takuzu--grade 'medium)
@@ -1234,7 +1228,7 @@ events get, so the pulse timer must not cut it short."
 
 (ert-deftest test-takuzu-ui-prove-declined-records-nothing ()
   "Boundary: declining the prove prompt records nothing."
-  (test-takuzu-ui--with-stats-file
+  (takuzu-testutil-with-stats-file
     (test-takuzu-ui--with-buffer
       (test-takuzu-ui--setup-4)
       (setq takuzu--grade 'medium)
@@ -1246,7 +1240,7 @@ events get, so the pulse timer must not cut it short."
 (ert-deftest test-takuzu-ui-stats-summary ()
   "Normal/Boundary: the summary names the current key and overall totals;
 with no games recorded it says so."
-  (test-takuzu-ui--with-stats-file
+  (takuzu-testutil-with-stats-file
     (test-takuzu-ui--with-buffer
       (test-takuzu-ui--setup-4)
       (setq takuzu--grade 'hard)
@@ -1262,7 +1256,7 @@ with no games recorded it says so."
 
 (ert-deftest test-takuzu-ui-stats-summary-no-grade-overall-only ()
   "Boundary: with no grade yet (armed, nothing generated) only the overall tally shows."
-  (test-takuzu-ui--with-stats-file
+  (takuzu-testutil-with-stats-file
     (test-takuzu-ui--with-buffer
       (test-takuzu-ui--setup-4)
       (setq takuzu--grade nil takuzu--difficulty nil)
@@ -1273,7 +1267,7 @@ with no games recorded it says so."
 
 (ert-deftest test-takuzu-ui-stats-summary-unplayed-key ()
   "Boundary: games on other keys still summarize; the current key shows 0W 0L."
-  (test-takuzu-ui--with-stats-file
+  (takuzu-testutil-with-stats-file
     (test-takuzu-ui--with-buffer
       (test-takuzu-ui--setup-4)
       (setq takuzu--grade 'easy)
@@ -1286,22 +1280,35 @@ with no games recorded it says so."
 ;; --- coin skins ---
 
 (ert-deftest test-takuzu-ui-coin-skin-default-and-set ()
-  "Normal: the skin defcustom defaults to lamp; the skin list has all thirteen."
-  (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'lamp))
+  "Normal: the skin defcustom defaults to pierced; the skin list has all thirteen."
+  (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'pierced))
   (should (equal takuzu--coin-skins
-                 '(lamp jewel compass guilloche cross pierced scallop
-                   bimetal cash matrix split rosette machined))))
+                 '(pierced cash lamp jewel compass guilloche cross
+                   scallop bimetal matrix gems split rosette machined))))
 
 (ert-deftest test-takuzu-ui-cycle-skin-cycles ()
-  "Normal: the skin command walks the whole list and wraps back to lamp."
+  "Normal: the skin command walks the whole list and wraps back around."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (let ((takuzu-coin-skin 'lamp))
+    (let ((takuzu-coin-skin 'pierced))
       (takuzu-cycle-skin)
-      (should (eq takuzu-coin-skin 'jewel))
+      (should (eq takuzu-coin-skin 'cash))
       (dotimes (_ (1- (length takuzu--coin-skins)))
         (takuzu-cycle-skin))
-      (should (eq takuzu-coin-skin 'lamp)))))
+      (should (eq takuzu-coin-skin 'pierced)))))
+
+(ert-deftest test-takuzu-ui-every-skin-has-a-drawer ()
+  "Normal: every skin in the cycle list resolves to a draw function.
+A skin added to the list without a drawer would silently fall back to lamp."
+  (dolist (skin takuzu--coin-skins)
+    (should (functionp (takuzu--coin-skin-drawer skin)))))
+
+(ert-deftest test-takuzu-ui-metal-skins-have-pairs ()
+  "Normal: every registry entry with metals names them from the tone table."
+  (dolist (entry takuzu--coin-skin-registry)
+    (should (functionp (nth 1 entry)))
+    (dolist (m (cddr entry))
+      (when m (should (assq m takuzu--coin-metal-tones))))))
 
 (ert-deftest test-takuzu-ui-all-skins-draw-both-scales ()
   "Normal/Boundary: every skin draws both colours, fixed and placed, at 2x
@@ -1333,6 +1340,28 @@ and at board scale, without error and with visible shapes."
       (let ((svg (svg-create 100 100)))
         (takuzu--draw-disc svg 50 50 r 0 nil)
         (should (>= (length (dom-by-tag svg 'rect)) 2))))))
+
+(ert-deftest test-takuzu-ui-matrix-keeps-its-pellets ()
+  "Normal: the original dot-matrix coin still draws its pellet grid."
+  (let ((takuzu-coin-skin 'matrix)
+        (svg (svg-create 100 100)))
+    (takuzu--draw-disc svg 50 50 33 0 nil)
+    (should (dom-by-id svg "^m-bronze-fill$"))
+    (should (> (length (dom-by-tag svg 'circle)) 16))))
+
+(ert-deftest test-takuzu-ui-gems-pellets-are-jeweled ()
+  "Normal: the gems coin encrusts multicolour gems in a precious metal --
+a silver body for 0, gold for 1, with at least four gem cuts on the face."
+  (let ((takuzu-coin-skin 'gems))
+    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
+      (takuzu--draw-disc c0 50 50 33 0 nil)
+      (takuzu--draw-disc c1 50 50 33 1 nil)
+      (should (dom-by-id c0 "^m-silver-fill$"))
+      (should (dom-by-id c1 "^m-gold-fill$"))
+      (dolist (gem '(ruby sapphire emerald diamond))
+        (should (dom-by-id c0 (format "^takuzu-gem-%s$" gem))))
+      ;; 16 grid positions plus the blank's circles
+      (should (> (length (dom-by-tag c0 'circle)) 16)))))
 
 (ert-deftest test-takuzu-ui-machined-given-knurls ()
   "Normal: a fixed machined coin adds the knurled (dashed) rim."
@@ -1416,7 +1445,7 @@ jewel and compass sets."
   "Normal: the faceplate carries the skin selector with the tape-counter index."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((lamp . "01") (jewel . "02") (compass . "03")))
+    (dolist (case '((pierced . "01") (cash . "02") (lamp . "03")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
         (should (member (cdr case) texts))
