@@ -952,11 +952,12 @@ function drawDiscSovereign(svg, cx, cy, r, val, given) {
 }
 
 // COLLEGIATE -- school colours struck dark: Berkeley blue + gold radial vs
-// Stanford cardinal + silver; user coins flat, fixed carry a white centre
+// Stanford cardinal + silver; user coins flat, fixed carry one matte
+// porcelain dot -- no ring around it, no border ring
 function drawDiscCollegiate(svg, cx, cy, r, val, given) {
   const m = val === 0 ? "berkeley" : "cardinal";
   const accent = val === 0 ? "sunflower" : "silver";
-  metalBlank(svg, cx, cy, r, m, given);
+  metalBlank(svg, cx, cy, r, m, false);
   if (r >= 20)
     for (let i = 0; i < 16; i++) {
       const a = i * 22.5;
@@ -965,9 +966,7 @@ function drawDiscCollegiate(svg, cx, cy, r, val, given) {
         { fill: "none", stroke: COIN_METAL[accent][2], "stroke-opacity": 0.75, "stroke-width": 0.8 });
     }
   if (!given) return;
-  const h = r * 0.28;
-  circle(svg, cx, cy, h, { fill: c("white"), stroke: mDeep(m), "stroke-width": 1.4 });
-  circle(svg, cx, cy, h + 1.8, { fill: "none", stroke: mFixedInk(m), "stroke-width": 1.6 });
+  circle(svg, cx, cy, r * 0.20, { fill: "#fffffb", stroke: mDeep(m), "stroke-width": 0.8 });
 }
 
 // SCALLOP -- iron vs bronze, twelve-lobed planchet with its own lit rim

@@ -791,11 +791,11 @@ gallery, panel 13, iterated live."
   "Draw the collegiate coin of VAL at CX,CY radius R on SVG.
 School colours, struck dark: Berkeley blue with a California-gold
 chrysanthemum for 0, Stanford cardinal with a silver-white one for 1.
-A user coin is a flat face; a FIXED coin carries a white-filled centre
-ringed in the contrast metal."
+A user coin is a flat face; a FIXED coin carries a single matte
+porcelain dot at the centre -- no ring around it, no border ring."
   (let* ((m (takuzu--coin-pair-metal 'collegiate val))
          (accent (if (eql val 0) 'sunflower 'silver)))
-    (takuzu--metal-blank svg cx cy r m given)
+    (takuzu--metal-blank svg cx cy r m nil)
     (when (>= r 20)
       (dotimes (i 16)
         (let* ((a (* i 22.5))
@@ -809,12 +809,9 @@ ringed in the contrast metal."
            'fill "none" 'stroke (takuzu--metal accent 2)
            'stroke-opacity 0.75 'stroke-width 0.8))))
     (when given
-      (let ((h (* r 0.28)))
-        (svg-circle svg cx cy h :fill (takuzu--c :white)
-                    :stroke (takuzu--metal m 3) :stroke-width 1.4)
-        (svg-circle svg cx cy (+ h 1.8) :fill "none"
-                    :stroke (takuzu--metal-fixed-ink m)
-                    :stroke-width 1.6)))))
+      ;; the fixed marking: one matte porcelain dot, nothing else
+      (svg-circle svg cx cy (* r 0.20) :fill "#fffffb"
+                  :stroke (takuzu--metal m 3) :stroke-width 0.8))))
 
 (defun takuzu--scallop-d (cx cy r arc)
   "The scalloped-outline path at CX,CY reach R with lobe arc radius ARC."
