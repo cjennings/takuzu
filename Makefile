@@ -51,9 +51,14 @@ coverage:
 	@$(MAKE) coverage-summary
 
 # Print the per-file table and the unit-weighted project number.
+# The summary script is local dev tooling; without it the raw SimpleCov
+# report still lands at $(COVERAGE_FILE).
 coverage-summary:
 	@if [ ! -f $(COVERAGE_FILE) ]; then \
 	  echo "[!] No coverage file at $(COVERAGE_FILE). Run 'make coverage' first."; exit 1; \
+	fi
+	@if [ ! -f $(COVERAGE_SUMMARY) ]; then \
+	  echo "[i] No summary script at $(COVERAGE_SUMMARY); raw report is $(COVERAGE_FILE)."; exit 0; \
 	fi
 	@$(EMACS) --batch -q -l $(COVERAGE_SUMMARY) \
 	  --eval '(cj/coverage-print-module-summary "$(COVERAGE_FILE)" "." "$(CURDIR)")'
