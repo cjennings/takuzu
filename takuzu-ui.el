@@ -298,7 +298,7 @@ omits it)."
 (defconst takuzu--coin-skin-registry
   '((filigree  takuzu--draw-disc-filigree  silver   pewter)
     (sovereign takuzu--draw-disc-sovereign coal     beech)
-    (pierced   takuzu--draw-disc-pierced   blue     oxblood)
+    (pierced   takuzu--draw-disc-pierced   berkeley cardinal)
     (machined  takuzu--draw-disc-machined  nickel   gold)
     (cash      takuzu--draw-disc-cash      iron     gold)
     (gems      takuzu--draw-disc-gems      silver   gold)
@@ -348,6 +348,8 @@ thumbwheel through it in order."
     (olive    "#98ac86" "#809c50" "#627b2c" "#3f4c23")
     (regal    "#bea9dc" "#8255b5" "#6624a0" "#2f0c4e")
     (oxblood  "#b3676c" "#8f4046" "#6b2e33" "#331417")
+    (berkeley "#7fa3cc" "#3f6b9e" "#003262" "#001830")
+    (cardinal "#cf7a7a" "#ad4646" "#8c1515" "#420808")
     (beech    "#f0dfc4" "#ddc19a" "#c4a377" "#6b5133")
     (coal     "#6e6c68" "#454340" "#252422" "#0b0b0a")
     (sunflower "#ffe3a4" "#ffd274" "#ffc145" "#94691f")
@@ -786,11 +788,13 @@ gallery, panel 13, iterated live."
     (takuzu--metal-sheen svg cx cy r)))
 
 (defun takuzu--draw-disc-pierced (svg cx cy r val given)
-  "Draw the pierced coin of VAL at CX,CY radius R on SVG: blue vs deep
-oxblood, a round hole under a chrysanthemum radial.  The blue body sits a
-step lighter than the old gunmetal so the coin clears the dark sockets."
+  "Draw the pierced coin of VAL at CX,CY radius R on SVG.
+School colours: Berkeley blue with a California-gold chrysanthemum for
+0, Stanford cardinal with a silver-white one for 1.  A user coin is a
+flat face -- no hole, no raised centre; only a FIXED coin is pierced,
+its hole ringed in the contrast metal."
   (let* ((m (takuzu--coin-pair-metal 'pierced val))
-         (ink (takuzu--metal m 3)))
+         (accent (if (eql val 0) 'sunflower 'silver)))
     (takuzu--metal-blank svg cx cy r m given)
     (when (>= r 20)
       (dotimes (i 16)
@@ -802,14 +806,15 @@ step lighter than the old gunmetal so the coin clears the dark sockets."
            svg (format "M %.2f %.2f L %.2f %.2f A %.2f %.2f 0 0 1 %.2f %.2f Z"
                        (car p0) (cdr p0) (car p1) (cdr p1)
                        (* r 0.16) (* r 0.16) (car p2) (cdr p2))
-           'fill "none" 'stroke ink 'stroke-opacity 0.7 'stroke-width 0.8))))
-    (let ((h (* r 0.28)))
-      (svg-circle svg cx cy h :fill (takuzu--c :socket)
-                  :stroke (takuzu--metal m 3) :stroke-width 1.4)
-      (svg-circle svg cx cy (+ h 1.8) :fill "none"
-                  :stroke (if given (takuzu--metal-fixed-ink m) (takuzu--metal m 1))
-                  :stroke-width (if given 1.6 0.9)
-                  :stroke-opacity (if given 1 0.7)))))
+           'fill "none" 'stroke (takuzu--metal accent 2)
+           'stroke-opacity 0.75 'stroke-width 0.8))))
+    (when given
+      (let ((h (* r 0.28)))
+        (svg-circle svg cx cy h :fill (takuzu--c :socket)
+                    :stroke (takuzu--metal m 3) :stroke-width 1.4)
+        (svg-circle svg cx cy (+ h 1.8) :fill "none"
+                    :stroke (takuzu--metal-fixed-ink m)
+                    :stroke-width 1.6)))))
 
 (defun takuzu--scallop-d (cx cy r arc)
   "The scalloped-outline path at CX,CY reach R with lobe arc radius ARC."

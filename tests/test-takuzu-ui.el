@@ -1427,17 +1427,33 @@ coins define exactly four fills and four edges -- shared, not per-coin."
     (should (= (length (dom-by-tag svg 'radialGradient)) 4))
     (should (= (length (dom-by-tag svg 'linearGradient)) 4))))
 
-(ert-deftest test-takuzu-ui-pierced-wears-blue-and-oxblood ()
-  "Normal: the pierced coin lightened off the socket -- blue for 0 instead
-of gunmetal, deep oxblood for 1 instead of gold."
+(ert-deftest test-takuzu-ui-pierced-wears-college-colours ()
+  "Normal: the pierced pair in school colours -- Berkeley blue with gold
+accents for 0, Stanford cardinal with silver accents for 1.  Only a FIXED
+coin is pierced; user coins are flat faces with no centre hole."
   (let ((takuzu-coin-skin 'pierced))
-    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
+    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
+          (fx (svg-create 100 100)))
       (takuzu--draw-disc c0 50 50 33 0 nil)
       (takuzu--draw-disc c1 50 50 33 1 nil)
-      (should (dom-by-id c0 "^m-blue-fill$"))
-      (should-not (dom-by-id c0 "^m-gunmetal-fill$"))
-      (should (dom-by-id c1 "^m-oxblood-fill$"))
-      (should-not (dom-by-id c1 "^m-gold-fill$")))))
+      (takuzu--draw-disc fx 50 50 33 0 t)
+      (should (dom-by-id c0 "^m-berkeley-fill$"))
+      (should (dom-by-id c1 "^m-cardinal-fill$"))
+      ;; the radial engraves in each school's accent
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'stroke) (takuzu--metal 'sunflower 2)))
+                        (dom-by-tag c0 'path)))
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'stroke) (takuzu--metal 'silver 2)))
+                        (dom-by-tag c1 'path)))
+      ;; user coins are flat; only the fixed coin is pierced
+      (dolist (svg (list c0 c1))
+        (should-not (seq-find (lambda (n)
+                                (equal (dom-attr n 'fill) (takuzu--c :socket)))
+                              (dom-by-tag svg 'circle))))
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'fill) (takuzu--c :socket)))
+                        (dom-by-tag fx 'circle))))))
 
 (ert-deftest test-takuzu-ui-bimetal-wears-dupre-colours ()
   "Normal: the bimetal coin strikes the Dupre palette -- a blue ring with a
