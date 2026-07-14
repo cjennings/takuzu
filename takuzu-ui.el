@@ -441,6 +441,7 @@ level position, after the classic amp mode switch."
   (let* ((level (or takuzu--grade takuzu--difficulty))
          (specs '((easy "EASY" -46) (medium "MED" 0) (hard "HARD" 46)))
          (ang (or (nth 2 (assq level specs)) 0))
+         (rot (format "rotate(%d %d %d)" ang cx cy))
          (rad (lambda (a) (* (- a 90) (/ float-pi 180)))))
     ;; position ticks + labels around the sweep
     (dolist (spec specs)
@@ -464,7 +465,7 @@ level position, after the classic amp mode switch."
                                        (+ cx 7.0) (+ cy 6.0) (+ cx 4.0) (+ cy 8.5)
                                        (- cx 4.0) (+ cy 8.5)
                                        (- cx 7.0) (+ cy 6.0) (- cx 6.5) (- cy 3.0)))
-                      (cons 'transform (format "rotate(%d %d %d)" ang cx cy))
+                      (cons 'transform rot)
                       (cons 'fill (takuzu--c :knob-shade))
                       (cons 'stroke (takuzu--c :shadow))
                       (cons 'stroke-width "0.7"))))
@@ -472,7 +473,7 @@ level position, after the classic amp mode switch."
       (dom-node 'line
                 (list (cons 'x1 cx) (cons 'y1 (- cy 19))
                       (cons 'x2 cx) (cons 'y2 (+ cy 5))
-                      (cons 'transform (format "rotate(%d %d %d)" ang cx cy))
+                      (cons 'transform rot)
                       (cons 'stroke (takuzu--c :knob-edge))
                       (cons 'stroke-width "1.4")
                       (cons 'stroke-linecap "round"))))))
