@@ -217,6 +217,32 @@ var TakuzuEngine = (function () {
     return false;
   }
 
+  // Mirror of takuzu-next-hint: the next fillable cell and the technique that
+  // found it, as [r, c, value, technique] with technique "forced",
+  // "hypothesis", or "solution" (taken from solution when neither logic tier
+  // names a cell).  Null when the board has no empty cell (or no technique
+  // applies and solution is null).  b is unchanged.
+  function nextHint(b, n, solution) {
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++)
+        if (b[idx(n, r, c)] == null) {
+          const vals = legalValues(b, n, r, c);
+          if (vals.length === 1) return [r, c, vals[0], "forced"];
+        }
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++)
+        if (b[idx(n, r, c)] == null) {
+          const f = forcedByHypothesis(b, n, r, c);
+          if (f !== "contradiction" && f != null) return [r, c, f, "hypothesis"];
+        }
+    if (solution)
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++)
+          if (b[idx(n, r, c)] == null)
+            return [r, c, solution[idx(n, r, c)], "solution"];
+    return null;
+  }
+
   // easy: propagation alone solves; medium: depth-1 hypothesis; hard: neither.
   function grade(b, n) {
     const w = b.slice();
@@ -309,7 +335,7 @@ var TakuzuEngine = (function () {
     hasTriple, countLegal, lineComplete, completeValid,
     boardLegal, boardFull, boardSolved,
     legalValues, propagate, solutions, countSolutions, solve, isUnique,
-    forcedCell, grade,
+    forcedCell, nextHint, grade,
     fullSolution, generate, makeCarve, carveStep, carveResult,
     parseCells, parseGivens, cellsString,
   };
@@ -372,7 +398,7 @@ const GAP = 6;             // pixels between board cells
 const BPAD = 14;           // board inner padding
 const PPAD = 24;           // faceplate padding
 const STAGE_GAP = 16;      // gap between the board and the right panel
-const PANEL_W = 88;        // right panel width
+const PANEL_W = 100;       // right panel width
 const PANEL_MIN_H = 406;   // minimum instrument-panel height
 const TITLE_H = 78;        // title band height
 const LEGEND_H = 64;       // legend band height
@@ -380,6 +406,8 @@ const EVENT_H = 30;        // event annunciator strip height
 const EVENT_TICK = 0.08;   // seconds between event-lamp pulse frames
 const EVENT_BREATH = 2.8;  // seconds per breathing cycle
 const EVENT_DUR = EVENT_BREATH; // one breath, then dark
+const INVALID_HOLD = 2.0;  // seconds INVALID holds full brightness
+const INVALID_FADE = 0.6;  // seconds INVALID takes to dim after the hold
 const FILL = 0.85;         // fraction of the window the faceplate fills
 const CHAR_ASPECT = 0.62;  // monospace glyph width / font size
 const FLASH_PERIOD = 1.0;  // seconds per on/off cycle of the flashing New key
@@ -443,7 +471,8 @@ function elapsed() {
 
 const flashOnP = () => (Date.now() / 1000) % FLASH_PERIOD < 0.5 * FLASH_PERIOD;
 const refreshInterval = () => Math.max(0.2, Math.min(1.0, FLASH_PERIOD / 2));
-const fmtTime = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+const fmtTime = s =>
+  `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 const curP = (r, cc) => r === state.cursor[0] && cc === state.cursor[1];
 
 function lineBadP(line, n, lines) {
@@ -641,7 +670,7 @@ function drawNixieSize(svg, cx, y, size) {
 
 function drawNixieTime(svg, cx, y) {
   const str = fmtTime(elapsed());
-  const tw = 15, th = 23, g = 3, colw = 7;
+  const tw = 14, th = 23, g = 3, colw = 6;
   let total = 0;
   for (let i = 0; i < str.length; i++)
     total += (str[i] === ":" ? colw : tw) + (i > 0 ? g : 0);
@@ -659,26 +688,38 @@ function drawNixieTime(svg, cx, y) {
   }
 }
 
+// Mirror of takuzu--draw-rotary-level: the LEVEL chicken-head selector.  The
+// tapered bakelite lever is the indicator: its tip aims at the engraved level
+// position, after the classic amp mode switch.
 function drawRotaryLevel(svg, cx, cy) {
-  const r = 19;
   const level = state.grade || state.difficulty;
   const specs = [["easy", "EASY", -46], ["medium", "MED", 0], ["hard", "HARD", 46]];
   const found = specs.find(s => s[0] === level);
   const ang = found ? found[2] : 0;
+  const rot = `rotate(${ang} ${cx} ${cy})`;
   const rad = a => (a - 90) * Math.PI / 180;
-  circle(svg, cx, cy, r, { fill: c("knob"), stroke: c("knob-edge"), "stroke-width": 1 });
-  circle(svg, Math.round(cx - r * 0.3), Math.round(cy - r * 0.3), Math.round(r * 0.5),
-    { fill: c("knob-shade"), "fill-opacity": 0.45 });
-  const a = rad(ang);
-  line(svg, cx, cy, Math.round(cx + (r - 5) * Math.cos(a)), Math.round(cy + (r - 5) * Math.sin(a)),
-    { stroke: c("gold-hi"), "stroke-width": 2, "stroke-linecap": "round" });
+  // position ticks + labels around the sweep
   for (const [lv, lab, deg] of specs) {
     const la = rad(deg);
-    const lx = cx + (r + 12) * Math.cos(la), ly = cy + (r + 12) * Math.sin(la);
+    const lx = cx + 34 * Math.cos(la), ly = cy + 34 * Math.sin(la);
+    const t1x = cx + 26 * Math.cos(la), t1y = cy + 26 * Math.sin(la);
+    const t2x = cx + 23 * Math.cos(la), t2y = cy + 23 * Math.sin(la);
     const on = lv === level;
+    line(svg, Math.round(t1x), Math.round(t1y), Math.round(t2x), Math.round(t2y),
+      { stroke: c("steel"), "stroke-width": 1.2 });
     txt(svg, Math.round(lx), Math.round(ly + 3), lab, 7,
       on ? c("gold-hi") : c("steel"), "middle", on ? "bold" : null);
   }
+  // skirt, then the lever aimed by a rotate transform about the pivot
+  circle(svg, cx, cy, 10, { fill: c("knob"), stroke: c("knob-edge"), "stroke-width": 0.8 });
+  pathEl(svg,
+    `M ${cx} ${(cy - 22).toFixed(1)} L ${(cx + 6.5).toFixed(1)} ${(cy - 3).toFixed(1)} `
+    + `Q ${(cx + 7).toFixed(1)} ${(cy + 6).toFixed(1)} ${(cx + 4).toFixed(1)} ${(cy + 8.5).toFixed(1)} `
+    + `A 5.5 5.5 0 0 1 ${(cx - 4).toFixed(1)} ${(cy + 8.5).toFixed(1)} `
+    + `Q ${(cx - 7).toFixed(1)} ${(cy + 6).toFixed(1)} ${(cx - 6.5).toFixed(1)} ${(cy - 3).toFixed(1)} Z`,
+    { transform: rot, fill: c("knob-shade"), stroke: c("shadow"), "stroke-width": 0.7 });
+  line(svg, cx, cy - 19, cx, cy + 5,
+    { transform: rot, stroke: c("knob-edge"), "stroke-width": 1.4, "stroke-linecap": "round" });
 }
 
 // The needle sweeps left-to-right across the top by pct; value sits below.
@@ -704,7 +745,7 @@ function drawNeedleGauge(svg, cx, cy, r, pct, value) {
 function drawPanel(svg, x, y, h) {
   const w = PANEL_W, cx = x + Math.floor(w / 2);
   const fx = x + 8, fw = w - 16;
-  const timeH = 44, sizeH = 46, levelH = 84, leftH = 62, stateH = 110;
+  const timeH = 44, sizeH = 46, levelH = 84, leftH = 62, stateH = 78;
   const gap = (h - 12 - 8 - timeH - sizeH - levelH - leftH - stateH) / 4;
   let fy = y + 12;
   rect(svg, x, y, w, h, { rx: 10, fill: c("well"), stroke: c("panel-edge") });
@@ -718,7 +759,7 @@ function drawPanel(svg, x, y, h) {
   drawRotaryLevel(svg, cx, Math.round(fy) + 48);
   fy += levelH + gap;
   drawFrame(svg, fx, Math.round(fy), fw, leftH, "LEFT");
-  drawNeedleGauge(svg, cx, Math.round(fy) + 38, 26, fillPct(), emptyCount());
+  drawNeedleGauge(svg, cx, Math.round(fy) + 38, 28, fillPct(), emptyCount());
   fy += leftH + gap;
   drawStateLamps(svg, fx, Math.round(fy), fw, (y + h) - 8 - Math.round(fy));
 }
@@ -734,22 +775,25 @@ function drawJewel(svg, cx, cy, r, color, on) {
   }
 }
 
+// A proven (shown) board counts as solved -- the SOLVED lamp carries the
+// failure in its colour instead of a separate SHOWN state.
 function gameState() {
   if (state.armed) return "ready";
-  if (state.won) return "solved";
-  if (state.proven) return "shown";
+  if (state.won || state.proven) return "solved";
   return "solving";
 }
 
+// READY and SOLVED are steady.  SOLVING follows the flash cycle so the lamp
+// blinks while a game is in play and goes dark once it ends.  SOLVED lights
+// green on a win and red when the solution was proven instead -- a reveal is
+// a failed solve.
 function drawStateLamps(svg, x, y, w, h) {
   drawFrame(svg, x, y, w, h, "STATE");
   const st = gameState();
   const lamps = [
     ["READY", c("lamp-green"), st === "ready"],
-    ["SOLVING", c("lamp-amber"), st === "solving"],
-    ["SOLVED", c("lamp-green"), st === "solved"],
-    ["SHOWN", c("fail"), st === "shown"],
-    ["ASSIST", c("lamp-cyan"), state.assist],
+    ["SOLVING", c("lamp-amber"), st === "solving" && flashOnP()],
+    ["SOLVED", state.proven && !state.won ? c("fail") : c("lamp-green"), st === "solved"],
   ];
   const n = lamps.length, top = y + 16, bot = y + h - 12;
   const rowstep = (bot - top) / (n - 1);
@@ -761,10 +805,22 @@ function drawStateLamps(svg, x, y, w, h) {
   });
 }
 
-// Slow breathing intensity 0..1 of the current event over elapsed time.
+// Seconds the current event lamp stays lit before the pulse timer clears it.
+function eventDuration() {
+  return state.event === "invalid" ? INVALID_HOLD + INVALID_FADE : EVENT_DUR;
+}
+
+// Pulse intensity 0..1 of the current event.  Most events breathe slowly over
+// their elapsed time.  INVALID instead holds full brightness for INVALID_HOLD
+// seconds and then dims over INVALID_FADE -- a steady warning, not a breath.
 function eventIntensity() {
   if (state.eventTime == null) return 0;
   const e = (Date.now() - state.eventTime) / 1000;
+  if (state.event === "invalid") {
+    if (e < INVALID_HOLD) return 1.0;
+    if (e < INVALID_HOLD + INVALID_FADE) return 1.0 - (e - INVALID_HOLD) / INVALID_FADE;
+    return 0;
+  }
   return 0.5 * (1 - Math.cos(2 * Math.PI * e / EVENT_BREATH));
 }
 
@@ -805,12 +861,14 @@ function legendGlyph(svg, cx, y, size, key, color, underline) {
 }
 
 function legendItemWidth(it, charw, kgap) {
-  if (it[0] === "word" || it[0] === "flashword") return it[1].length * charw;
+  if (it[0] === "word" || it[0] === "flashword" || it[0] === "litword")
+    return it[1].length * charw;
   return it[1].length * charw + kgap + it[2].length * charw;
 }
 
 // Items justified across width: (word W) first letter gold-underlined,
-// (flashword W ON) flashing first letter, (keyed K L) key underlined then label.
+// (flashword W ON) flashing first letter, (litword W ON) label lit while on,
+// (keyed K L) key underlined then label.
 function drawLegendLine(svg, x, y, width, size, items) {
   const charw = size * CHAR_ASPECT, kgap = size * 0.4;
   const widths = items.map(it => legendItemWidth(it, charw, kgap));
@@ -828,6 +886,10 @@ function drawLegendLine(svg, x, y, width, size, items) {
       const w = it[1], on = it[2];
       legendGlyph(svg, cx, y, size, w[0], on ? c("gold-hi") : c("steel"), on);
       legendGlyph(svg, cx + charw, y, size, w.slice(1), c("dim"));
+    } else if (it[0] === "litword") {
+      const w = it[1], on = it[2];
+      legendGlyph(svg, cx, y, size, w[0], c("gold"), true);
+      legendGlyph(svg, cx + charw, y, size, w.slice(1), on ? c("lamp-cyan") : c("dim"));
     } else if (it[0] === "keyed") {
       const k = it[1], l = it[2];
       legendGlyph(svg, cx, y, size, k, c("gold"), true);
@@ -855,7 +917,7 @@ function drawLegend(svg, x, y, width) {
   drawEngrave(svg, x, y + 36, width, "PLAY");
   drawLegendLine(svg, x, y + 52, width, 10,
     [["keyed", "SPC", "CYCLE"], ["word", "UNDO"], ["keyed", "?", "HINT"],
-     ["word", "CHECK"], ["word", "ASSIST"]]);
+     ["word", "CHECK"], ["litword", "ASSIST", state.assist]]);
 }
 
 // --- faceplate geometry ---
@@ -996,24 +1058,25 @@ function helpRuleWidget(svg, x, y, kind, d0, d1, fail) {
 }
 
 // Flat black print; only the name is embossed silver, raised off the plate.
+// Each layer is one text element of three tspans, so the browser computes the
+// exact advances and the comma hugs the name (a per-segment CHAR_ASPECT
+// estimate left a stray gap before it).
 function drawHelpDedication(svg, cx, y) {
-  const size = 10, a = size * CHAR_ASPECT;
+  const size = 10;
   const pre = "Dedicated to ", name = "Christine Ciarmello";
   const post = ", with thanks for the inspiration.";
-  const total = pre.length + name.length + post.length;
-  const x0 = cx - (total * a) / 2;
-  const nx = x0 + pre.length * a;
-  const ne = nx + name.length * a;
   const silver = c("spec-name-silver");
-  txt(svg, x0, y, pre, size, c("ink"));
-  const emboss = (yy, fill, opacity) => textEl(svg, nx, yy, name, {
-    "font-family": "monospace", "font-size": size, fill,
-    "fill-opacity": opacity, "text-anchor": "start", "font-weight": "bold",
-  });
-  emboss(y + 1, c("ink"), 0.6);
-  emboss(y - 1, c("white"), 0.85);
-  emboss(y, silver, null);
-  txt(svg, ne, y, post, size, c("ink"));
+  // pre/post ride along transparent in the emboss layers to keep the advance
+  const layer = (yy, nameFill, nameOpacity, edgeOpacity) => svg.push(
+    `<text x="${cx}" y="${yy}" font-family="monospace" font-size="${size}"`
+    + ` text-anchor="middle">`
+    + `<tspan fill="${c("ink")}"${edgeOpacity != null ? ` fill-opacity="${edgeOpacity}"` : ""}>${esc(pre)}</tspan>`
+    + `<tspan fill="${nameFill}"${nameOpacity != null ? ` fill-opacity="${nameOpacity}"` : ""} font-weight="bold">${esc(name)}</tspan>`
+    + `<tspan fill="${c("ink")}"${edgeOpacity != null ? ` fill-opacity="${edgeOpacity}"` : ""}>${esc(post)}</tspan>`
+    + `</text>`);
+  layer(y + 1, c("ink"), 0.6, 0);
+  layer(y - 1, c("white"), 0.85, 0);
+  layer(y, silver, null, null);
 }
 
 // The spec-plate card: frame, plate, header, rules with diagrams, compliance
@@ -1123,7 +1186,7 @@ function signalEvent(event) {
 
 function eventPulse() {
   if (state.eventTime == null
-      || (Date.now() - state.eventTime) / 1000 > EVENT_DUR) {
+      || (Date.now() - state.eventTime) / 1000 > eventDuration()) {
     state.event = null; state.eventTime = null;
     cancelTimer("event");
   }
@@ -1207,18 +1270,23 @@ function undo() {
   redraw();
 }
 
+// Escalates automatically: a forced cell first, then a depth-1 hypothesis
+// cell, and as a last resort a cell taken from the solution, labelled
+// honestly at each tier.
 function hint() {
   if (!playingOnly()) return;
   if (state.won || state.proven) {
     setStatus(MSG_FINISHED);
   } else {
-    const found = E.forcedCell(state.board.cells, state.size);
+    const found = E.nextHint(state.board.cells, state.size, state.solution);
     if (!found) {
-      setStatus("No cell is forced right now -- reason further.", "no-hint");
+      setStatus("No empty cell left to hint.", "no-hint");
     } else {
       state.cursor = [found[0], found[1]];
       setCurrent(found[2]);
-      setStatus("Filled a forced cell.", "hint");
+      setStatus(found[3] === "forced" ? "Filled a forced cell."
+        : found[3] === "hypothesis" ? "Hypothesis hint: only one colour survives here."
+        : "No logic path found -- filled from the solution.", "hint");
     }
   }
   redraw();
@@ -1293,6 +1361,24 @@ function cycleSize() {
   const i = SIZES.indexOf(state.size);
   const next = SIZES[((i < 0 ? 0 : i) + 1) % SIZES.length];
   arm(next, currentDifficulty());
+}
+
+// Mirror of takuzu--digit-size: 4, 6, and 8 pick their size directly; 1 lands
+// on 10 first, then repeated presses toggle 10 and 12.  Deliberately
+// unlabelled on the faceplate -- discoverable by feel, like the arrow keys.
+function digitSize(key) {
+  switch (key) {
+    case "4": return 4;
+    case "6": return 6;
+    case "8": return 8;
+    case "1": return state.size === 10 ? 12 : 10;
+    default: return null;
+  }
+}
+
+function jumpSize(key) {
+  const size = digitSize(key);
+  if (size != null) arm(size, currentDifficulty());
 }
 
 function cycleLevel() {
@@ -1408,6 +1494,7 @@ document.addEventListener("keydown", e => {
     case "n": newGame(); return;
     case "i": help(); return;
     case "q": message("Close the tab to quit."); return;
+    case "1": case "4": case "6": case "8": jumpSize(e.key); return;
   }
 });
 
