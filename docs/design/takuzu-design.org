@@ -4,13 +4,18 @@
 
 * Status
 
-Draft. Designed and initially built in a =.emacs.d= session (2026-07-11) at
-Craig's direction ("build as much as we can"). The engine (board rules, grading
-solver, uniqueness-guaranteeing generator) is pure and built test-first; the
-buffer UI follows and needs live daemon verification.
+Built and shipped. Designed and initially built in a =.emacs.d= session
+(2026-07-11) at Craig's direction ("build as much as we can"); the repo went
+public at =github.com/cjennings/takuzu= on 2026-07-13. Everything below the
+Prototype & deviations section reads as the original plan; the deviations log
+and the repo itself carry what actually landed. As of 2026-07-14 the package
+covers the full v1 scope plus most of Phase 2: escalating hints (forced →
+hypothesis → reveal-from-solution), difficulty tuning, async generation, the
+instrument-console SVG faceplate with a tty fallback, and persistent win/loss
++ best-time stats (=takuzu-stats.el=).
 
 Process: spec → prototype with live adjustments → revise spec → build to match.
-The engine is being built directly since it is headless-verifiable.
+The engine was built directly since it is headless-verifiable.
 
 * Problem
 
@@ -209,13 +214,14 @@ here as they are settled.
   keymaps; the image regenerates per state change. Pipeline validated by jotto's
   librsvg spike on Emacs 30.2.
 
-- *Aesthetic direction is an open pair, still exploring* (2026-07-11). v1 clean
-  skin shipped in the Dupré palette (dark faceplate, blue/terracotta discs, gold
-  cursor, amber readout, tactile buttons). Craig wants two directions explored
-  next: (a) retro stereo hi-fi — VU meters, knobs, dials, gauges, the
-  instrument-console kit; reference =~/code/archsetup/docs/prototypes/2026-07-03-panel-widget-gallery-prototype.html=
-  (Controls, Indicators & readouts, Meters & gauges). (b) a 1950s period look.
-  Treat these as an open pair to compare in HTML before settling.
+- *Aesthetic direction settled: the retro hi-fi instrument console* (2026-07-12).
+  The open pair (retro stereo hi-fi vs a 1950s period look) resolved through the
+  HTML prototype iterations: the instrument-console direction won and shipped —
+  lamp-socket board, nixie TIME/SIZE tubes, chicken-head LEVEL lever, needle
+  LEFT gauge, jewel state lamps, event annunciator, engraved legend, and the
+  brushed-silver spec-plate instructions overlay. The archsetup panel-widget
+  gallery supplied the rotary/nixie patterns. =docs/prototypes/takuzu-hifi.html=
+  is the design-of-record, kept at parity with the Elisp faceplate.
 
 - *Assist is opt-in; no help by default* (2026-07-11). Live rule-break
   highlighting is a selectable help, not the default. A new game shows no
@@ -226,15 +232,21 @@ here as they are settled.
 
 * Open Questions
 
-- [ ] Exact color pair for the two tiles (theme-aware faces).
-- [ ] Cell-cycle order (empty → color-0 → color-1 → empty) and the toggle keys.
-- [ ] Clue-count targets per (size, tier).
-- [ ] Whether to generate async for 12×12 if timings warrant.
-- [ ] Best-times persistence file name/location under emacs-home.
+All of the original open questions resolved in the build:
+
+- [X] Color pair: settled by the instrument-console palette (=takuzu--colors=
+  in =takuzu-ui.el=) — blue/terracotta discs on lamp sockets, not theme faces.
+- [X] Cell-cycle order: empty → 0 → 1 → empty on SPC (=takuzu-cycle=).
+- [X] Clue-count targets: none needed — the one-pass hybrid carve bounds depth
+  by tier, so clue count falls out of the tier.
+- [X] Async generation: yes, for every size — a child =emacs --batch= process
+  with a warm-up pre-generate behind the armed state (=takuzu-async.el=).
+- [X] Best-times persistence: =takuzu-stats.eld= via =locate-user-emacs-file=,
+  wins/losses/best per (size . grade) (=takuzu-stats.el=, 2026-07-14).
 
 * Next Steps
 
-- Build the engine test-first (board → solver → generator), then the UI.
-- Add =modules/takuzu-config.el= wiring in =.emacs.d= once the package loads.
-- Formalize this into =docs/specs/takuzu-spec.org= if/when the project runs
-  spec-create.
+- The size/level selection flow + end-of-game screen (with the won/lost
+  counter's UX placement) is the next design effort — a real spec in
+  =docs/specs/= plus ~5 working prototype directions, tracked in =todo.org=.
+- Released prototype versions hand off to the website project at each tag.
