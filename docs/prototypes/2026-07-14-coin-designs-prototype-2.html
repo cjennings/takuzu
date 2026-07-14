@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Takuzu coin-design gallery v2: industrial metals.  Six directions where
+     the two game colours are two METALS -- iron, copper, steel, brass,
+     gunmetal, bronze, chrome, silver -- one cool/dark and one warm per pair.
+     Each panel shows both metals placed and FIXED at 2x, then a real-scale
+     board strip.  Fixed coins keep their metal's normal look and add one
+     modest machining mark.  Same palette scaffolding as takuzu-hifi.html;
+     librsvg-safe primitives only, so the winner ports 1:1 to svg.el. -->
+<title>Takuzu — Coin Prototypes v2 (Industrial)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 0 60px;
+    display: flex; flex-direction: column; align-items: center;
+    background: #0b0a08; font-family: ui-monospace, Menlo, Consolas, monospace;
+  }
+  #stage svg { display: block; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<script>
+"use strict";
+(function () {
+
+// --- console palette (mirror of takuzu--colors) ---
+
+const COLORS = {
+  "plate": "#1b1710", "plate-edge": "#2c2620", "panel-edge": "#201d17",
+  "well": "#0a0c0d", "board-bg": "#14110c",
+  "socket": "#0c0a07", "socket-edge": "#05040a",
+  "ink": "#000000", "white": "#ffffff",
+  "gold": "#b99640", "gold-hi": "#dcc061", "cream": "#f3e7c5",
+  "steel": "#969385", "dim": "#7c838a", "wash": "#2c2f32",
+  "bezel": "#a8aeb5",
+};
+const c = k => COLORS[k];
+
+// --- the metals: [highlight, base, deep] per finish ---
+
+const METAL = {
+  iron:     ["#6a6e75", "#4a4d52", "#2b2d31"],
+  copper:   ["#d99a5e", "#b87333", "#6f4218"],
+  silver:   ["#e6e9ed", "#b3b8bf", "#767b83"],
+  brass:    ["#dcc061", "#b99640", "#7a5f24"],
+  gunmetal: ["#5c626b", "#3f434a", "#24262b"],
+  bronze:   ["#c89858", "#8c6a3f", "#52381d"],
+  chrome:   ["#f2f5f8", "#c3c9d1", "#7e848d"],
+};
+const hi = m => METAL[m][0], base = m => METAL[m][1], deep = m => METAL[m][2];
+
+// --- svg string helpers ---
+
+const attrs = o => Object.entries(o)
+  .filter(([, v]) => v != null)
+  .map(([k, v]) => ` ${k}="${v}"`).join("");
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const rect = (svg, x, y, w, h, o) => svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}"${attrs(o)}/>`);
+const circle = (svg, cx, cy, r, o) => svg.push(`<circle cx="${cx}" cy="${cy}" r="${r}"${attrs(o)}/>`);
+const ellipse = (svg, cx, cy, rx, ry, o) => svg.push(`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"${attrs(o)}/>`);
+const line = (svg, x1, y1, x2, y2, o) => svg.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${attrs(o)}/>`);
+const pathEl = (svg, d, o) => svg.push(`<path d="${d}"${attrs(o)}/>`);
+const polygon = (svg, pts, o) => svg.push(`<polygon points="${pts.map(p => p.join(",")).join(" ")}"${attrs(o)}/>`);
+function txt(svg, x, y, str, size, color, anchor, weight) {
+  svg.push(`<text x="${x}" y="${y}" font-family="monospace" font-size="${size}"`
+    + ` fill="${color}" text-anchor="${anchor || "start"}"`
+    + ` font-weight="${weight || "normal"}">${esc(str)}</text>`);
+}
+
+// unique gradient ids per coin instance (multi-board id-collision guard)
+let uid = 0;
+const gid = () => `coin2-g${++uid}`;
+
+// a machined-metal radial fill: light catch upper-left, falling to shadow
+function metalFill(svg, m) {
+  const g = gid();
+  svg.push(`<radialGradient id="${g}" cx="0.36" cy="0.30" r="0.95">`
+    + `<stop offset="0" stop-color="${hi(m)}"/>`
+    + `<stop offset="0.5" stop-color="${base(m)}"/>`
+    + `<stop offset="1" stop-color="${deep(m)}"/>`
+    + `</radialGradient>`);
+  return `url(#${g})`;
+}
+
+function socket(svg, sx, sy, cell) {
+  rect(svg, sx, sy, cell, cell, {
+    rx: cell * 0.18, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1,
+  });
+}
+
+// =====================================================================
+// Six industrial directions.  drawCoin(svg, cx, cy, r, val, given);
+// val 0 takes the cool/dark metal, val 1 the warm one.
+// =====================================================================
+
+// 1 CAST SLUG — iron vs copper.  Sand-cast metal: matte, a faint mold ring,
+//   barely any shine.  FIXED: a punched centre mark, dark pit with a lit lip.
+function coinCastSlug(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "iron" : "copper";
+  circle(svg, cx, cy, r, { fill: base(m), stroke: deep(m), "stroke-width": 1.3 });
+  circle(svg, cx, cy, r * 0.80, { fill: "none", stroke: deep(m), "stroke-width": 1, "stroke-opacity": 0.5 });
+  pathEl(svg, `M ${cx - r * 0.55} ${cy - r * 0.30} A ${r * 0.62} ${r * 0.62} 0 0 1 ${cx - r * 0.05} ${cy - r * 0.60}`,
+    { fill: "none", stroke: hi(m), "stroke-opacity": 0.5, "stroke-width": r * 0.10, "stroke-linecap": "round" });
+  if (given) {
+    circle(svg, cx, cy + r * 0.045, r * 0.14, { fill: hi(m), "fill-opacity": 0.8 });
+    circle(svg, cx, cy, r * 0.13, { fill: deep(m), stroke: c("ink"), "stroke-width": 0.6 });
+  }
+}
+
+// 2 MACHINED FACE — silver steel vs brass.  Lathe-turned face: concentric
+//   machining grooves under a hard light catch.  FIXED: a knurled rim, the
+//   grip pattern reading as a dashed ring.
+function coinMachined(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "brass";
+  circle(svg, cx, cy, r, { fill: metalFill(svg, m), stroke: deep(m), "stroke-width": 1.2 });
+  for (const k of [0.78, 0.58, 0.38])
+    circle(svg, cx, cy, r * k, { fill: "none", stroke: deep(m), "stroke-opacity": 0.45, "stroke-width": 0.7 });
+  for (const k of [0.68, 0.48])
+    circle(svg, cx, cy, r * k, { fill: "none", stroke: hi(m), "stroke-opacity": 0.35, "stroke-width": 0.5 });
+  if (given) {
+    const dash = (2 * Math.PI * (r - 1.2)) / 28;
+    circle(svg, cx, cy, r - 1.2, {
+      fill: "none", stroke: c("ink"), "stroke-width": 2.4,
+      "stroke-opacity": 0.55, "stroke-dasharray": `${dash.toFixed(2)} ${dash.toFixed(2)}`,
+    });
+  }
+}
+
+// 3 BALL BEARING — chrome vs copper.  A polished ball seated in the cup:
+//   deep radial shine and a hard specular point.  FIXED: a ground flat on
+//   the crown, the small matte circle a fitter would file for a set screw.
+function coinBearing(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "chrome" : "copper";
+  circle(svg, cx, cy, r, { fill: metalFill(svg, m), stroke: c("ink"), "stroke-width": 0.9 });
+  ellipse(svg, cx - r * 0.32, cy - r * 0.36, r * 0.14, r * 0.09, { fill: c("white"), "fill-opacity": 0.85 });
+  ellipse(svg, cx + r * 0.28, cy + r * 0.42, r * 0.30, r * 0.12, { fill: c("white"), "fill-opacity": 0.10 });
+  if (given) {
+    circle(svg, cx, cy - r * 0.30, r * 0.22, { fill: base(m), stroke: deep(m), "stroke-width": 0.9 });
+    circle(svg, cx, cy - r * 0.30, r * 0.22, { fill: c("ink"), "fill-opacity": 0.15 });
+  }
+}
+
+// 4 HEX NUT — gunmetal vs bronze.  A chamfered hexagonal slug dropped in the
+//   round cup.  FIXED: seated on a thin silver washer that rings the hex.
+function coinHexNut(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "gunmetal" : "bronze";
+  const pts = a0 => Array.from({ length: 6 }, (_, i) => {
+    const a = (a0 + i * 60) * Math.PI / 180;
+    return [(cx + r * Math.cos(a)).toFixed(1), (cy + r * Math.sin(a)).toFixed(1)];
+  });
+  if (given)
+    circle(svg, cx, cy, r * 1.02, { fill: "none", stroke: c("bezel"), "stroke-width": 2 });
+  polygon(svg, pts(0).map(([x, y]) => [x, y]), {
+    fill: metalFill(svg, m), stroke: deep(m), "stroke-width": 1.2, "stroke-linejoin": "round",
+  });
+  // chamfer: an inner hex edge catching the light
+  const inner = Array.from({ length: 6 }, (_, i) => {
+    const a = (i * 60) * Math.PI / 180;
+    return [(cx + r * 0.72 * Math.cos(a)).toFixed(1), (cy + r * 0.72 * Math.sin(a)).toFixed(1)];
+  });
+  polygon(svg, inner, { fill: "none", stroke: hi(m), "stroke-opacity": 0.4, "stroke-width": 0.8, "stroke-linejoin": "round" });
+}
+
+// 5 MEDALLION — silver vs copper.  A struck coin: reeded (milled) edge and a
+//   raised inner rim, mint-fresh.  FIXED: a four-point mint mark at centre.
+function coinMedallion(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "copper";
+  circle(svg, cx, cy, r, { fill: metalFill(svg, m), stroke: deep(m), "stroke-width": 1 });
+  // reeding: fine radial ticks around the rim
+  const seg = (2 * Math.PI * r) / 44;
+  circle(svg, cx, cy, r - 0.9, {
+    fill: "none", stroke: deep(m), "stroke-width": 1.8,
+    "stroke-opacity": 0.7, "stroke-dasharray": `${(seg * 0.45).toFixed(2)} ${(seg * 0.55).toFixed(2)}`,
+  });
+  circle(svg, cx, cy, r * 0.74, { fill: "none", stroke: hi(m), "stroke-opacity": 0.5, "stroke-width": 1 });
+  circle(svg, cx, cy, r * 0.70, { fill: "none", stroke: deep(m), "stroke-opacity": 0.4, "stroke-width": 0.7 });
+  if (given) {
+    const s = r * 0.20;
+    pathEl(svg, `M ${cx} ${cy - s} L ${cx + s * 0.35} ${cy - s * 0.35} L ${cx + s} ${cy} `
+      + `L ${cx + s * 0.35} ${cy + s * 0.35} L ${cx} ${cy + s} L ${cx - s * 0.35} ${cy + s * 0.35} `
+      + `L ${cx - s} ${cy} L ${cx - s * 0.35} ${cy - s * 0.35} Z`,
+      { fill: deep(m), stroke: hi(m), "stroke-width": 0.6, "stroke-opacity": 0.8 });
+  }
+}
+
+// 6 RIVET & SCREW — iron vs copper button heads.  A placed coin is a domed
+//   rivet; FIXED is the same head driven as a screw, a slot milled across
+//   the dome.  Fasteners hold the givens down.
+function coinRivet(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "iron" : "copper";
+  circle(svg, cx, cy, r, { fill: metalFill(svg, m), stroke: deep(m), "stroke-width": 1.2 });
+  ellipse(svg, cx - r * 0.18, cy - r * 0.30, r * 0.34, r * 0.18, { fill: c("white"), "fill-opacity": 0.22 });
+  if (given) {
+    line(svg, cx - r * 0.62, cy, cx + r * 0.62, cy,
+      { stroke: c("ink"), "stroke-width": r * 0.14, "stroke-linecap": "round", "stroke-opacity": 0.75 });
+    line(svg, cx - r * 0.62, cy + r * 0.09, cx + r * 0.62, cy + r * 0.09,
+      { stroke: hi(m), "stroke-width": 1, "stroke-linecap": "round", "stroke-opacity": 0.5 });
+  }
+}
+
+const VARIANTS = [
+  ["1  CAST SLUG", "iron vs copper - fixed: centre punch mark", coinCastSlug],
+  ["2  MACHINED FACE", "steel vs brass - fixed: knurled rim", coinMachined],
+  ["3  BALL BEARING", "chrome vs copper - fixed: ground flat on the crown", coinBearing],
+  ["4  HEX NUT", "gunmetal vs bronze - fixed: silver washer under the hex", coinHexNut],
+  ["5  MEDALLION", "silver vs copper - fixed: mint mark at centre", coinMedallion],
+  ["6  RIVET & SCREW", "iron vs copper - fixed: screw slot across the dome", coinRivet],
+];
+
+// --- panel layout (as v1) ---
+
+const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
+const PANEL_W = 4 * ZCELL + 3 * GAP + 2 * 24;
+const PANEL_H = 264;
+
+function frame(svg, x, y, w, h, label) {
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  rect(svg, x + 3, y + 3, w - 6, h - 6, { rx: 6, fill: "none", stroke: c("wash"), "stroke-width": 1, "stroke-opacity": 0.6 });
+  const lw = label.length * 7 + 10;
+  rect(svg, x + 18, y - 6, lw, 12, { fill: c("plate") });
+  txt(svg, x + 23, y + 3, label, 10, c("cream"), "start", "bold");
+}
+
+function drawVariantPanel(svg, x, y, title, note, drawCoin) {
+  frame(svg, x, y, PANEL_W, PANEL_H, title);
+  txt(svg, x + 23, y + 24, note, 9, c("dim"));
+  const combos = [[0, false], [1, false], [0, true], [1, true]];
+  const labels = ["PLACED", "PLACED", "FIXED", "FIXED"];
+  const rowx = x + 24, rowy = y + 40;
+  combos.forEach(([val, given], i) => {
+    const sx = rowx + i * (ZCELL + GAP);
+    socket(svg, sx, rowy, ZCELL);
+    drawCoin(svg, sx + ZCELL / 2, rowy + ZCELL / 2, Math.round(ZCELL * 0.33), val, given);
+    txt(svg, sx + ZCELL / 2, rowy + ZCELL + 16, labels[i], 8.5,
+      given ? c("gold") : c("steel"), "middle");
+  });
+  const strip = [[0, true], [1, false], [1, true], [0, false], null, [1, false], [0, true], [1, true]];
+  const spanw = strip.length * RCELL + (strip.length - 1) * RGAP + 2 * 12;
+  const bx = x + Math.round((PANEL_W - spanw) / 2), by = rowy + ZCELL + 34;
+  rect(svg, bx, by, spanw, RCELL + 24, { rx: 10, fill: c("board-bg"), stroke: c("ink") });
+  strip.forEach((cellv, i) => {
+    const sx = bx + 12 + i * (RCELL + RGAP), sy = by + 12;
+    socket(svg, sx, sy, RCELL);
+    if (cellv != null)
+      drawCoin(svg, sx + RCELL / 2, sy + RCELL / 2, Math.round(RCELL * 0.33), cellv[0], cellv[1]);
+  });
+  txt(svg, x + PANEL_W - 22, by + RCELL + 36, "AT BOARD SCALE", 8, c("dim"), "end");
+}
+
+// --- page assembly ---
+
+const MARGIN = 34, TITLE_H = 74, VGAP = 26;
+const W = PANEL_W + 2 * MARGIN;
+const H = TITLE_H + VARIANTS.length * (PANEL_H + VGAP) + MARGIN;
+
+const svg = [];
+rect(svg, 0, 0, W, H, { rx: 16, fill: c("plate"), stroke: c("plate-edge") });
+txt(svg, MARGIN, 44, "TAKUZU", 30, c("gold"), "start", "bold");
+txt(svg, MARGIN + 132, 44, "/", 30, c("gold-hi"));
+txt(svg, MARGIN + 152, 32, "COIN PROTOTYPES V2", 11, c("steel"));
+txt(svg, MARGIN + 152, 46, "INDUSTRIAL METALS - IRON, COPPER, SILVER, BRASS", 9, c("dim"));
+txt(svg, W - MARGIN, 32, "2026-07-14", 10, c("steel"), "end");
+
+VARIANTS.forEach(([title, note, fn], i) => {
+  drawVariantPanel(svg, MARGIN, TITLE_H + i * (PANEL_H + VGAP), title, note, fn);
+});
+
+document.getElementById("stage").innerHTML =
+  `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" `
+  + `xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Takuzu coin prototypes v2">`
+  + svg.join("") + `</svg>`;
+
+})();
+</script>
+</body>
+</html>
