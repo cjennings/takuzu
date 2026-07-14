@@ -325,7 +325,8 @@ their own colour."
 (defun takuzu--draw-disc-jewel (svg cx cy r val given)
   "Draw the jewel-dome disc of VAL on SVG at CX,CY radius R.
 A domed pilot-lamp jewel: radial depth and a hard specular catch.
-GIVEN seats a thin brass collar around the jewel."
+GIVEN seats a thin iron collar around the jewel -- brass read as copper
+against the warm jewel, so the collar contrasts in iron instead."
   (let ((id (format "takuzu-coin-jewel-%d" val)))
     (takuzu--ensure-coin-gradient
      svg id 0.38 0.32 0.85
@@ -338,9 +339,9 @@ GIVEN seats a thin brass collar around the jewel."
                  :fill (takuzu--c :white) :fill-opacity 0.55)
     (when given
       (svg-circle svg cx cy (+ r 1.6) :fill "none"
-                  :stroke (takuzu--c :gold) :stroke-width 1.6)
+                  :stroke (takuzu--c :coin-iron-hi) :stroke-width 1.6)
       (svg-circle svg cx cy (+ r 2.6) :fill "none"
-                  :stroke (takuzu--c :gold-hi) :stroke-width 0.6 :stroke-opacity 0.6))))
+                  :stroke (takuzu--c :white) :stroke-width 0.5 :stroke-opacity 0.3))))
 
 (defun takuzu--draw-disc-compass (svg cx cy r val given)
   "Draw the compass-rose medallion of VAL on SVG at CX,CY radius R.
@@ -365,9 +366,9 @@ showcase scale, not board scale).  GIVEN adds a bright silver rim ring."
                 :stroke body-deep :stroke-width 1.2)
     (when given
       (svg-circle svg cx cy (+ r 1.5) :fill "none"
-                  :stroke (takuzu--c :rim-silver) :stroke-width 1.6)
+                  :stroke (takuzu--c :coin-iron-hi) :stroke-width 1.6)
       (svg-circle svg cx cy (+ r 2.6) :fill "none"
-                  :stroke (takuzu--c :white) :stroke-width 0.5 :stroke-opacity 0.35))
+                  :stroke (takuzu--c :white) :stroke-width 0.5 :stroke-opacity 0.3))
     (when detailed
       (let (teeth)
         (dotimes (i 32)

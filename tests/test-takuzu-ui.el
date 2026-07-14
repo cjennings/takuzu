@@ -1310,14 +1310,34 @@ with no games recorded it says so."
         (should (= (length (dom-by-tag svg (car want))) (cdr want)))))))
 
 (ert-deftest test-takuzu-ui-jewel-given-wears-collar ()
-  "Normal: a fixed jewel adds the two brass collar rings."
+  "Normal: a fixed jewel adds the two collar rings, and the collar is iron.
+Brass reads as copper against the warm jewel, so the collar contrasts in
+iron instead."
   (let ((takuzu-coin-skin 'jewel))
     (let ((plain (svg-create 100 100)) (fixed (svg-create 100 100)))
       (takuzu--draw-disc plain 50 50 33 1 nil)
       (takuzu--draw-disc fixed 50 50 33 1 t)
       (should (= (- (length (dom-by-tag fixed 'circle))
                     (length (dom-by-tag plain 'circle)))
-                 2)))))
+                 2))
+      (should (seq-find (lambda (node)
+                          (equal (dom-attr node 'stroke)
+                                 (takuzu--c :coin-iron-hi)))
+                        (dom-by-tag fixed 'circle))))))
+
+(ert-deftest test-takuzu-ui-compass-given-wears-iron-rim ()
+  "Normal: a fixed compass medallion rings in iron, not silver."
+  (let ((takuzu-coin-skin 'compass))
+    (let ((fixed (svg-create 100 100)))
+      (takuzu--draw-disc fixed 50 50 33 1 t)
+      (should (seq-find (lambda (node)
+                          (equal (dom-attr node 'stroke)
+                                 (takuzu--c :coin-iron-hi)))
+                        (dom-by-tag fixed 'circle)))
+      (should-not (seq-find (lambda (node)
+                              (equal (dom-attr node 'stroke)
+                                     (takuzu--c :rim-silver)))
+                            (dom-by-tag fixed 'circle))))))
 
 (ert-deftest test-takuzu-ui-compass-lod-drops-dentate-at-board-scale ()
   "Boundary: the compass dentate border draws at 2x but not below r=20."
