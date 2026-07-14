@@ -183,11 +183,22 @@ function drawWoodPorcelain(svg, cx, cy, r, val, given) {
 // sunflower dots ride the dark walnut, coal dots ride the pale beech, and
 // the pin is always the core's opposite (coal pin on gold, sunflower pin
 // on coal) so the pinning reads everywhere.  Fixed = the pierced hole.
-function drawWoodSovereign(svg, cx, cy, r, val, given) {
-  const wood = val === 0 ? "walnut" : "beech";
-  const core = val === 0 ? "sunflower" : "coal";
-  const dots = val === 0 ? "sunflower" : "coal";
-  const pin = val === 0 ? "coal" : "sunflower";
+function woodSovereign(specs) {
+  return (svg, cx, cy, r, val, given) =>
+    drawWoodSovereignSpec(svg, cx, cy, r, specs[val], given);
+}
+const drawWoodSovereign = woodSovereign([
+  ["walnut", "sunflower", "sunflower", "coal"],
+  ["beech", "coal", "coal", "sunflower"],
+]);
+// panel 13: coin one rebuilt from colour one's own colours, moved around --
+// coal ring holding a beech heart, sunflower dots riding the coal band
+const drawWoodSovereignInverse = woodSovereign([
+  ["coal", "beech", "sunflower", "coal"],
+  ["beech", "coal", "coal", "sunflower"],
+]);
+function drawWoodSovereignSpec(svg, cx, cy, r, spec, given) {
+  const [wood, core, dots, pin] = spec;
   ensureMat(svg, wood); ensureMat(svg, core);
   circle(svg, cx, cy, r, { fill: mfill(wood), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
   circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.09 });
@@ -250,6 +261,9 @@ const VARIANTS = [
   ["12  SOVEREIGN IN WOOD (10 ITERATED)",
    drawWoodSovereign, null,
    "Sovereign gone wood, accents flipped for contrast. A sunflower heart in dark walnut with sunflower dots riding the band -- the gold pinning now reads -- against a coal heart in pale beech with coal dots. The pin is always the core's opposite: coal on gold, sunflower on coal. Fixed is the pierced hole, matching 11."],
+  ["13  SOVEREIGN INVERSE (12 ITERATED)",
+   drawWoodSovereignInverse, null,
+   "Coin one rebuilt from colour one's own colours, moved around: a coal ring holding a beech heart with sunflower dots riding the dark band, against the unchanged beech ring holding coal. One palette, two arrangements -- a true inverse pair like a matched chess set."],
 ];
 
 const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
