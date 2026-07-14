@@ -296,7 +296,8 @@ omits it)."
 ;; --- coin skins ---
 
 (defconst takuzu--coin-skin-registry
-  '((sovereign takuzu--draw-disc-sovereign coal     beech)
+  '((filigree  takuzu--draw-disc-filigree  silver   pewter)
+    (sovereign takuzu--draw-disc-sovereign coal     beech)
     (pierced   takuzu--draw-disc-pierced   blue     oxblood)
     (machined  takuzu--draw-disc-machined  nickel   gold)
     (cash      takuzu--draw-disc-cash      iron     gold)
@@ -349,7 +350,8 @@ thumbwheel through it in order."
     (oxblood  "#b3676c" "#8f4046" "#6b2e33" "#331417")
     (beech    "#f0dfc4" "#ddc19a" "#c4a377" "#6b5133")
     (coal     "#6e6c68" "#454340" "#252422" "#0b0b0a")
-    (sunflower "#ffe3a4" "#ffd274" "#ffc145" "#94691f"))
+    (sunflower "#ffe3a4" "#ffd274" "#ffc145" "#94691f")
+    (pewter   "#9fa3a7" "#6e7276" "#494c50" "#232527"))
   "Coin metals as (NAME GLINT HI BASE DEEP), light to dark.
 Every ramp is drawn from the Dupre (WIP) theme palette so the coins sit in
 the faceplate's own colour world: silver/nickel from the silver and ground
@@ -708,6 +710,46 @@ GIVEN rings the coin in the contrasting metal."
     (takuzu--draw-rune svg cx cy (* r (if detailed 0.42 0.62))
                        (if (eql val 0) 'tir 'daeg) ink hi 0)
     (when given (takuzu--metal-given-ring svg cx cy r m))))
+
+(defun takuzu--filigree-gem (svg gx gy gr gem m)
+  "Set GEM of radius GR at GX,GY in a collet of metal M on SVG.
+The stone language of the gems skin: a deep collet ring, a glint ring,
+the cabochon's shared gradient, and a hard specular dot."
+  (takuzu--ensure-gem svg gem)
+  (svg-circle svg gx gy (* gr 1.3) :fill "none"
+              :stroke (takuzu--metal m 3) :stroke-width (* gr 0.35))
+  (svg-circle svg gx gy (* gr 1.3) :fill "none"
+              :stroke (takuzu--metal m 0) :stroke-width (* gr 0.15)
+              :stroke-opacity 0.6)
+  (svg-circle svg gx gy gr :fill (format "url(#takuzu-gem-%s)" gem))
+  (svg-circle svg (- gx (* gr 0.3)) (- gy (* gr 0.35)) (* gr 0.28)
+              :fill (takuzu--c :white) :fill-opacity 0.85))
+
+(defun takuzu--draw-disc-filigree (svg cx cy r val given)
+  "Draw the filigree wheel of VAL at CX,CY radius R on SVG.
+Silver for 0, dark pewter for 1: six polished spokes over pierced
+openwork, a multicolour stone at every spoke's end -- ruby, sapphire,
+emerald, amethyst, topaz, aqua around the felloe -- and a diamond at
+the hub.  GIVEN rings in the contrast metal.  From the v6 gallery,
+recoloured to gem variety on the two silver bodies."
+  (let ((m (takuzu--coin-pair-metal 'filigree val))
+        (gems '(ruby sapphire emerald amethyst topaz aqua)))
+    (takuzu--metal-blank svg cx cy r m given)
+    (dotimes (i 6)
+      (let ((p (takuzu--coin-pt cx cy (* r 0.47) (+ (* i 60) 30))))
+        (svg-circle svg (car p) (cdr p) (* r 0.155)
+                    :fill (takuzu--c :socket)
+                    :stroke (takuzu--metal m 3)
+                    :stroke-width (max 0.7 (* r 0.03)))))
+    (dotimes (i 6)
+      (let* ((a (* i 60.0))
+             (s (takuzu--coin-pt cx cy (* r 0.30) a))
+             (e (takuzu--coin-pt cx cy (* r 0.72) a)))
+        (svg-line svg (car s) (cdr s) (car e) (cdr e)
+                  :stroke (takuzu--metal m 1) :stroke-width (* r 0.055)
+                  :stroke-linecap "round")
+        (takuzu--filigree-gem svg (car e) (cdr e) (* r 0.085) (nth i gems) m)))
+    (takuzu--filigree-gem svg cx cy (* r 0.15) 'diamond m)))
 
 (defun takuzu--draw-pierced-recess (svg cx cy r h wood)
   "Cut an open centre of radius H in a WOOD coin at CX,CY radius R on SVG.

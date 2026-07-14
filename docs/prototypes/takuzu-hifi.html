@@ -461,9 +461,9 @@ const state = {
 };
 
 // a new skin always enters at the head (drum 01), shifting the rest down
-const COIN_SKINS = ["sovereign", "pierced", "machined", "cash", "gems", "lamp",
-                    "jewel", "compass", "guilloche", "runic", "scallop",
-                    "bimetal", "matrix", "split", "rosette"];
+const COIN_SKINS = ["filigree", "sovereign", "pierced", "machined", "cash",
+                    "gems", "lamp", "jewel", "compass", "guilloche", "runic",
+                    "scallop", "bimetal", "matrix", "split", "rosette"];
 
 // --- the struck-metal engine (mirror of takuzu--coin-metal-tones etc.) ---
 
@@ -490,6 +490,8 @@ const COIN_METAL = {
   beech:     ["#f0dfc4", "#ddc19a", "#c4a377", "#6b5133"],
   coal:      ["#6e6c68", "#454340", "#252422", "#0b0b0a"],
   sunflower: ["#ffe3a4", "#ffd274", "#ffc145", "#94691f"],
+  // the filigree wheel's dark body
+  pewter:    ["#9fa3a7", "#6e7276", "#494c50", "#232527"],
 };
 
 // gem cuts for the gems skin (amethyst/topaz/aqua from the Dupre ramps)
@@ -891,6 +893,33 @@ function drawDiscRunic(svg, cx, cy, r, val, given) {
   if (given) metalGivenRing(svg, cx, cy, r, m);
 }
 
+// FILIGREE -- silver vs dark pewter wheel: six spokes over pierced
+// openwork, a multicolour stone at every felloe, a diamond at the hub
+function filigreeGem(svg, gx, gy, gr, gem, m) {
+  ensureGem(svg, gem);
+  circle(svg, gx, gy, gr * 1.3, { fill: "none", stroke: mDeep(m), "stroke-width": gr * 0.35 });
+  circle(svg, gx, gy, gr * 1.3, { fill: "none", stroke: mGlint(m), "stroke-width": gr * 0.15, "stroke-opacity": 0.6 });
+  circle(svg, gx, gy, gr, { fill: `url(#takuzu-gem-${gem})` });
+  circle(svg, gx - gr * 0.3, gy - gr * 0.35, gr * 0.28, { fill: c("white"), "fill-opacity": 0.85 });
+}
+const FILIGREE_GEMS = ["ruby", "sapphire", "emerald", "amethyst", "topaz", "aqua"];
+function drawDiscFiligree(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "pewter";
+  metalBlank(svg, cx, cy, r, m, given);
+  for (let i = 0; i < 6; i++) {
+    const [px, py] = coinPt(cx, cy, r * 0.47, i * 60 + 30);
+    circle(svg, px, py, r * 0.155,
+      { fill: c("socket"), stroke: mDeep(m), "stroke-width": Math.max(0.7, r * 0.03) });
+  }
+  for (let i = 0; i < 6; i++) {
+    const [sx, sy] = coinPt(cx, cy, r * 0.30, i * 60);
+    const [ex, ey] = coinPt(cx, cy, r * 0.72, i * 60);
+    line(svg, sx, sy, ex, ey, { stroke: mHi(m), "stroke-width": r * 0.055, "stroke-linecap": "round" });
+    filigreeGem(svg, ex, ey, r * 0.085, FILIGREE_GEMS[i], m);
+  }
+  filigreeGem(svg, cx, cy, r * 0.15, "diamond", m);
+}
+
 // SOVEREIGN -- an inverse wood pair from one palette: coal ring / beech
 // heart vs beech ring / coal heart, sunflower dots on the dark band, pin
 // always the core's opposite.  Fixed = an open ring pierced to the socket,
@@ -1112,6 +1141,7 @@ function drawDiscMachined(svg, cx, cy, r, val, given) {
 
 // Mirror of takuzu--draw-disc: dispatch on the current skin.
 const COIN_DRAWERS = {
+  filigree: drawDiscFiligree,
   sovereign: drawDiscSovereign, jewel: drawDiscJewel, compass: drawDiscCompass,
   guilloche: drawDiscGuilloche, runic: drawDiscRunic, pierced: drawDiscPierced,
   scallop: drawDiscScallop, bimetal: drawDiscBimetal, cash: drawDiscCash,

@@ -1283,8 +1283,30 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to pierced; favourites lead the cycle."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'pierced))
   (should (equal takuzu--coin-skins
-                 '(sovereign pierced machined cash gems lamp jewel compass
-                   guilloche runic scallop bimetal matrix split rosette))))
+                 '(filigree sovereign pierced machined cash gems lamp jewel
+                   compass guilloche runic scallop bimetal matrix split
+                   rosette))))
+
+(ert-deftest test-takuzu-ui-filigree-wheel-gems-and-metals ()
+  "Normal: the filigree wheel is silver for 0, dark pewter for 1, with six
+pierced lights, six spokes, multicolour stones at the felloes, and a
+diamond at the hub."
+  (let ((takuzu-coin-skin 'filigree))
+    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
+      (takuzu--draw-disc c0 50 50 33 0 nil)
+      (takuzu--draw-disc c1 50 50 33 1 nil)
+      (should (dom-by-id c0 "^m-silver-fill$"))
+      (should (dom-by-id c1 "^m-pewter-fill$"))
+      ;; the multicolour setting: every spoke cut defined, diamond at hub
+      (dolist (gem '(ruby sapphire emerald amethyst topaz aqua diamond))
+        (should (dom-by-id c0 (format "^takuzu-gem-%s$" gem))))
+      ;; six spokes and six pierced lights
+      (should (= (length (dom-by-tag c0 'line)) 6))
+      (should (>= (length (seq-filter
+                           (lambda (n)
+                             (equal (dom-attr n 'fill) (takuzu--c :socket)))
+                           (dom-by-tag c0 'circle)))
+                  6)))))
 
 (ert-deftest test-takuzu-ui-sovereign-woods-and-hole ()
   "Normal: the sovereign coin is a coal ring with a beech heart for 0 and
@@ -1555,8 +1577,8 @@ two-piece needle instead of the sixteen rays."
   "Normal: the skin selector shows the tape-counter index and never a name."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((sovereign . "01") (pierced . "02") (machined . "03")
-                    (cash . "04") (gems . "05")))
+    (dolist (case '((filigree . "01") (sovereign . "02") (pierced . "03")
+                    (machined . "04") (cash . "05")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
         (should (member (cdr case) texts))
