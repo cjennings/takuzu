@@ -54,7 +54,7 @@
     ;; coin-skin metals (compass medallions) and the fixed-coin rim
     :coin-iron-hi "#5a5f66" :coin-iron "#33363b" :coin-iron-deep "#1a1c20"
     :coin-copper-hi "#d99a5e" :coin-copper "#b87333" :coin-copper-deep "#6f4218"
-    :rim-silver "#c3c9d1"
+    :rim-silver "#c3c9d1" :rim-iron "#3a3e44"
     ;; nixie tubes
     :amber "#ff9a3c" :amber-off "#3a2a1c" :amber-hi "#ffbf7a"
     :tube-glass "#0b0807" :tube-edge "#2c261d" :tube-halo "#ff8c32"
@@ -293,13 +293,105 @@ omits it)."
 
 (defcustom takuzu-coin-skin 'lamp
   "The coin skin drawn on the board.
-lamp is the shipped matte disc, jewel a domed pilot-lamp jewel, and
-compass an iron-and-copper medallion engraved with a compass rose."
-  :type '(choice (const lamp) (const jewel) (const compass))
+lamp is the shipped matte disc and jewel a domed pilot-lamp jewel; the
+rest are struck-metal coins, each in its own metal pair: compass
+(iron/copper medallion), guilloche (silver/gold engine turning), cross
+\(silver/copper hammered penny), pierced (gunmetal/gold holed coin),
+scallop (iron/bronze lobed planchet), bimetal (silver/gold ring-and-core),
+cash (iron/brass square hole), matrix (bronze/silver pellet grid), split
+\(gunmetal/copper hatched field), rosette (iron/copper stonework), and
+machined (nickel/brass lathe face)."
+  :type '(choice (const lamp) (const jewel) (const compass)
+                 (const guilloche) (const cross) (const pierced)
+                 (const scallop) (const bimetal) (const cash)
+                 (const matrix) (const split) (const rosette)
+                 (const machined))
   :group 'takuzu)
 
-(defconst takuzu--coin-skins '(lamp jewel compass)
+(defconst takuzu--coin-skins
+  '(lamp jewel compass guilloche cross pierced scallop
+    bimetal cash matrix split rosette machined)
   "Skin cycle order for `takuzu-cycle-skin' and the selector counter.")
+
+;; --- the struck-metal engine ---
+
+(defconst takuzu--coin-metal-tones
+  '((silver   "#f4f6f8" "#dfe3e7" "#aab0b7" "#62676e")
+    (nickel   "#eef1f3" "#c9ced4" "#99a0a8" "#565c63")
+    (gold     "#f8e7ae" "#e8cd76" "#b99640" "#6d5520")
+    (copper   "#f4c193" "#d99a5e" "#b87333" "#6f4218")
+    (iron     "#8e949b" "#5a5f66" "#33363b" "#191b1e")
+    (bronze   "#e0b184" "#c89858" "#8c6a3f" "#4e3319")
+    (gunmetal "#7f868e" "#565d66" "#363b42" "#1d2024"))
+  "Coin metals as (NAME GLINT HI BASE DEEP), light to dark.")
+
+(defconst takuzu--coin-light-metals '(silver nickel gold)
+  "Metals light enough that fixed markings contrast in iron, not silver.")
+
+(defun takuzu--metal (m tone)
+  "The colour of metal M at TONE: 0 glint, 1 hi, 2 base, 3 deep."
+  (nth (1+ tone) (assq m takuzu--coin-metal-tones)))
+
+(defun takuzu--metal-fixed-ink (m)
+  "The fixed-coin marking colour that contrasts with metal M."
+  (takuzu--c (if (memq m takuzu--coin-light-metals) :rim-iron :rim-silver)))
+
+(defun takuzu--ensure-metal (svg m)
+  "Define metal M's shared gradients on SVG once: a struck-field radial
+fill (m-M-fill) and a top-lit edge gradient (m-M-edge), both in
+objectBoundingBox units so every coin scales them to itself."
+  (let ((fill-id (format "m-%s-fill" m)))
+    (unless (dom-by-id svg (concat "^" fill-id "$"))
+      (dom-append-child svg
+        (dom-node 'radialGradient
+                  (list (cons 'id fill-id)
+                        (cons 'cx 0.34) (cons 'cy 0.28) (cons 'r 1.05))
+                  (dom-node 'stop (list (cons 'offset 0) (cons 'stop-color (takuzu--metal m 0))))
+                  (dom-node 'stop (list (cons 'offset 0.22) (cons 'stop-color (takuzu--metal m 1))))
+                  (dom-node 'stop (list (cons 'offset 0.62) (cons 'stop-color (takuzu--metal m 2))))
+                  (dom-node 'stop (list (cons 'offset 1) (cons 'stop-color (takuzu--metal m 3))))))
+      (dom-append-child svg
+        (dom-node 'linearGradient
+                  (list (cons 'id (format "m-%s-edge" m))
+                        (cons 'x1 0) (cons 'y1 0) (cons 'x2 0) (cons 'y2 1))
+                  (dom-node 'stop (list (cons 'offset 0) (cons 'stop-color (takuzu--metal m 0))))
+                  (dom-node 'stop (list (cons 'offset 0.5) (cons 'stop-color (takuzu--metal m 2))))
+                  (dom-node 'stop (list (cons 'offset 1) (cons 'stop-color (takuzu--metal m 3)))))))))
+
+(defun takuzu--metal-sheen (svg cx cy r)
+  "Draw the broad sheen and hard specular catch on a coin at CX,CY radius R."
+  (svg-ellipse svg (- cx (* r 0.30)) (- cy (* r 0.34)) (* r 0.34) (* r 0.18)
+               :fill (takuzu--c :white) :fill-opacity 0.18)
+  (svg-ellipse svg (- cx (* r 0.38)) (- cy (* r 0.42)) (* r 0.10) (* r 0.055)
+               :fill (takuzu--c :white) :fill-opacity 0.55))
+
+(defun takuzu--metal-given-ring (svg cx cy r m)
+  "Ring the fixed coin at CX,CY radius R in the metal contrasting with M."
+  (svg-circle svg cx cy (+ r 1.5) :fill "none"
+              :stroke (takuzu--metal-fixed-ink m) :stroke-width 1.6)
+  (svg-circle svg cx cy (+ r 2.6) :fill "none"
+              :stroke (takuzu--c :white) :stroke-width 0.5 :stroke-opacity 0.3))
+
+(defun takuzu--metal-blank (svg cx cy r m given)
+  "Draw a struck blank of metal M at CX,CY radius R: field, lit rim, sheen.
+GIVEN adds the contrast-metal ring."
+  (takuzu--ensure-metal svg m)
+  (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" m)
+              :stroke (takuzu--c :ink) :stroke-width 0.7 :stroke-opacity 0.8)
+  (svg-circle svg cx cy (- r (* r 0.045)) :fill "none"
+              :stroke (format "url(#m-%s-edge)" m) :stroke-width (* r 0.09))
+  (svg-circle svg cx cy (- r (* r 0.10)) :fill "none"
+              :stroke (takuzu--metal m 3) :stroke-width 0.6 :stroke-opacity 0.5)
+  (takuzu--metal-sheen svg cx cy r)
+  (when given (takuzu--metal-given-ring svg cx cy r m)))
+
+(defun takuzu--coin-path (svg d &rest attrs)
+  "Append path D to SVG with ATTRS, a plist of symbol/value pairs."
+  (dom-append-child svg
+    (dom-node 'path
+              (cons (cons 'd d)
+                    (cl-loop for (k v) on attrs by #'cddr
+                             collect (cons k v))))))
 
 (defun takuzu--coin-pt (cx cy rr deg)
   "The point at DEG degrees (12 o'clock = 0) and radius RR around CX,CY."
@@ -402,12 +494,275 @@ showcase scale, not board scale).  GIVEN adds a bright silver rim ring."
     (svg-circle svg cx cy (* r 0.10) :fill body-base
                 :stroke ink :stroke-width (* r 0.04))))
 
+(defun takuzu--draw-disc-guilloche (svg cx cy r val given)
+  "Draw the guilloche coin of VAL at CX,CY radius R on SVG: silver vs gold,
+engine-turned wave rings in a struck field.  GIVEN rings in contrast metal."
+  (let* ((m (if (eql val 0) 'silver 'gold))
+         (ink (takuzu--metal m 3)))
+    (takuzu--metal-blank svg cx cy r m given)
+    (let ((rings (if (>= r 20) '(0.74 0.58 0.42 0.27) '(0.66 0.40)))
+          (ri 0))
+      (dolist (k rings)
+        (let ((n (+ 12 (* ri 4))) (rr (* r k)) (amp (* r 0.05)) (d ""))
+          (dotimes (i (1+ (* n 6)))
+            (let* ((a (/ (* i 360.0) (* n 6)))
+                   (rad (+ rr (* amp (sin (+ (/ (* i float-pi 2 n) (* n 6)) (* ri 1.3))))))
+                   (p (takuzu--coin-pt cx cy rad a)))
+              (setq d (concat d (if (zerop i) "M" "L")
+                              (format " %.2f %.2f " (car p) (cdr p))))))
+          (takuzu--coin-path svg (concat d "Z")
+                             'fill "none" 'stroke ink
+                             'stroke-opacity 0.55 'stroke-width 0.7))
+        (setq ri (1+ ri))))
+    (svg-circle svg cx cy (* r 0.07)
+                :fill (if given (takuzu--metal-fixed-ink m) ink)
+                :fill-opacity 0.9)))
+
+(defun takuzu--draw-disc-cross (svg cx cy r val given)
+  "Draw the long-cross coin of VAL at CX,CY radius R on SVG: silver vs
+copper, a voided cross to the rim with pellet trios in the quarters."
+  (let* ((m (if (eql val 0) 'silver 'copper))
+         (ink (takuzu--metal m 3)))
+    (takuzu--metal-blank svg cx cy r m given)
+    (let ((w (* r 0.13)) (e (* r 0.94)))
+      (dolist (dxy '((1 . 0) (0 . 1)))
+        (let ((dx (car dxy)) (dy (cdr dxy)))
+          (svg-line svg (- cx (* dx e)) (- cy (* dy e)) (+ cx (* dx e)) (+ cy (* dy e))
+                    :stroke ink :stroke-width (* w 2.4) :stroke-opacity 0.9)
+          (svg-line svg (- cx (* dx e)) (- cy (* dy e)) (+ cx (* dx e)) (+ cy (* dy e))
+                    :stroke (takuzu--metal m 2) :stroke-width (* w 0.8)))))
+    (dolist (q '(45 135 225 315))
+      (dolist (spec '((0.42 . 0) (0.58 . -11) (0.58 . 11)))
+        (let ((p (takuzu--coin-pt cx cy (* r (car spec)) (+ q (cdr spec)))))
+          (svg-circle svg (car p) (cdr p) (* r 0.055) :fill (takuzu--metal m 1)))))
+    (when given
+      (svg-circle svg cx cy (* r 0.11) :fill "none"
+                  :stroke (takuzu--metal-fixed-ink m) :stroke-width 1.6))))
+
+(defun takuzu--draw-disc-pierced (svg cx cy r val given)
+  "Draw the pierced coin of VAL at CX,CY radius R on SVG: gunmetal vs gold,
+a round hole under a chrysanthemum radial."
+  (let* ((m (if (eql val 0) 'gunmetal 'gold))
+         (ink (takuzu--metal m 3)))
+    (takuzu--metal-blank svg cx cy r m given)
+    (when (>= r 20)
+      (dotimes (i 16)
+        (let* ((a (* i 22.5))
+               (p0 (takuzu--coin-pt cx cy (* r 0.42) a))
+               (p1 (takuzu--coin-pt cx cy (* r 0.76) (- a 7)))
+               (p2 (takuzu--coin-pt cx cy (* r 0.76) (+ a 7))))
+          (takuzu--coin-path
+           svg (format "M %.2f %.2f L %.2f %.2f A %.2f %.2f 0 0 1 %.2f %.2f Z"
+                       (car p0) (cdr p0) (car p1) (cdr p1)
+                       (* r 0.16) (* r 0.16) (car p2) (cdr p2))
+           'fill "none" 'stroke ink 'stroke-opacity 0.7 'stroke-width 0.8))))
+    (let ((h (* r 0.28)))
+      (svg-circle svg cx cy h :fill (takuzu--c :socket)
+                  :stroke (takuzu--metal m 3) :stroke-width 1.4)
+      (svg-circle svg cx cy (+ h 1.8) :fill "none"
+                  :stroke (if given (takuzu--metal-fixed-ink m) (takuzu--metal m 1))
+                  :stroke-width (if given 1.6 0.9)
+                  :stroke-opacity (if given 1 0.7)))))
+
+(defun takuzu--scallop-d (cx cy r arc)
+  "The scalloped-outline path at CX,CY reach R with lobe arc radius ARC."
+  (let* ((lobes 12)
+         (pts (cl-loop for i below lobes
+                       collect (takuzu--coin-pt cx cy r (+ (/ (* i 360.0) lobes)
+                                                           (/ 180.0 lobes)))))
+         (last (car (last pts)))
+         (d (format "M %.2f %.2f " (car last) (cdr last))))
+    (dolist (p pts)
+      (setq d (concat d (format "A %.2f %.2f 0 0 1 %.2f %.2f " arc arc (car p) (cdr p)))))
+    (concat d "Z")))
+
+(defun takuzu--draw-disc-scallop (svg cx cy r val given)
+  "Draw the scalloped coin of VAL at CX,CY radius R on SVG: iron vs bronze
+on a twelve-lobed planchet with its own lit rim."
+  (let* ((m (if (eql val 0) 'iron 'bronze))
+         (ink (takuzu--metal m 3)))
+    (takuzu--ensure-metal svg m)
+    (takuzu--coin-path svg (takuzu--scallop-d cx cy (* r 0.94) (* r 0.30))
+                       'fill (format "url(#m-%s-fill)" m)
+                       'stroke (if given (takuzu--metal-fixed-ink m) (takuzu--metal m 3))
+                       'stroke-width (if given 1.8 1.1))
+    (takuzu--coin-path svg (takuzu--scallop-d cx cy (* r 0.86) (* r 0.27))
+                       'fill "none" 'stroke (format "url(#m-%s-edge)" m)
+                       'stroke-width (* r 0.07) 'stroke-opacity 0.9)
+    (takuzu--metal-sheen svg cx cy (* r 0.9))
+    (svg-circle svg cx cy (* r 0.58) :fill "none"
+                :stroke ink :stroke-opacity 0.75 :stroke-width (* r 0.04))
+    (dotimes (i 6)
+      (let ((p (takuzu--coin-pt cx cy (* r 0.40) (* i 60))))
+        (svg-circle svg (car p) (cdr p) (* r 0.045) :fill (takuzu--metal m 1))))
+    (svg-circle svg cx cy (* r 0.10) :fill ink :fill-opacity 0.9)))
+
+(defun takuzu--draw-disc-bimetal (svg cx cy r val given)
+  "Draw the bimetallic coin of VAL at CX,CY radius R on SVG: a silver ring
+holding a gold core, mirrored for the other colour."
+  (let* ((ring (if (eql val 0) 'silver 'gold))
+         (core (if (eql val 0) 'gold 'silver)))
+    (takuzu--ensure-metal svg ring)
+    (takuzu--ensure-metal svg core)
+    (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" ring)
+                :stroke (takuzu--c :ink) :stroke-width 0.7 :stroke-opacity 0.8)
+    (svg-circle svg cx cy (- r (* r 0.045)) :fill "none"
+                :stroke (format "url(#m-%s-edge)" ring) :stroke-width (* r 0.09))
+    (svg-circle svg cx cy (* r 0.60) :fill (format "url(#m-%s-fill)" core)
+                :stroke (takuzu--metal ring 3) :stroke-width 1)
+    (svg-circle svg cx cy (* r 0.60) :fill "none"
+                :stroke (format "url(#m-%s-edge)" core)
+                :stroke-width (* r 0.05) :stroke-opacity 0.8)
+    (when (>= r 20)
+      (let ((seg (/ (* 2 float-pi r 0.80) 44)))
+        (svg-circle svg cx cy (* r 0.80) :fill "none"
+                    :stroke (takuzu--metal ring 3)
+                    :stroke-width (* r 0.045) :stroke-opacity 0.55
+                    :stroke-dasharray (format "%.2f %.2f" (* seg 0.4) (* seg 0.6)))))
+    (takuzu--metal-sheen svg cx cy r)
+    (svg-circle svg cx cy (* r 0.06) :fill (takuzu--metal ring 2)
+                :stroke (takuzu--c :ink) :stroke-width 0.5)
+    (when given (takuzu--metal-given-ring svg cx cy r ring))))
+
+(defun takuzu--draw-disc-cash (svg cx cy r val given)
+  "Draw the cash coin of VAL at CX,CY radius R on SVG: iron vs brass with a
+square hole and the cardinal characters T K Z U."
+  (let* ((m (if (eql val 0) 'iron 'gold))
+         (ink (takuzu--metal m 3))
+         (h (* r 0.32)))
+    (takuzu--metal-blank svg cx cy r m given)
+    (svg-rectangle svg (- cx h) (- cy h) (* 2 h) (* 2 h)
+                   :fill (takuzu--c :socket) :stroke (takuzu--metal m 3) :stroke-width 1.4)
+    (svg-rectangle svg (- cx h 2) (- cy h 2) (+ (* 2 h) 4) (+ (* 2 h) 4)
+                   :fill "none"
+                   :stroke (if given (takuzu--metal-fixed-ink m) (takuzu--metal m 1))
+                   :stroke-width (if given 1.6 1))
+    (svg-circle svg cx cy (* r 0.82) :fill "none"
+                :stroke ink :stroke-opacity 0.5 :stroke-width 1)
+    (when (>= r 20)
+      (let ((fs (* r 0.28)))
+        (takuzu--txt svg (round cx) (round (+ (- cy (* r 0.50)) (* fs 0.35))) "T" fs ink "middle" "bold")
+        (takuzu--txt svg (round (+ cx (* r 0.60))) (round (+ cy (* fs 0.35))) "K" fs ink "middle" "bold")
+        (takuzu--txt svg (round cx) (round (+ cy (* r 0.60) (* fs 0.35))) "Z" fs ink "middle" "bold")
+        (takuzu--txt svg (round (- cx (* r 0.60))) (round (+ cy (* fs 0.35))) "U" fs ink "middle" "bold")))))
+
+(defun takuzu--draw-disc-matrix (svg cx cy r val given)
+  "Draw the dot-matrix coin of VAL at CX,CY radius R on SVG: bronze vs
+silver, a legal 4x4 takuzu grid as domed and voided pellets."
+  (let* ((m (if (eql val 0) 'bronze 'silver))
+         (ink (takuzu--metal m 3))
+         (g (* r 0.28)) (r0 (* r 0.08))
+         (grid [0 1 0 1 1 0 1 0 0 1 1 0 1 0 0 1]))
+    (takuzu--metal-blank svg cx cy r m given)
+    (dotimes (i 16)
+      (let ((gx (+ cx (* (- (mod i 4) 1.5) g)))
+            (gy (+ cy (* (- (/ i 4) 1.5) g))))
+        (if (zerop (aref grid i))
+            (progn
+              (svg-circle svg gx gy r0 :fill ink :fill-opacity 0.9)
+              (svg-circle svg (- gx (* r0 0.25)) (- gy (* r0 0.3)) (* r0 0.3)
+                          :fill (takuzu--c :white) :fill-opacity 0.25))
+          (svg-circle svg gx gy r0 :fill "none"
+                      :stroke ink :stroke-width (* r0 0.55) :stroke-opacity 0.9))))
+    (when given
+      (svg-circle svg cx cy (* r 0.70) :fill "none"
+                  :stroke (takuzu--metal-fixed-ink m)
+                  :stroke-width 1.2 :stroke-opacity 0.95))))
+
+(defun takuzu--draw-disc-split (svg cx cy r val given)
+  "Draw the split-field coin of VAL at CX,CY radius R on SVG: gunmetal vs
+copper, horizontal and vertical hatching either side of a raised bar."
+  (let* ((m (if (eql val 0) 'gunmetal 'copper))
+         (ink (takuzu--metal m 3))
+         (step (if (>= r 20) (* r 0.14) (* r 0.24))))
+    (takuzu--metal-blank svg cx cy r m given)
+    (let ((y (+ (- r) step)))
+      (while (< y r)
+        (let ((half (sqrt (max 0 (- (* r r 0.72) (* y y))))))
+          (when (> half (* r 0.08))
+            (svg-line svg (- cx half) (+ cy y) (- cx (* r 0.06)) (+ cy y)
+                      :stroke ink :stroke-opacity 0.7 :stroke-width (* r 0.03))))
+        (setq y (+ y step))))
+    (let ((x step))
+      (while (< x r)
+        (let ((half (sqrt (max 0 (- (* r r 0.72) (* x x))))))
+          (when (> half (* r 0.08))
+            (svg-line svg (+ cx x) (- cy half) (+ cx x) (+ cy half)
+                      :stroke ink :stroke-opacity 0.7 :stroke-width (* r 0.03))))
+        (setq x (+ x step))))
+    (svg-line svg cx (- cy (* r 0.82)) cx (+ cy (* r 0.82))
+              :stroke (if given (takuzu--metal-fixed-ink m) (takuzu--metal m 1))
+              :stroke-width (* r 0.07) :stroke-linecap "round")))
+
+(defun takuzu--draw-disc-rosette (svg cx cy r val given)
+  "Draw the rosette coin of VAL at CX,CY radius R on SVG: iron vs copper,
+the six-petal stonework rosette inside a scalloped band."
+  (let* ((m (if (eql val 0) 'iron 'copper))
+         (ink (takuzu--metal m 3))
+         (detailed (>= r 20))
+         (rr (* r (if detailed 0.48 0.58))))
+    (takuzu--metal-blank svg cx cy r m given)
+    (when detailed
+      (let ((seg (/ (* 2 float-pi r 0.74) 18)))
+        (svg-circle svg cx cy (* r 0.74) :fill "none"
+                    :stroke ink :stroke-opacity 0.7 :stroke-width (* r 0.05)
+                    :stroke-dasharray (format "%.2f %.2f" (* seg 0.62) (* seg 0.38)))))
+    (svg-circle svg cx cy rr :fill "none"
+                :stroke ink :stroke-width (* r 0.045) :stroke-opacity 0.9)
+    (dotimes (i 6)
+      (let ((p (takuzu--coin-pt cx cy (* rr 0.5) (* i 60))))
+        (svg-circle svg (car p) (cdr p) (* rr 0.5) :fill "none"
+                    :stroke ink :stroke-width (* r 0.04) :stroke-opacity 0.9)))
+    (svg-circle svg cx cy (* r 0.045) :fill (takuzu--metal m 1))
+    (dotimes (i 6)
+      (let ((p (takuzu--coin-pt cx cy (* rr 0.82) (+ (* i 60) 30))))
+        (svg-circle svg (car p) (cdr p) (* r 0.028) :fill (takuzu--metal m 1))))
+    (when (and given (not detailed))
+      (svg-circle svg cx cy (* r 0.10) :fill (takuzu--metal-fixed-ink m)))))
+
+(defun takuzu--draw-disc-machined (svg cx cy r val given)
+  "Draw the machined coin of VAL at CX,CY radius R on SVG: nickel vs brass,
+lathe grooves under a sweeping light catch.  GIVEN knurls the rim."
+  (let ((m (if (eql val 0) 'nickel 'gold)))
+    (takuzu--metal-blank svg cx cy r m given)
+    (dolist (k (if (>= r 20) '(0.78 0.68 0.58 0.48 0.38 0.28) '(0.70 0.50 0.30)))
+      (svg-circle svg cx cy (* r k) :fill "none"
+                  :stroke (takuzu--metal m 3) :stroke-opacity 0.5 :stroke-width 0.7)
+      (svg-circle svg cx cy (- (* r k) 0.9) :fill "none"
+                  :stroke (takuzu--metal m 0) :stroke-opacity 0.35 :stroke-width 0.5))
+    (takuzu--coin-path
+     svg (format "M %.2f %.2f A %.2f %.2f 0 0 1 %.2f %.2f"
+                 (- cx (* r 0.58)) (- cy (* r 0.30)) (* r 0.64) (* r 0.64)
+                 (- cx (* r 0.06)) (- cy (* r 0.62)))
+     'fill "none" 'stroke (takuzu--c :white) 'stroke-opacity 0.28
+     'stroke-width (* r 0.16) 'stroke-linecap "round")
+    (svg-circle svg cx cy (* r 0.10) :fill (takuzu--metal m 2)
+                :stroke (takuzu--metal m 3) :stroke-width 0.8)
+    (svg-circle svg (- cx (* r 0.03)) (- cy (* r 0.03)) (* r 0.03)
+                :fill (takuzu--c :white) :fill-opacity 0.6)
+    (when given
+      (let ((dash (/ (* 2 float-pi (- r 1.2)) 30)))
+        (svg-circle svg cx cy (- r 1.2) :fill "none"
+                    :stroke (takuzu--metal-fixed-ink m)
+                    :stroke-width 2.2 :stroke-opacity 0.85
+                    :stroke-dasharray (format "%.2f %.2f" dash dash))))))
+
 (defun takuzu--draw-disc (svg cx cy r val given)
   "Draw the coin for VAL on SVG at CX,CY radius R in the current skin.
 GIVEN draws the skin's fixed-coin marking."
   (pcase takuzu-coin-skin
     ('jewel (takuzu--draw-disc-jewel svg cx cy r val given))
     ('compass (takuzu--draw-disc-compass svg cx cy r val given))
+    ('guilloche (takuzu--draw-disc-guilloche svg cx cy r val given))
+    ('cross (takuzu--draw-disc-cross svg cx cy r val given))
+    ('pierced (takuzu--draw-disc-pierced svg cx cy r val given))
+    ('scallop (takuzu--draw-disc-scallop svg cx cy r val given))
+    ('bimetal (takuzu--draw-disc-bimetal svg cx cy r val given))
+    ('cash (takuzu--draw-disc-cash svg cx cy r val given))
+    ('matrix (takuzu--draw-disc-matrix svg cx cy r val given))
+    ('split (takuzu--draw-disc-split svg cx cy r val given))
+    ('rosette (takuzu--draw-disc-rosette svg cx cy r val given))
+    ('machined (takuzu--draw-disc-machined svg cx cy r val given))
     (_ (takuzu--draw-disc-lamp svg cx cy r val given))))
 
 (defun takuzu-cycle-skin ()

@@ -1282,21 +1282,64 @@ with no games recorded it says so."
 ;; --- coin skins ---
 
 (ert-deftest test-takuzu-ui-coin-skin-default-and-set ()
-  "Normal: the skin defcustom defaults to lamp; the skin list has all three."
+  "Normal: the skin defcustom defaults to lamp; the skin list has all thirteen."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'lamp))
-  (should (equal takuzu--coin-skins '(lamp jewel compass))))
+  (should (equal takuzu--coin-skins
+                 '(lamp jewel compass guilloche cross pierced scallop
+                   bimetal cash matrix split rosette machined))))
 
 (ert-deftest test-takuzu-ui-cycle-skin-cycles ()
-  "Normal: the skin command walks lamp -> jewel -> compass -> lamp."
+  "Normal: the skin command walks the whole list and wraps back to lamp."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
     (let ((takuzu-coin-skin 'lamp))
       (takuzu-cycle-skin)
       (should (eq takuzu-coin-skin 'jewel))
-      (takuzu-cycle-skin)
-      (should (eq takuzu-coin-skin 'compass))
-      (takuzu-cycle-skin)
+      (dotimes (_ (1- (length takuzu--coin-skins)))
+        (takuzu-cycle-skin))
       (should (eq takuzu-coin-skin 'lamp)))))
+
+(ert-deftest test-takuzu-ui-all-skins-draw-both-scales ()
+  "Normal/Boundary: every skin draws both colours, fixed and placed, at 2x
+and at board scale, without error and with visible shapes."
+  (dolist (skin takuzu--coin-skins)
+    (let ((takuzu-coin-skin skin))
+      (dolist (r '(16 33))
+        (dolist (given '(nil t))
+          (let ((svg (svg-create 100 100))
+                (before 0))
+            (setq before (length (dom-children svg)))
+            (takuzu--draw-disc svg 50 50 r 0 given)
+            (takuzu--draw-disc svg 50 50 r 1 given)
+            (should (> (length (dom-children svg)) before))))))))
+
+(ert-deftest test-takuzu-ui-metal-defs-shared-per-metal ()
+  "Boundary: a board of bimetal coins defines each metal's two defs once."
+  (let ((takuzu-coin-skin 'bimetal)
+        (svg (svg-create 200 100)))
+    (dotimes (i 4)
+      (takuzu--draw-disc svg (+ 30 (* i 40)) 50 16 (mod i 2) nil))
+    (should (= (length (dom-by-tag svg 'radialGradient)) 2))
+    (should (= (length (dom-by-tag svg 'linearGradient)) 2))))
+
+(ert-deftest test-takuzu-ui-cash-has-square-hole ()
+  "Normal: the cash coin carries its square hole at both scales."
+  (let ((takuzu-coin-skin 'cash))
+    (dolist (r '(16 33))
+      (let ((svg (svg-create 100 100)))
+        (takuzu--draw-disc svg 50 50 r 0 nil)
+        (should (>= (length (dom-by-tag svg 'rect)) 2))))))
+
+(ert-deftest test-takuzu-ui-machined-given-knurls ()
+  "Normal: a fixed machined coin adds the knurled (dashed) rim."
+  (let ((takuzu-coin-skin 'machined))
+    (let ((plain (svg-create 100 100)) (fixed (svg-create 100 100)))
+      (takuzu--draw-disc plain 50 50 33 0 nil)
+      (takuzu--draw-disc fixed 50 50 33 0 t)
+      (should (seq-find (lambda (node) (dom-attr node 'stroke-dasharray))
+                        (dom-by-tag fixed 'circle)))
+      (should (> (length (dom-by-tag fixed 'circle))
+                 (length (dom-by-tag plain 'circle)))))))
 
 (ert-deftest test-takuzu-ui-draw-disc-dispatches-by-skin ()
   "Normal: each skin draws its signature shapes through the one entry point."

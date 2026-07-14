@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Takuzu coin-design gallery v5: the eight keepers from v4 (guilloche,
+     long cross, pierced, scallop, bimetal, cash, dot matrix, split field)
+     re-rendered as PHYSICAL METAL.  A shared metal engine gives every coin
+     a four-stop struck-field fill, a rim edge lit from above, and a hard
+     specular catch; each skin gets its own metal pair instead of the
+     uniform iron/copper of v3-v4 -- silver, gold, copper, iron, bronze,
+     and gunmetal across the set.  Fixed coins mark in the contrast metal
+     (iron on light bodies, silver on dark).  librsvg-safe primitives only,
+     so this ports 1:1 to svg.el as the in-game skins. -->
+<title>Takuzu — Coin Prototypes v5 (Struck Metal)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 16px 60px;
+    display: flex; flex-direction: column; align-items: center;
+    background: #0b0a08; font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: #969385;
+  }
+  .head { width: 560px; max-width: 100%; margin-bottom: 10px; }
+  .head h1 { margin: 0; font-size: 26px; color: #b99640; font-style: italic; }
+  .head p { margin: 4px 0 0; font-size: 11px; color: #7c838a; }
+  .panel { width: 560px; max-width: 100%; margin-top: 26px; }
+  .panel svg { display: block; width: 100%; height: auto; }
+  .caption {
+    border: 1px solid #201d17; border-top: none; border-radius: 0 0 8px 8px;
+    background: #0a0c0d; padding: 10px 14px 12px; font-size: 11.5px; line-height: 1.5;
+  }
+  .caption .why { color: #969385; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>TAKUZU / COIN PROTOTYPES V5</h1>
+  <p>THE EIGHT KEEPERS, STRUCK IN REAL METAL - PER-SKIN METAL PAIRS</p>
+</div>
+<div id="stage"></div>
+
+<script>
+"use strict";
+(function () {
+
+const COLORS = {
+  "plate": "#1b1710", "plate-edge": "#2c2620", "panel-edge": "#201d17",
+  "well": "#0a0c0d", "board-bg": "#14110c",
+  "socket": "#0c0a07", "socket-edge": "#05040a",
+  "ink": "#000000", "white": "#ffffff",
+  "gold": "#b99640", "cream": "#f3e7c5",
+  "steel": "#969385", "dim": "#7c838a",
+  "rim-silver": "#c3c9d1", "rim-iron": "#3a3e44",
+};
+const c = k => COLORS[k];
+
+// --- the metal engine: [glint, hi, base, deep] per finish ---
+
+const METAL = {
+  silver:   ["#f4f6f8", "#dfe3e7", "#aab0b7", "#62676e"],
+  nickel:   ["#eef1f3", "#c9ced4", "#99a0a8", "#565c63"],
+  gold:     ["#f8e7ae", "#e8cd76", "#b99640", "#6d5520"],
+  copper:   ["#f4c193", "#d99a5e", "#b87333", "#6f4218"],
+  iron:     ["#8e949b", "#5a5f66", "#33363b", "#191b1e"],
+  bronze:   ["#e0b184", "#c89858", "#8c6a3f", "#4e3319"],
+  gunmetal: ["#7f868e", "#565d66", "#363b42", "#1d2024"],
+};
+const LIGHT = new Set(["silver", "nickel", "gold"]);
+const glint = m => METAL[m][0], hi = m => METAL[m][1];
+const base = m => METAL[m][2], deep = m => METAL[m][3];
+// engraving ink on a body: dark on light metals, the metal's own deep otherwise
+const engrave = m => LIGHT.has(m) ? deep(m) : METAL[m][3];
+
+const attrs = o => Object.entries(o)
+  .filter(([, v]) => v != null)
+  .map(([k, v]) => ` ${k}="${v}"`).join("");
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const rect = (svg, x, y, w, h, o) => svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}"${attrs(o)}/>`);
+const circle = (svg, cx, cy, r, o) => svg.push(`<circle cx="${cx}" cy="${cy}" r="${r}"${attrs(o)}/>`);
+const ellipse = (svg, cx, cy, rx, ry, o) => svg.push(`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"${attrs(o)}/>`);
+const line = (svg, x1, y1, x2, y2, o) => svg.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${attrs(o)}/>`);
+const pathEl = (svg, d, o) => svg.push(`<path d="${d}"${attrs(o)}/>`);
+const polygon = (svg, pts, o) => svg.push(`<polygon points="${pts.map(p => p.join(",")).join(" ")}"${attrs(o)}/>`);
+function txt(svg, x, y, str, size, color, anchor, weight) {
+  svg.push(`<text x="${x}" y="${y}" font-family="monospace" font-size="${size}"`
+    + ` fill="${color}" text-anchor="${anchor || "start"}"`
+    + ` font-weight="${weight || "normal"}">${esc(str)}</text>`);
+}
+
+const pt = (cx, cy, rr, deg) => {
+  const a = (deg - 90) * Math.PI / 180;
+  return [+(cx + rr * Math.cos(a)).toFixed(2), +(cy + rr * Math.sin(a)).toFixed(2)];
+};
+
+// shared gradient defs, one per metal per svg: a struck-field radial fill
+// and a top-lit edge gradient for the rim (objectBoundingBox, so every coin
+// scales them to itself)
+function ensureMetal(svg, m) {
+  if (!svg.metals) svg.metals = new Set();
+  if (svg.metals.has(m)) return;
+  svg.metals.add(m);
+  svg.push(`<radialGradient id="m-${m}-fill" cx="0.34" cy="0.28" r="1.05">`
+    + `<stop offset="0" stop-color="${glint(m)}"/>`
+    + `<stop offset="0.22" stop-color="${hi(m)}"/>`
+    + `<stop offset="0.62" stop-color="${base(m)}"/>`
+    + `<stop offset="1" stop-color="${deep(m)}"/>`
+    + `</radialGradient>`
+    + `<linearGradient id="m-${m}-edge" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="${glint(m)}"/>`
+    + `<stop offset="0.5" stop-color="${base(m)}"/>`
+    + `<stop offset="1" stop-color="${deep(m)}"/>`
+    + `</linearGradient>`);
+}
+const mfill = m => `url(#m-${m}-fill)`;
+const medge = m => `url(#m-${m}-edge)`;
+
+// the struck blank: field, raised rim lit from above, hard specular
+function metalBlank(svg, cx, cy, r, m, given) {
+  ensureMetal(svg, m);
+  circle(svg, cx, cy, r, { fill: mfill(m), stroke: c("ink"), "stroke-width": 0.7, "stroke-opacity": 0.8 });
+  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(m), "stroke-width": r * 0.09 });
+  circle(svg, cx, cy, r - r * 0.10, { fill: "none", stroke: deep(m), "stroke-width": 0.6, "stroke-opacity": 0.5 });
+  sheen(svg, cx, cy, r);
+  if (given) givenRing(svg, cx, cy, r, m);
+}
+function sheen(svg, cx, cy, r) {
+  ellipse(svg, cx - r * 0.30, cy - r * 0.34, r * 0.34, r * 0.18,
+    { fill: c("white"), "fill-opacity": 0.18 });
+  ellipse(svg, cx - r * 0.38, cy - r * 0.42, r * 0.10, r * 0.055,
+    { fill: c("white"), "fill-opacity": 0.55 });
+}
+// fixed marking: a ring in the contrast metal (iron on light, silver on dark)
+function givenRing(svg, cx, cy, r, m) {
+  const ring = LIGHT.has(m) ? c("rim-iron") : c("rim-silver");
+  circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: ring, "stroke-width": 1.6 });
+  circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.3 });
+}
+const fixedInk = m => LIGHT.has(m) ? c("rim-iron") : c("rim-silver");
+
+function socket(svg, sx, sy, cell) {
+  rect(svg, sx, sy, cell, cell, {
+    rx: cell * 0.18, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1,
+  });
+}
+
+// =====================================================================
+// The eight skins.  drawCoin(svg, cx, cy, r, val, given); PAIRS[skin]
+// gives (metal for val 0, metal for val 1).
+// =====================================================================
+
+// GUILLOCHE -- silver vs gold, engine-turned wave rings
+function coinGuilloche(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "gold";
+  metalBlank(svg, cx, cy, r, m, given);
+  const ink = engrave(m);
+  const rings = r >= 20 ? [0.74, 0.58, 0.42, 0.27] : [0.66, 0.40];
+  rings.forEach((k, ri) => {
+    const n = 12 + ri * 4, rr = r * k, amp = r * 0.05;
+    let d = "";
+    for (let i = 0; i <= n * 6; i++) {
+      const a = (i * 360) / (n * 6);
+      const rad = rr + amp * Math.sin((i * Math.PI * 2 * n) / (n * 6) + ri * 1.3);
+      const [x, y] = pt(cx, cy, rad, a);
+      d += (i === 0 ? "M" : "L") + ` ${x} ${y} `;
+    }
+    pathEl(svg, d + "Z", { fill: "none", stroke: ink, "stroke-opacity": 0.55, "stroke-width": 0.7 });
+  });
+  circle(svg, cx, cy, r * 0.07, { fill: given ? fixedInk(m) : ink, "fill-opacity": 0.9 });
+}
+
+// LONG CROSS -- silver vs copper, voided cross and pellet trios
+function coinCross(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "copper";
+  metalBlank(svg, cx, cy, r, m, given);
+  const ink = engrave(m);
+  const w = r * 0.13;
+  for (const [dx, dy] of [[1, 0], [0, 1]]) {
+    line(svg, cx - dx * r * 0.94, cy - dy * r * 0.94, cx + dx * r * 0.94, cy + dy * r * 0.94,
+      { stroke: ink, "stroke-width": w * 2.4, "stroke-opacity": 0.9 });
+    line(svg, cx - dx * r * 0.94, cy - dy * r * 0.94, cx + dx * r * 0.94, cy + dy * r * 0.94,
+      { stroke: base(m), "stroke-width": w * 0.8 });
+  }
+  for (const q of [45, 135, 225, 315])
+    for (const [dr, da] of [[0.42, 0], [0.58, -11], [0.58, 11]])
+      circle(svg, ...pt(cx, cy, r * dr, q + da), r * 0.055, { fill: hi(m) });
+  if (given)
+    circle(svg, cx, cy, r * 0.11, { fill: "none", stroke: fixedInk(m), "stroke-width": 1.6 });
+}
+
+// PIERCED -- gunmetal vs gold, round hole and chrysanthemum radial
+function coinPierced(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "gunmetal" : "gold";
+  metalBlank(svg, cx, cy, r, m, given);
+  const ink = engrave(m);
+  if (r >= 20)
+    for (let i = 0; i < 16; i++) {
+      const a = i * 22.5;
+      pathEl(svg, `M ${pt(cx, cy, r * 0.42, a).join(" ")} L ${pt(cx, cy, r * 0.76, a - 7).join(" ")} `
+        + `A ${r * 0.16} ${r * 0.16} 0 0 1 ${pt(cx, cy, r * 0.76, a + 7).join(" ")} Z`,
+        { fill: "none", stroke: ink, "stroke-opacity": 0.7, "stroke-width": 0.8 });
+    }
+  const h = r * 0.28;
+  circle(svg, cx, cy, h, { fill: c("socket"), stroke: deep(m), "stroke-width": 1.4 });
+  circle(svg, cx, cy, h + 1.8, {
+    fill: "none", stroke: given ? fixedInk(m) : hi(m), "stroke-width": given ? 1.6 : 0.9,
+    "stroke-opacity": given ? 1 : 0.7,
+  });
+}
+
+// SCALLOP -- iron vs bronze, twelve-lobed planchet
+function coinScallop(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "iron" : "bronze";
+  ensureMetal(svg, m);
+  const scal = (rr, arc) => {
+    const lobes = 12;
+    const pts = Array.from({ length: lobes }, (_, i) =>
+      pt(cx, cy, rr, (i * 360) / lobes + 180 / lobes));
+    let d = `M ${pts[lobes - 1][0]} ${pts[lobes - 1][1]} `;
+    for (let i = 0; i < lobes; i++)
+      d += `A ${arc} ${arc} 0 0 1 ${pts[i][0]} ${pts[i][1]} `;
+    return d + "Z";
+  };
+  pathEl(svg, scal(r * 0.94, r * 0.30), {
+    fill: mfill(m), stroke: given ? fixedInk(m) : deep(m), "stroke-width": given ? 1.8 : 1.1,
+  });
+  pathEl(svg, scal(r * 0.86, r * 0.27), {
+    fill: "none", stroke: medge(m), "stroke-width": r * 0.07, "stroke-opacity": 0.9,
+  });
+  sheen(svg, cx, cy, r * 0.9);
+  const ink = engrave(m);
+  circle(svg, cx, cy, r * 0.58, { fill: "none", stroke: ink, "stroke-opacity": 0.75, "stroke-width": r * 0.04 });
+  for (let i = 0; i < 6; i++)
+    circle(svg, ...pt(cx, cy, r * 0.40, i * 60), r * 0.045, { fill: hi(m) });
+  circle(svg, cx, cy, r * 0.10, { fill: ink, "fill-opacity": 0.9 });
+}
+
+// BIMETAL -- silver ring with gold core, mirrored for the other colour
+function coinBimetal(svg, cx, cy, r, val, given) {
+  const ring = val === 0 ? "silver" : "gold";
+  const core = val === 0 ? "gold" : "silver";
+  ensureMetal(svg, ring); ensureMetal(svg, core);
+  circle(svg, cx, cy, r, { fill: mfill(ring), stroke: c("ink"), "stroke-width": 0.7, "stroke-opacity": 0.8 });
+  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(ring), "stroke-width": r * 0.09 });
+  circle(svg, cx, cy, r * 0.60, { fill: mfill(core), stroke: deep(ring), "stroke-width": 1 });
+  circle(svg, cx, cy, r * 0.60, { fill: "none", stroke: medge(core), "stroke-width": r * 0.05, "stroke-opacity": 0.8 });
+  if (r >= 20) {
+    const seg = (2 * Math.PI * r * 0.80) / 44;
+    circle(svg, cx, cy, r * 0.80, {
+      fill: "none", stroke: deep(ring), "stroke-width": r * 0.045, "stroke-opacity": 0.55,
+      "stroke-dasharray": `${(seg * 0.4).toFixed(2)} ${(seg * 0.6).toFixed(2)}`,
+    });
+  }
+  sheen(svg, cx, cy, r);
+  circle(svg, cx, cy, r * 0.06, { fill: base(ring), stroke: c("ink"), "stroke-width": 0.5 });
+  if (given) givenRing(svg, cx, cy, r, ring);
+}
+
+// CASH -- iron vs gold, square-holed with cardinal characters
+function coinCash(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "iron" : "gold";
+  metalBlank(svg, cx, cy, r, m, given);
+  const ink = engrave(m);
+  const h = r * 0.32;
+  rect(svg, cx - h, cy - h, 2 * h, 2 * h, { fill: c("socket"), stroke: deep(m), "stroke-width": 1.4 });
+  rect(svg, cx - h - 2, cy - h - 2, 2 * h + 4, 2 * h + 4,
+    { fill: "none", stroke: given ? fixedInk(m) : hi(m), "stroke-width": given ? 1.6 : 1 });
+  circle(svg, cx, cy, r * 0.82, { fill: "none", stroke: ink, "stroke-opacity": 0.5, "stroke-width": 1 });
+  if (r >= 20) {
+    const fs = r * 0.28;
+    txt(svg, cx, cy - r * 0.50 + fs * 0.35, "T", fs, ink, "middle", "bold");
+    txt(svg, cx + r * 0.60, cy + fs * 0.35, "K", fs, ink, "middle", "bold");
+    txt(svg, cx, cy + r * 0.60 + fs * 0.35, "Z", fs, ink, "middle", "bold");
+    txt(svg, cx - r * 0.60, cy + fs * 0.35, "U", fs, ink, "middle", "bold");
+  }
+}
+
+// DOT MATRIX -- bronze vs silver, the game's own grid in raised pellets
+function coinMatrix(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "bronze" : "silver";
+  metalBlank(svg, cx, cy, r, m, given);
+  const ink = engrave(m);
+  const g = r * 0.28, r0 = r * 0.08;
+  const grid = [0, 1, 0, 1,  1, 0, 1, 0,  0, 1, 1, 0,  1, 0, 0, 1];
+  for (let i = 0; i < 16; i++) {
+    const gx = cx + ((i % 4) - 1.5) * g, gy = cy + (Math.floor(i / 4) - 1.5) * g;
+    if (grid[i] === 0) {
+      circle(svg, gx, gy, r0, { fill: ink, "fill-opacity": 0.9 });
+      circle(svg, gx - r0 * 0.25, gy - r0 * 0.3, r0 * 0.3, { fill: c("white"), "fill-opacity": 0.25 });
+    } else {
+      circle(svg, gx, gy, r0, { fill: "none", stroke: ink, "stroke-width": r0 * 0.55, "stroke-opacity": 0.9 });
+    }
+  }
+  if (given)
+    circle(svg, cx, cy, r * 0.70, { fill: "none", stroke: fixedInk(m), "stroke-width": 1.2, "stroke-opacity": 0.95 });
+}
+
+// SPLIT FIELD -- gunmetal vs copper, hatched duality
+function coinSplit(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "gunmetal" : "copper";
+  metalBlank(svg, cx, cy, r, m, given);
+  const ink = engrave(m);
+  const step = r >= 20 ? r * 0.14 : r * 0.24;
+  for (let y = -r + step; y < r; y += step) {
+    const half = Math.sqrt(Math.max(0, r * r * 0.72 - y * y)) ;
+    if (half > r * 0.08)
+      line(svg, cx - half, cy + y, cx - r * 0.06, cy + y,
+        { stroke: ink, "stroke-opacity": 0.7, "stroke-width": r * 0.03 });
+  }
+  for (let x = step; x < r; x += step) {
+    const half = Math.sqrt(Math.max(0, r * r * 0.72 - x * x));
+    if (half > r * 0.08)
+      line(svg, cx + x, cy - half, cx + x, cy + half,
+        { stroke: ink, "stroke-opacity": 0.7, "stroke-width": r * 0.03 });
+  }
+  line(svg, cx, cy - r * 0.82, cx, cy + r * 0.82,
+    { stroke: given ? fixedInk(m) : hi(m), "stroke-width": r * 0.07, "stroke-linecap": "round" });
+}
+
+// ROSETTE -- iron vs copper, the v3 stonework rosette in struck metal
+function coinRosette(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "iron" : "copper";
+  metalBlank(svg, cx, cy, r, m, given);
+  const ink = engrave(m);
+  const detailed = r >= 20;
+  const R = r * (detailed ? 0.48 : 0.58), pr = R * 0.5;
+  if (detailed) {
+    const seg = (2 * Math.PI * r * 0.74) / 18;
+    circle(svg, cx, cy, r * 0.74, {
+      fill: "none", stroke: ink, "stroke-opacity": 0.7, "stroke-width": r * 0.05,
+      "stroke-dasharray": `${(seg * 0.62).toFixed(2)} ${(seg * 0.38).toFixed(2)}`,
+    });
+  }
+  circle(svg, cx, cy, R, { fill: "none", stroke: ink, "stroke-width": r * 0.045, "stroke-opacity": 0.9 });
+  for (let i = 0; i < 6; i++) {
+    const [px, py] = pt(cx, cy, pr, i * 60);
+    circle(svg, px, py, pr, { fill: "none", stroke: ink, "stroke-width": r * 0.04, "stroke-opacity": 0.9 });
+  }
+  circle(svg, cx, cy, r * 0.045, { fill: hi(m) });
+  for (let i = 0; i < 6; i++)
+    circle(svg, ...pt(cx, cy, R * 0.82, i * 60 + 30), r * 0.028, { fill: hi(m) });
+  if (given && !detailed) circle(svg, cx, cy, r * 0.10, { fill: fixedInk(m) });
+}
+
+// MACHINED FACE -- nickel vs brass, lathe-turned grooves, knurled when fixed
+function coinMachined(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "nickel" : "gold";
+  metalBlank(svg, cx, cy, r, m, given);
+  const rings = r >= 20 ? [0.78, 0.68, 0.58, 0.48, 0.38, 0.28] : [0.70, 0.50, 0.30];
+  rings.forEach((k, i) => {
+    circle(svg, cx, cy, r * k, {
+      fill: "none", stroke: deep(m), "stroke-opacity": 0.5, "stroke-width": 0.7,
+    });
+    circle(svg, cx, cy, r * k - 0.9, {
+      fill: "none", stroke: glint(m), "stroke-opacity": 0.35, "stroke-width": 0.5,
+    });
+  });
+  // the lathe's light catch sweeping across the grooves
+  pathEl(svg, `M ${cx - r * 0.58} ${cy - r * 0.30} A ${r * 0.64} ${r * 0.64} 0 0 1 ${cx - r * 0.06} ${cy - r * 0.62}`,
+    { fill: "none", stroke: c("white"), "stroke-opacity": 0.28, "stroke-width": r * 0.16, "stroke-linecap": "round" });
+  circle(svg, cx, cy, r * 0.10, { fill: base(m), stroke: deep(m), "stroke-width": 0.8 });
+  circle(svg, cx - r * 0.03, cy - r * 0.03, r * 0.03, { fill: c("white"), "fill-opacity": 0.6 });
+  if (given) {
+    const dash = (2 * Math.PI * (r - 1.2)) / 30;
+    circle(svg, cx, cy, r - 1.2, {
+      fill: "none", stroke: fixedInk(m), "stroke-width": 2.2,
+      "stroke-opacity": 0.85, "stroke-dasharray": `${dash.toFixed(2)} ${dash.toFixed(2)}`,
+    });
+  }
+}
+
+const VARIANTS = [
+  ["1  GUILLOCHE", coinGuilloche,
+   "Silver vs gold, the watch-dial metals. The engine-turned rings now sit in a struck field with a lit rim; the wave work reads as lathe cuts in polished metal rather than printed lines."],
+  ["2  LONG CROSS", coinCross,
+   "Hammered-silver penny vs its copper echo. The voided cross and pellet trios raise out of the field in the metal's own highlight tone, the way relief catches light on a real hammered coin."],
+  ["3  PIERCED", coinPierced,
+   "Gunmetal vs gold, after the 50-yen/5-yen pairing. The chrysanthemum radial engraves into the field; the hole's chamfer picks up the highlight so the piercing reads punched, not drawn."],
+  ["4  SCALLOP", coinScallop,
+   "Iron vs bronze on the twelve-lobed planchet. The scalloped edge now carries its own lit rim following the lobes, which is what sells the shape as struck metal."],
+  ["5  BIMETAL", coinBimetal,
+   "Silver ring, gold core -- and the mirror coin swaps them. Both metals get their own field and edge treatment, so the seam reads as two real alloys joined, like a pound or euro."],
+  ["6  CASH", coinCash,
+   "Iron vs gold brass, the two metals cash coins were actually struck in. The square hole keeps its chamfered liner; T K Z U sit in the quarters."],
+  ["7  DOT MATRIX", coinMatrix,
+   "Bronze vs silver. The 4x4 takuzu grid pellets are now domed -- each solid pellet carries its own specular dot -- so the pattern reads as raised tactile metal, braille-coin style."],
+  ["8  SPLIT FIELD", coinSplit,
+   "Gunmetal vs copper. The hatching engraves into the struck field either side of the raised polished bar; duality as texture, now with depth."],
+  ["9  ROSETTE", coinRosette,
+   "Iron vs copper, carried over from v3. The six-petal rosette and scalloped band engrave into the struck field, petal-junction pellets raised in the metal's highlight."],
+  ["10  MACHINED FACE", coinMachined,
+   "Nickel vs brass, per the shop drawing. Six lathe grooves, each cut as a shadow line with its own light return, under a sweeping light catch -- and a knurled rim grips the fixed coins."],
+];
+
+const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
+const PANEL_W = 4 * ZCELL + 3 * GAP + 2 * 24;
+const PANEL_H = 246;
+
+function frame(svg, x, y, w, h, label) {
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  const lw = label.length * 7 + 10;
+  rect(svg, x + 18, y - 6, lw, 12, { fill: c("plate") });
+  txt(svg, x + 23, y + 3, label, 10, c("cream"), "start", "bold");
+}
+
+function variantSvg(title, drawCoin) {
+  const svg = [];
+  const W = PANEL_W + 20, H = PANEL_H + 24;
+  rect(svg, 0, 0, W, H, { rx: 8, fill: c("plate"), stroke: c("plate-edge") });
+  frame(svg, 10, 12, PANEL_W, PANEL_H, title);
+  const combos = [[0, false], [1, false], [0, true], [1, true]];
+  const labels = ["COLOUR 0", "COLOUR 1", "FIXED", "FIXED"];
+  const rowx = 10 + 24, rowy = 12 + 18;
+  combos.forEach(([val, given], i) => {
+    const sx = rowx + i * (ZCELL + GAP);
+    socket(svg, sx, rowy, ZCELL);
+    drawCoin(svg, sx + ZCELL / 2, rowy + ZCELL / 2, Math.round(ZCELL * 0.33), val, given);
+    txt(svg, sx + ZCELL / 2, rowy + ZCELL + 14, labels[i], 8,
+      given ? c("gold") : c("steel"), "middle");
+  });
+  const strip = [[0, true], [1, false], [1, true], [0, false], null, [1, false], [0, true], [1, true]];
+  const spanw = strip.length * RCELL + (strip.length - 1) * RGAP + 2 * 12;
+  const bx = 10 + Math.round((PANEL_W - spanw) / 2), by = rowy + ZCELL + 24;
+  rect(svg, bx, by, spanw, RCELL + 24, { rx: 10, fill: c("board-bg"), stroke: c("ink") });
+  strip.forEach((cellv, i) => {
+    const sx = bx + 12 + i * (RCELL + RGAP), sy = by + 12;
+    socket(svg, sx, sy, RCELL);
+    if (cellv != null)
+      drawCoin(svg, sx + RCELL / 2, sy + RCELL / 2, Math.round(RCELL * 0.33), cellv[0], cellv[1]);
+  });
+  txt(svg, 10 + PANEL_W - 22, by + RCELL + 33, "AT BOARD SCALE", 8, c("dim"), "end");
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img"`
+    + ` aria-label="${esc(title)}">${svg.join("")}</svg>`;
+}
+
+const stage = document.getElementById("stage");
+stage.innerHTML = VARIANTS.map(([title, fn, why]) =>
+  `<div class="panel">${variantSvg(title, fn)}<div class="caption">`
+  + `<div class="why">${esc(why)}</div></div></div>`).join("");
+
+})();
+</script>
+</body>
+</html>
