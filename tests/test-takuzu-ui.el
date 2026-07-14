@@ -826,6 +826,62 @@ Lowercase words were the one typographic outlier on the faceplate."
           (let ((s (dom-text node)))
             (should (string= s (upcase s)))))))))
 
+(ert-deftest test-takuzu-integration-tty-full-game-flow ()
+  "Integration: the text fallback carries a full game end to end.
+
+Components integrated:
+- takuzu-ui-arm and takuzu--begin-play (real)
+- movement, cycle, undo, hint, check, assist, reset, prove commands (real)
+- takuzu--redraw textual path (real -- batch Emacs has no display)
+- takuzu-generate (real, sync, for the puzzle)
+
+Validates: every core command functions with no graphics available, and the
+rendered buffer text stays sensible at each step (no stray nil in the armed
+header, grade + clock present in play, cursor visible, coins render)."
+  (skip-unless (not (display-graphic-p)))
+  (test-takuzu-ui--arming
+    (takuzu-ui-arm 4 'easy)
+    (with-current-buffer "*Takuzu*"
+      ;; armed: header must not print a nil grade
+      (should-not (string-match-p "nil" (buffer-string)))
+      (should (string-match-p "Press n to begin" (buffer-string)))
+      ;; begin play with a real generated puzzle
+      (takuzu--begin-play (current-buffer) (takuzu-generate 4 'easy))
+      (should (string-match-p "Takuzu  4x4" (buffer-string)))
+      (should (string-match-p "[0-9][0-9]:[0-9][0-9]" (buffer-string)))
+      (should (string-match-p "\\[.\\]" (buffer-string)))
+      ;; movement moves the rendered cursor
+      (let ((before (buffer-string)))
+        (takuzu-right)
+        (should-not (equal (buffer-string) before)))
+      ;; cycle places a coin at the cursor, undo takes it back
+      (let ((cur takuzu--cursor))
+        (when (takuzu-board-given-p takuzu--board (car cur) (cdr cur))
+          (takuzu-down))
+        (let ((r (car takuzu--cursor)) (c (cdr takuzu--cursor)))
+          (takuzu-cycle)
+          (should (takuzu-board-ref takuzu--board r c))
+          (takuzu-undo)
+          (should-not (takuzu-board-ref takuzu--board r c))))
+      ;; hint, check, assist, reset all function and report
+      (takuzu-hint)
+      (should (string-match-p "forced\\|Hypothesis\\|solution" takuzu--status))
+      (takuzu-check)
+      (should-not (string-empty-p takuzu--status))
+      (takuzu-toggle-assist)
+      (should takuzu--assist)
+      (takuzu-reset)
+      (should (cl-every (lambda (i)
+                          (or (aref (takuzu-board-givens takuzu--board) i)
+                              (null (aref (takuzu-board-cells takuzu--board) i))))
+                        (number-sequence 0 15)))
+      ;; prove fills the whole board from the solution (confirmation mocked)
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_) t)))
+        (takuzu-prove))
+      (should takuzu--proven)
+      (should (takuzu-board-full-p takuzu--board))
+      (should (string-match-p "Solution shown" (buffer-string))))))
+
 (ert-deftest test-takuzu-ui-tty-legend-derives-from-table ()
   "Normal: the tty key legend is generated from the shared legend table.
 One data table drives the SVG legend and the tty fallback, so a key added

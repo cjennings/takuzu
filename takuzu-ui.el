@@ -1057,9 +1057,15 @@ Kicks off the scale-easing timer when the displayed scale is off target."
                     (plist-get takuzu--generating :difficulty)
                     takuzu--size takuzu--size)))
    (t
-    (insert (format "Takuzu  %dx%d  %s\n\n" takuzu--size takuzu--size takuzu--grade)
-            (takuzu--render-text)
-            (format "\n%s\n\n%s\n" takuzu--status (takuzu--tty-legend))))))
+    (let ((label (cond (takuzu--grade (symbol-name takuzu--grade))
+                       (takuzu--armed
+                        (format "%s -- press n to begin"
+                                (plist-get takuzu--armed :difficulty)))
+                       (t ""))))
+      (insert (format "Takuzu  %dx%d  %s  %s\n\n" takuzu--size takuzu--size
+                      label (takuzu--fmt-time (takuzu--elapsed)))
+              (takuzu--render-text)
+              (format "\n%s\n\n%s\n" takuzu--status (takuzu--tty-legend)))))))
 
 (defun takuzu--redraw (&optional buffer)
   "Redraw BUFFER (or the current buffer) from state."
