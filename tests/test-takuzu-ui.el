@@ -805,6 +805,21 @@ so the player knows to press n again."
     (should (eq takuzu--event 'gen-fail))
     (should (string-prefix-p "Generation failed" takuzu--status))))
 
+(ert-deftest test-takuzu-ui-on-generated-cancelled-is-silent ()
+  "Error: a cancelled generation neither reports failure nor clobbers state.
+Cycling size or level cancels the old child and starts a new one; the old
+sentinel's callback must not flash GEN FAIL on the re-armed buffer, and it
+must not nil out the new in-flight process reference."
+  (test-takuzu-ui--with-buffer
+    (setq takuzu--size 4 takuzu--generating '(:size 4 :difficulty easy)
+          takuzu--gen-process 'placeholder-for-new-process
+          takuzu--board (takuzu-make-board 4) takuzu--status "" takuzu--event nil)
+    (takuzu--on-generated (current-buffer) 'cancelled)
+    (should (eq takuzu--gen-process 'placeholder-for-new-process))
+    (should takuzu--generating)
+    (should-not (eq takuzu--event 'gen-fail))
+    (should (string-empty-p takuzu--status))))
+
 (ert-deftest test-takuzu-ui-panel-min-height ()
   "Boundary: every board size leaves the panel at least its minimum height.
 At small sizes the board alone is shorter than the instrument stack, and the

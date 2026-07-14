@@ -86,15 +86,15 @@ Components integrated:
 - the process sentinel (real)
 
 Validates: `delete-process' on an in-flight generation (size/level cycling
-does this) reports nil without littering a *takuzu-gen-stderr* buffer."
+does this) reports the distinct `cancelled' marker -- not nil, which means
+failure -- and litters no *takuzu-gen-stderr* buffer."
   (when-let ((stale (get-buffer "*takuzu-gen-stderr*")))
     (kill-buffer stale))
   (let ((done 'pending) (deadline (+ (float-time) 30)))
     (delete-process (takuzu-generate-async 12 'hard (lambda (r) (setq done r))))
     (while (and (eq done 'pending) (< (float-time) deadline))
       (accept-process-output nil 0.1))
-    (should (not (eq done 'pending)))
-    (should-not done)
+    (should (eq done 'cancelled))
     (should-not (get-buffer "*takuzu-gen-stderr*"))))
 
 (provide 'test-takuzu-async)

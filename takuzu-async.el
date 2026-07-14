@@ -38,10 +38,13 @@ on the noise instead of the result."
 (defun takuzu-generate-async (size difficulty callback)
   "Generate a SIZE by DIFFICULTY puzzle in a child Emacs.
 Call CALLBACK with the decoded result plist (:board :solution :grade) on
-success, or with nil if the child failed.  Return the process.
+success, with the symbol `cancelled' when the process was deliberately
+killed (a size/level cycle or a buffer kill), or with nil if the child
+genuinely failed.  Return the process.
 
-The child's stderr collects in a hidden buffer that is deleted on success;
-on failure it is renamed to *takuzu-gen-stderr* and kept for post-mortem."
+The child's stderr collects in a hidden buffer that is deleted on success
+or cancel; on failure it is renamed to *takuzu-gen-stderr* and kept for
+post-mortem."
   (let* ((dir (takuzu--lib-dir))
          (out (generate-new-buffer " *takuzu-gen*"))
          (err (generate-new-buffer " *takuzu-gen-stderr*"))
@@ -59,7 +62,10 @@ on failure it is renamed to *takuzu-gen-stderr* and kept for post-mortem."
            :sentinel
            (lambda (proc _event)
              (when (memq (process-status proc) '(exit signal))
-               (let ((result nil))
+               (let ((result (unless (eq (process-status proc) 'exit)
+                               ;; a signal is a deliberate cancel (size/level
+                               ;; cycling, buffer kill), not a failure
+                               'cancelled)))
                  (unwind-protect
                      (when (and (eq (process-status proc) 'exit)
                                 (= 0 (process-exit-status proc)))
@@ -68,10 +74,8 @@ on failure it is renamed to *takuzu-gen-stderr* and kept for post-mortem."
                            (setq result (takuzu--decode-result data)))))
                    (kill-buffer (process-buffer proc))
                    (cond
-                    ;; a signal is a deliberate cancel (size/level cycling,
-                    ;; buffer kill), not a failure worth a post-mortem
-                    ((or result (not (eq (process-status proc) 'exit)))
-                     (kill-buffer err))
+                    ;; success or cancel: no post-mortem to keep
+                    (result (kill-buffer err))
                     (t
                      (when-let ((old (get-buffer "*takuzu-gen-stderr*")))
                        (kill-buffer old))

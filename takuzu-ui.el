@@ -1349,9 +1349,12 @@ in a buried buffer."
 
 (defun takuzu--on-generated (buf result)
   "Handle a finished background generation for BUF.
-A nil RESULT reports the failure; otherwise begin play at once if the start
-key was already pressed, or hold the RESULT pending the start key."
-  (when (buffer-live-p buf)
+A `cancelled' RESULT is ignored outright: the cancel came from a size or
+level cycle (or a teardown) whose successor owns the buffer state now, so
+touching anything here would clobber the new in-flight generation.  A nil
+RESULT reports the failure; otherwise begin play at once if the start key
+was already pressed, or hold the RESULT pending the start key."
+  (when (and (buffer-live-p buf) (not (eq result 'cancelled)))
     (with-current-buffer buf
       (setq takuzu--gen-process nil)
       (cond
