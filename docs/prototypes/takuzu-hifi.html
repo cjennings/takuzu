@@ -460,10 +460,10 @@ const state = {
   coinSkin: "pierced", // mirror of takuzu-coin-skin (pierced is the default)
 };
 
-// a new skin always enters at the head (drum 01), shifting the rest down
-const COIN_SKINS = ["filigree", "sovereign", "pierced", "machined", "cash",
-                    "gems", "lamp", "jewel", "compass", "guilloche", "runic",
-                    "scallop", "bimetal", "matrix", "split", "rosette"];
+// a new skin is always appended at the tail -- existing positions never change
+const COIN_SKINS = ["sovereign", "pierced", "machined", "cash", "gems", "lamp",
+                    "jewel", "compass", "guilloche", "runic", "scallop",
+                    "bimetal", "matrix", "split", "rosette", "filigree"];
 
 // --- the struck-metal engine (mirror of takuzu--coin-metal-tones etc.) ---
 

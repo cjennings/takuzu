@@ -296,8 +296,7 @@ omits it)."
 ;; --- coin skins ---
 
 (defconst takuzu--coin-skin-registry
-  '((filigree  takuzu--draw-disc-filigree  silver   pewter)
-    (sovereign takuzu--draw-disc-sovereign coal     beech)
+  '((sovereign takuzu--draw-disc-sovereign coal     beech)
     (pierced   takuzu--draw-disc-pierced   berkeley cardinal)
     (machined  takuzu--draw-disc-machined  nickel   gold)
     (cash      takuzu--draw-disc-cash      iron     gold)
@@ -311,15 +310,16 @@ omits it)."
     (bimetal   takuzu--draw-disc-bimetal   blue     copper)
     (matrix    takuzu--draw-disc-matrix    bronze   silver)
     (split     takuzu--draw-disc-split     gunmetal copper)
-    (rosette   takuzu--draw-disc-rosette   iron     copper))
+    (rosette   takuzu--draw-disc-rosette   iron     copper)
+    (filigree  takuzu--draw-disc-filigree  silver   pewter))
   "The coin-skin catalogue: (SKIN DRAWER METAL-FOR-0 METAL-FOR-1) rows.
-This one table is the whole configuration -- the cycle order (favourites
-first), the selector counter, the defcustom choices, the dispatch, and
-each struck-metal skin's pair all read from it.  Adding a coin is one row
-here plus its draw function; nothing is ever removed, only added -- and a
-new skin always enters at the HEAD of the table (drum position 01),
-shifting every other design down one.  The lamp/jewel/compass skins carry
-their own colours, so their metals are nil.")
+This one table is the whole configuration -- the cycle order, the
+selector counter, the defcustom choices, the dispatch, and each
+struck-metal skin's pair all read from it.  Adding a coin is one row
+here plus its draw function; nothing is ever removed, only added -- and
+a new skin is always APPENDED at the tail of the table, so every
+existing design keeps its drum position forever.  The lamp/jewel/compass
+skins carry their own colours, so their metals are nil.")
 
 (defcustom takuzu-coin-skin 'pierced
   "The coin skin drawn on the board.

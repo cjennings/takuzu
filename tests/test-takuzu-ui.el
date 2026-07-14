@@ -1283,9 +1283,9 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to pierced; favourites lead the cycle."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'pierced))
   (should (equal takuzu--coin-skins
-                 '(filigree sovereign pierced machined cash gems lamp jewel
-                   compass guilloche runic scallop bimetal matrix split
-                   rosette))))
+                 '(sovereign pierced machined cash gems lamp jewel compass
+                   guilloche runic scallop bimetal matrix split rosette
+                   filigree))))
 
 (ert-deftest test-takuzu-ui-filigree-wheel-gems-and-metals ()
   "Normal: the filigree wheel is silver for 0, dark pewter for 1, with six
@@ -1615,8 +1615,8 @@ two-piece needle instead of the sixteen rays."
   "Normal: the skin selector shows the tape-counter index and never a name."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((filigree . "01") (sovereign . "02") (pierced . "03")
-                    (machined . "04") (cash . "05")))
+    (dolist (case '((sovereign . "01") (pierced . "02") (machined . "03")
+                    (cash . "04") (filigree . "16")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
         (should (member (cdr case) texts))
