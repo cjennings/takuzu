@@ -10,6 +10,11 @@
 (require 'ert)
 (require 'takuzu)
 
+;; Redirect stats writes for the whole batch: the win/prove tests record
+;; results, and without this every suite and hook run would write the
+;; developer's real stats file.
+(setq takuzu-stats-file (make-temp-file "takuzu-stats-suite-" nil ".eld"))
+
 ;; A known-valid 4x4 solution used across win/render tests.
 (defconst test-takuzu-ui--solution-4
   (vector 0 0 1 1

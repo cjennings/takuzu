@@ -65,6 +65,25 @@ Components integrated:
           (with-current-buffer b (ignore-errors (takuzu--cleanup)))
           (ignore-errors (kill-buffer b)))))))
 
+;; Redirect stats writes for the whole batch: tests that win or prove a board
+;; record a result, and without this every suite and hook run would write the
+;; developer's real stats file.
+(setq takuzu-stats-file (make-temp-file "takuzu-stats-suite-" nil ".eld"))
+
+(ert-deftest test-takuzu-suite-stats-file-redirected ()
+  "Error: the suite must never write the developer's real stats file.
+Tests that win or prove a board record a result through `takuzu-stats-file';
+left at its default, every suite and hook run pollutes the real record."
+  (should-not (equal (expand-file-name takuzu-stats-file)
+                     (expand-file-name (locate-user-emacs-file "takuzu-stats.eld")))))
+
+(ert-deftest test-takuzu-stats-file-default-absolute ()
+  "Error: the stats-file default is absolute, never cwd-relative.
+A bare filename would resolve against `default-directory' and fragment the
+record across every directory Emacs happens to be in."
+  (should (file-name-absolute-p
+           (eval (car (get 'takuzu-stats-file 'standard-value))))))
+
 (ert-deftest test-takuzu-make-test-prefers-newer-source ()
   "Error: test targets load newer source instead of stale bytecode."
   (let* ((root (locate-dominating-file default-directory "Makefile"))

@@ -10,6 +10,10 @@
 (require 'ert)
 (require 'takuzu-stats)
 
+;; Belt and suspenders alongside the per-test binding: a future test that
+;; forgets `test-takuzu-stats--with-file' still can't touch the real file.
+(setq takuzu-stats-file (make-temp-file "takuzu-stats-suite-" nil ".eld"))
+
 (defmacro test-takuzu-stats--with-file (&rest body)
   "Run BODY with `takuzu-stats-file' bound to a fresh temp path, cleaned after."
   (declare (indent 0))
