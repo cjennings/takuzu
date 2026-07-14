@@ -44,11 +44,15 @@
 ;; --- pure helpers ---
 
 (ert-deftest test-takuzu-ui-fmt-time ()
-  "Normal/Boundary: seconds format as MM:SS from the very first second."
+  "Normal/Boundary: seconds format as MM:SS from the very first second,
+pegging at 99:99 once the display runs out of digits."
   (should (equal (takuzu--fmt-time 0) "00:00"))
   (should (equal (takuzu--fmt-time 9) "00:09"))
   (should (equal (takuzu--fmt-time 75) "01:15"))
-  (should (equal (takuzu--fmt-time 600) "10:00")))
+  (should (equal (takuzu--fmt-time 600) "10:00"))
+  (should (equal (takuzu--fmt-time 5999) "99:59"))
+  (should (equal (takuzu--fmt-time 6000) "99:99"))
+  (should (equal (takuzu--fmt-time 999999) "99:99")))
 
 (ert-deftest test-takuzu-ui-draw-nixie-time-always-four-tubes ()
   "Boundary: the clock draws four digit tubes plus the colon even at 0:00.

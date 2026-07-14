@@ -207,8 +207,12 @@ missed cleanup path would otherwise leak the repeating timer forever."
   (max 0.2 (min 1.0 (/ takuzu-flash-period 2.0))))
 
 (defun takuzu--fmt-time (s)
-  "Format S seconds as MM:SS, two digits from the very first second."
-  (format "%02d:%02d" (/ s 60) (% s 60)))
+  "Format S seconds as MM:SS, two digits from the very first second.
+The display pegs at 99:99 once the minutes outgrow their two tubes, and
+stays there until a new game resets the clock."
+  (if (> s 5999)
+      "99:99"
+    (format "%02d:%02d" (/ s 60) (% s 60))))
 
 (defun takuzu--curp (r c)
   "Non-nil if the cursor is on cell R, C."

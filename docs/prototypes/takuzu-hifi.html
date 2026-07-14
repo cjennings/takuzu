@@ -506,8 +506,9 @@ function elapsed() {
 
 const flashOnP = () => (Date.now() / 1000) % FLASH_PERIOD < 0.5 * FLASH_PERIOD;
 const refreshInterval = () => Math.max(0.2, Math.min(1.0, FLASH_PERIOD / 2));
-const fmtTime = s =>
-  `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+// pegs at 99:99 once the minutes outgrow their two tubes, until a new game
+const fmtTime = s => s > 5999 ? "99:99"
+  : `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 const curP = (r, cc) => r === state.cursor[0] && cc === state.cursor[1];
 
 function lineBadP(line, n, lines) {
