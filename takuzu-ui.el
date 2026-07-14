@@ -791,11 +791,20 @@ gallery, panel 13, iterated live."
   "Draw the collegiate coin of VAL at CX,CY radius R on SVG.
 School colours, struck dark: Berkeley blue with a California-gold
 chrysanthemum for 0, Stanford cardinal with a silver-white one for 1.
-A user coin is a flat face; a FIXED coin carries a single matte
+The whole face is matte -- no specular sheen -- under a wide struck
+lip.  A user coin is a flat face; a FIXED coin carries a single matte
 porcelain dot at the centre -- no ring around it, no border ring."
   (let* ((m (takuzu--coin-pair-metal 'collegiate val))
          (accent (if (eql val 0) 'sunflower 'silver)))
-    (takuzu--metal-blank svg cx cy r m nil)
+    (takuzu--ensure-metal svg m)
+    (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" m)
+                :stroke (takuzu--c :ink) :stroke-width 0.8 :stroke-opacity 0.85)
+    ;; the wide struck lip, seated by a deep ring on its inner edge
+    (svg-circle svg cx cy (- r (* r 0.08)) :fill "none"
+                :stroke (format "url(#m-%s-edge)" m) :stroke-width (* r 0.16))
+    (svg-circle svg cx cy (- r (* r 0.165)) :fill "none"
+                :stroke (takuzu--metal m 3) :stroke-width 0.8
+                :stroke-opacity 0.6)
     (when (>= r 20)
       (dotimes (i 16)
         (let* ((a (* i 22.5))
@@ -810,7 +819,7 @@ porcelain dot at the centre -- no ring around it, no border ring."
            'stroke-opacity 0.75 'stroke-width 0.8))))
     (when given
       ;; the fixed marking: one matte porcelain dot, nothing else
-      (svg-circle svg cx cy (* r 0.20) :fill "#fffffb"
+      (svg-circle svg cx cy (* r 0.28) :fill "#fffffb"
                   :stroke (takuzu--metal m 3) :stroke-width 0.8))))
 
 (defun takuzu--scallop-d (cx cy r arc)

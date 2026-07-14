@@ -957,7 +957,11 @@ function drawDiscSovereign(svg, cx, cy, r, val, given) {
 function drawDiscCollegiate(svg, cx, cy, r, val, given) {
   const m = val === 0 ? "berkeley" : "cardinal";
   const accent = val === 0 ? "sunflower" : "silver";
-  metalBlank(svg, cx, cy, r, m, false);
+  ensureMetal(svg, m);
+  // matte face -- no sheen -- under a wide struck lip
+  circle(svg, cx, cy, r, { fill: mfill(m), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
+  circle(svg, cx, cy, r - r * 0.08, { fill: "none", stroke: medge(m), "stroke-width": r * 0.16 });
+  circle(svg, cx, cy, r - r * 0.165, { fill: "none", stroke: mDeep(m), "stroke-width": 0.8, "stroke-opacity": 0.6 });
   if (r >= 20)
     for (let i = 0; i < 16; i++) {
       const a = i * 22.5;
@@ -966,7 +970,7 @@ function drawDiscCollegiate(svg, cx, cy, r, val, given) {
         { fill: "none", stroke: COIN_METAL[accent][2], "stroke-opacity": 0.75, "stroke-width": 0.8 });
     }
   if (!given) return;
-  circle(svg, cx, cy, r * 0.20, { fill: "#fffffb", stroke: mDeep(m), "stroke-width": 0.8 });
+  circle(svg, cx, cy, r * 0.28, { fill: "#fffffb", stroke: mDeep(m), "stroke-width": 0.8 });
 }
 
 // SCALLOP -- iron vs bronze, twelve-lobed planchet with its own lit rim

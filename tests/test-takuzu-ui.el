@@ -1480,14 +1480,22 @@ flat faces; a FIXED coin carries a white-filled centre, never a black hole."
         (should-not (seq-find (lambda (n)
                                 (equal (dom-attr n 'fill) "#fffffb"))
                               (dom-by-tag svg 'circle))))
-      (should (= (length (seq-filter
-                          (lambda (n)
-                            (equal (dom-attr n 'fill) "#fffffb"))
-                          (dom-by-tag fx 'circle)))
-                 1))
+      (let ((dots (seq-filter
+                   (lambda (n)
+                     (equal (dom-attr n 'fill) "#fffffb"))
+                   (dom-by-tag fx 'circle))))
+        (should (= (length dots) 1))
+        (should (>= (dom-attr (car dots) 'r) (* 33 0.26))))
       (should-not (seq-find (lambda (n)
                               (equal (dom-attr n 'stroke) (takuzu--c :rim-silver)))
-                            (dom-by-tag fx 'circle))))))
+                            (dom-by-tag fx 'circle)))
+      ;; matte face -- no sheen ellipses -- under a wide struck lip
+      (dolist (svg (list c0 c1 fx))
+        (should (= (length (dom-by-tag svg 'ellipse)) 0))
+        (should (seq-find (lambda (n)
+                            (and (dom-attr n 'stroke-width)
+                                 (>= (dom-attr n 'stroke-width) (* 33 0.14))))
+                          (dom-by-tag svg 'circle)))))))
 
 (ert-deftest test-takuzu-ui-bimetal-wears-dupre-colours ()
   "Normal: the bimetal coin strikes the Dupre palette -- a blue ring with a
