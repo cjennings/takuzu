@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Takuzu coin-design gallery v4: coins that read as COINS.  Twelve
+     directions grounded in numismatic anatomy (legend, exergue, denticles,
+     reeding, beaded borders) and in real faceless-coin traditions: cash
+     coins, punch-marked incuse, text-only dinars, bimetallics, scalloped
+     and holed and heptagonal planchets, radiant fields, long-cross
+     pennies, guilloche engine turning.  No denominations, no faces,
+     abstract symbols only; the game's names (TAKUZU, BINAIRO, TOHU
+     WA-VOHU, BINARY LOGIC) serve as legends.  Each panel carries its
+     inspiration links and why it's distinctive.  Iron vs copper stays the
+     two-colour pair from v3; librsvg-safe primitives only. -->
+<title>Takuzu — Coin Prototypes v4 (Coinage)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 16px 60px;
+    display: flex; flex-direction: column; align-items: center;
+    background: #0b0a08; font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: #969385;
+  }
+  .head { width: 560px; max-width: 100%; margin-bottom: 10px; }
+  .head h1 { margin: 0; font-size: 26px; color: #b99640; font-style: italic; }
+  .head p { margin: 4px 0 0; font-size: 11px; color: #7c838a; }
+  .panel { width: 560px; max-width: 100%; margin-top: 26px; }
+  .panel svg { display: block; width: 100%; height: auto; }
+  .caption {
+    border: 1px solid #201d17; border-top: none; border-radius: 0 0 8px 8px;
+    background: #0a0c0d; padding: 10px 14px 12px; font-size: 11.5px; line-height: 1.5;
+  }
+  .caption .why { color: #969385; }
+  .caption .insp { margin-top: 6px; color: #7c838a; font-size: 10.5px; }
+  .caption a { color: #b99640; }
+  .caption a:hover { color: #dcc061; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>TAKUZU / COIN PROTOTYPES V4</h1>
+  <p>TWELVE COINAGE DIRECTIONS - NO DENOMINATIONS - NO FACES - ABSTRACT DEVICES ONLY</p>
+</div>
+<div id="stage"></div>
+
+<script>
+"use strict";
+(function () {
+
+const COLORS = {
+  "plate": "#1b1710", "plate-edge": "#2c2620", "panel-edge": "#201d17",
+  "well": "#0a0c0d", "board-bg": "#14110c",
+  "socket": "#0c0a07", "socket-edge": "#05040a",
+  "ink": "#000000", "white": "#ffffff",
+  "gold": "#b99640", "gold-hi": "#dcc061", "cream": "#f3e7c5",
+  "steel": "#969385", "dim": "#7c838a", "wash": "#2c2f32",
+  "rim-silver": "#c3c9d1",
+};
+const c = k => COLORS[k];
+
+const METAL = {
+  iron:   ["#5a5f66", "#33363b", "#1a1c20"],
+  copper: ["#d99a5e", "#b87333", "#6f4218"],
+};
+const body = v => METAL[v === 0 ? "iron" : "copper"];
+const inlay = v => METAL[v === 0 ? "copper" : "iron"];
+
+const attrs = o => Object.entries(o)
+  .filter(([, v]) => v != null)
+  .map(([k, v]) => ` ${k}="${v}"`).join("");
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const rect = (svg, x, y, w, h, o) => svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}"${attrs(o)}/>`);
+const circle = (svg, cx, cy, r, o) => svg.push(`<circle cx="${cx}" cy="${cy}" r="${r}"${attrs(o)}/>`);
+const line = (svg, x1, y1, x2, y2, o) => svg.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${attrs(o)}/>`);
+const pathEl = (svg, d, o) => svg.push(`<path d="${d}"${attrs(o)}/>`);
+const polygon = (svg, pts, o) => svg.push(`<polygon points="${pts.map(p => p.join(",")).join(" ")}"${attrs(o)}/>`);
+function txt(svg, x, y, str, size, color, anchor, weight) {
+  svg.push(`<text x="${x}" y="${y}" font-family="monospace" font-size="${size}"`
+    + ` fill="${color}" text-anchor="${anchor || "start"}"`
+    + ` font-weight="${weight || "normal"}">${esc(str)}</text>`);
+}
+
+let uid = 0;
+const gid = () => `coin4-g${++uid}`;
+
+const pt = (cx, cy, rr, deg) => {
+  const a = (deg - 90) * Math.PI / 180;
+  return [+(cx + rr * Math.cos(a)).toFixed(2), +(cy + rr * Math.sin(a)).toFixed(2)];
+};
+
+function metalFill(svg, m) {
+  const g = gid();
+  svg.push(`<radialGradient id="${g}" cx="0.36" cy="0.30" r="0.95">`
+    + `<stop offset="0" stop-color="${m[0]}"/>`
+    + `<stop offset="0.5" stop-color="${m[1]}"/>`
+    + `<stop offset="1" stop-color="${m[2]}"/>`
+    + `</radialGradient>`);
+  return `url(#${g})`;
+}
+
+function socket(svg, sx, sy, cell) {
+  rect(svg, sx, sy, cell, cell, {
+    rx: cell * 0.18, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1,
+  });
+}
+
+// round blank with a raised rim; the given ring is bright silver throughout v4
+function blank(svg, cx, cy, r, val, given) {
+  const b = body(val);
+  circle(svg, cx, cy, r, { fill: metalFill(svg, b), stroke: b[2], "stroke-width": 1.2 });
+  circle(svg, cx, cy, r - 1.4, { fill: "none", stroke: b[0], "stroke-opacity": 0.45, "stroke-width": 0.8 });
+  if (given) givenRing(svg, cx, cy, r);
+}
+function givenRing(svg, cx, cy, r) {
+  circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: c("rim-silver"), "stroke-width": 1.6 });
+  circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.35 });
+}
+
+// a circular legend: each glyph rotated to its station on the arc
+function legendArc(svg, cx, cy, r, text, size, color, startDeg, endDeg) {
+  const n = text.length;
+  const span = endDeg - startDeg;
+  for (let i = 0; i < n; i++) {
+    const a = startDeg + (n === 1 ? span / 2 : (i * span) / (n - 1));
+    const [x, y] = pt(cx, cy, r, a);
+    svg.push(`<text x="${x}" y="${y}" font-family="monospace" font-size="${size}"`
+      + ` fill="${color}" text-anchor="middle" transform="rotate(${a} ${x} ${y})">`
+      + `${esc(text[i])}</text>`);
+  }
+}
+
+// beaded border: a ring of pellets
+function beads(svg, cx, cy, r, n, br, color, opacity) {
+  for (let i = 0; i < n; i++) {
+    const [x, y] = pt(cx, cy, r, (i * 360) / n);
+    circle(svg, x, y, br, { fill: color, "fill-opacity": opacity == null ? 0.9 : opacity });
+  }
+}
+
+// =====================================================================
+// The twelve coins.  drawCoin(svg, cx, cy, r, val, given).
+// =====================================================================
+
+// 1 CASH -- square-holed coin, four cardinal characters
+function coinCash(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], b = body(val);
+  const h = r * 0.34;
+  rect(svg, cx - h, cy - h, 2 * h, 2 * h, { fill: c("socket"), stroke: b[2], "stroke-width": 1.4 });
+  rect(svg, cx - h - 2, cy - h - 2, 2 * h + 4, 2 * h + 4,
+    { fill: "none", stroke: given ? c("rim-silver") : ink, "stroke-width": given ? 1.6 : 1.2 });
+  circle(svg, cx, cy, r * 0.86, { fill: "none", stroke: ink, "stroke-opacity": 0.55, "stroke-width": 1 });
+  if (r >= 20) {
+    const fs = r * 0.30;
+    txt(svg, cx, cy - r * 0.52 + fs * 0.35, "T", fs, ink, "middle", "bold");
+    txt(svg, cx + r * 0.62, cy + fs * 0.35, "K", fs, ink, "middle", "bold");
+    txt(svg, cx, cy + r * 0.62 + fs * 0.35, "Z", fs, ink, "middle", "bold");
+    txt(svg, cx - r * 0.62, cy + fs * 0.35, "U", fs, ink, "middle", "bold");
+  }
+}
+
+// 2 LEGEND -- writing as the whole device, pellet pair at centre
+function coinLegend(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  if (r >= 20) {
+    beads(svg, cx, cy, r * 0.88, 36, r * 0.025, ink, 0.8);
+    legendArc(svg, cx, cy, r * 0.66, "TAKUZU", r * 0.19, ink, -62, 62);
+    legendArc(svg, cx, cy, r * 0.66, "BINAIRO", r * 0.19, ink, 118, 242);
+    beads(svg, cx, cy, r * 0.42, 18, r * 0.02, ink, 0.6);
+  }
+  circle(svg, cx - r * 0.14, cy, r * 0.10, { fill: glint });
+  circle(svg, cx + r * 0.14, cy, r * 0.10, { fill: "none", stroke: glint, "stroke-width": r * 0.045 });
+}
+
+// 3 INCUSE -- the hammer blow itself: a quartered square punch
+function coinIncuse(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const b = body(val), ink = inlay(val)[1];
+  const s = r * 0.62;
+  const sq = [0, 90, 180, 270].map(d => pt(cx, cy, s, d + 45));
+  polygon(svg, sq, { fill: b[2], stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.7 });
+  // two opposing quarters raised back out of the punch
+  polygon(svg, [pt(cx, cy, s, 45), [cx, cy], pt(cx, cy, s, 135)], { fill: b[1] });
+  polygon(svg, [pt(cx, cy, s, 225), [cx, cy], pt(cx, cy, s, 315)], { fill: b[1] });
+  polygon(svg, sq, { fill: "none", stroke: ink, "stroke-width": r * 0.045, "stroke-linejoin": "miter" });
+  line(svg, ...pt(cx, cy, s, 45), ...pt(cx, cy, s, 225), { stroke: ink, "stroke-width": r * 0.035 });
+  line(svg, ...pt(cx, cy, s, 135), ...pt(cx, cy, s, 315), { stroke: ink, "stroke-width": r * 0.035 });
+  if (given) circle(svg, cx, cy, r * 0.07, { fill: c("rim-silver") });
+}
+
+// 4 BIMETAL -- ring of one metal, core of the other
+function coinBimetal(svg, cx, cy, r, val, given) {
+  const ring = body(val), core = inlay(val);
+  circle(svg, cx, cy, r, { fill: metalFill(svg, ring), stroke: ring[2], "stroke-width": 1.2 });
+  circle(svg, cx, cy, r * 0.62, { fill: metalFill(svg, core), stroke: c("ink"), "stroke-width": 0.8 });
+  // the seam, milled
+  circle(svg, cx, cy, r * 0.63, { fill: "none", stroke: ring[2], "stroke-width": 1, "stroke-opacity": 0.8 });
+  if (r >= 20) {
+    const seg = (2 * Math.PI * r * 0.82) / 40;
+    circle(svg, cx, cy, r * 0.82, {
+      fill: "none", stroke: ring[2], "stroke-width": r * 0.05, "stroke-opacity": 0.6,
+      "stroke-dasharray": `${(seg * 0.4).toFixed(2)} ${(seg * 0.6).toFixed(2)}`,
+    });
+  }
+  circle(svg, cx, cy, r * 0.06, { fill: ring[1], stroke: c("ink"), "stroke-width": 0.5 });
+  if (given) givenRing(svg, cx, cy, r);
+}
+
+// 5 SCALLOP -- the silhouette does the work
+function coinScallop(svg, cx, cy, r, val, given) {
+  const b = body(val), ink = inlay(val)[1];
+  const lobes = 12;
+  const pts = Array.from({ length: lobes }, (_, i) =>
+    pt(cx, cy, r * 0.94, (i * 360) / lobes + 180 / lobes));
+  // scalloped outline: arcs bulging outward between lobe points
+  let d = `M ${pts[lobes - 1][0]} ${pts[lobes - 1][1]} `;
+  for (let i = 0; i < lobes; i++)
+    d += `A ${r * 0.30} ${r * 0.30} 0 0 1 ${pts[i][0]} ${pts[i][1]} `;
+  const g = gid();
+  svg.push(`<radialGradient id="${g}" cx="0.36" cy="0.30" r="0.95">`
+    + `<stop offset="0" stop-color="${b[0]}"/><stop offset="0.5" stop-color="${b[1]}"/>`
+    + `<stop offset="1" stop-color="${b[2]}"/></radialGradient>`);
+  pathEl(svg, d + "Z", {
+    fill: `url(#${g})`,
+    stroke: given ? c("rim-silver") : b[2], "stroke-width": given ? 1.8 : 1.2,
+  });
+  circle(svg, cx, cy, r * 0.60, { fill: "none", stroke: ink, "stroke-opacity": 0.7, "stroke-width": r * 0.04 });
+  beads(svg, cx, cy, r * 0.42, 6, r * 0.045, ink, 0.9);
+  circle(svg, cx, cy, r * 0.10, { fill: ink });
+}
+
+// 6 PIERCED -- round hole, chrysanthemum radial
+function coinPierced(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const b = body(val), ink = inlay(val)[1];
+  if (r >= 20)
+    for (let i = 0; i < 16; i++) {
+      const a = i * 22.5;
+      pathEl(svg, `M ${pt(cx, cy, r * 0.42, a).join(" ")} L ${pt(cx, cy, r * 0.80, a - 7).join(" ")} `
+        + `A ${r * 0.16} ${r * 0.16} 0 0 1 ${pt(cx, cy, r * 0.80, a + 7).join(" ")} Z`,
+        { fill: "none", stroke: ink, "stroke-opacity": 0.75, "stroke-width": 0.8 });
+    }
+  const h = r * 0.28;
+  circle(svg, cx, cy, h, { fill: c("socket"), stroke: b[2], "stroke-width": 1.4 });
+  circle(svg, cx, cy, h + 2, {
+    fill: "none", stroke: given ? c("rim-silver") : ink, "stroke-width": given ? 1.6 : 1,
+  });
+}
+
+// 7 HEPTAGON -- the odd-sided planchet
+function coinHeptagon(svg, cx, cy, r, val, given) {
+  const b = body(val), ink = inlay(val)[1];
+  const outer = Array.from({ length: 7 }, (_, i) => pt(cx, cy, r * 0.96, i * (360 / 7)));
+  // rounded heptagon: arcs between vertices (constant-width feel)
+  let d = `M ${outer[6][0]} ${outer[6][1]} `;
+  for (let i = 0; i < 7; i++)
+    d += `A ${r * 1.15} ${r * 1.15} 0 0 1 ${outer[i][0]} ${outer[i][1]} `;
+  const g = gid();
+  svg.push(`<radialGradient id="${g}" cx="0.36" cy="0.30" r="0.95">`
+    + `<stop offset="0" stop-color="${b[0]}"/><stop offset="0.5" stop-color="${b[1]}"/>`
+    + `<stop offset="1" stop-color="${b[2]}"/></radialGradient>`);
+  pathEl(svg, d + "Z", {
+    fill: `url(#${g})`,
+    stroke: given ? c("rim-silver") : b[2], "stroke-width": given ? 1.8 : 1.2,
+  });
+  // heptagram line device {7/2}
+  let d2 = "";
+  for (let i = 0; i <= 7; i++) {
+    const [x, y] = pt(cx, cy, r * 0.62, ((i * 2) % 7) * (360 / 7));
+    d2 += (i === 0 ? "M" : "L") + ` ${x} ${y} `;
+  }
+  pathEl(svg, d2 + "Z", { fill: "none", stroke: ink, "stroke-width": r * 0.045, "stroke-linejoin": "miter" });
+  circle(svg, cx, cy, r * 0.06, { fill: inlay(val)[0] });
+}
+
+// 8 RADIANT -- light as the device, name in the exergue
+function coinRadiant(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  const rays = r >= 20 ? 36 : 20;
+  for (let i = 0; i < rays; i++) {
+    const a = (i * 360) / rays;
+    line(svg, ...pt(cx, cy, r * 0.22, a), ...pt(cx, cy, r * (i % 2 ? 0.62 : 0.82), a),
+      { stroke: ink, "stroke-opacity": 0.8, "stroke-width": r * 0.025 });
+  }
+  circle(svg, cx, cy, r * 0.16, { fill: "none", stroke: glint, "stroke-width": r * 0.05 });
+  if (given) circle(svg, cx, cy, r * 0.08, { fill: c("rim-silver") });
+  if (r >= 20) legendArc(svg, cx, cy, r * 0.70, "TOHU WA-VOHU", r * 0.14, glint, 214, 146);
+}
+
+// 9 LONG CROSS -- the voided cross runs to the edge, pellets in quarters
+function coinLongCross(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  const w = r * 0.13;
+  for (const [dx, dy] of [[1, 0], [0, 1]]) {
+    line(svg, cx - dx * r, cy - dy * r, cx + dx * r, cy + dy * r,
+      { stroke: ink, "stroke-width": w * 2.4 });
+    line(svg, cx - dx * r, cy - dy * r, cx + dx * r, cy + dy * r,
+      { stroke: body(val)[1], "stroke-width": w * 0.8 });
+  }
+  for (const q of [45, 135, 225, 315])
+    for (const [dr, da] of [[0.42, 0], [0.58, -11], [0.58, 11]])
+      circle(svg, ...pt(cx, cy, r * dr, q + da), r * 0.055, { fill: glint });
+  if (given)
+    circle(svg, cx, cy, r * 0.11, { fill: "none", stroke: c("rim-silver"), "stroke-width": 1.6 });
+}
+
+// 10 GUILLOCHE -- engine-turned lathe work
+function coinGuilloche(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1];
+  const rings = r >= 20 ? [0.78, 0.62, 0.46, 0.30] : [0.70, 0.44];
+  rings.forEach((k, ri) => {
+    const n = 12 + ri * 4, rr = r * k, amp = r * 0.055;
+    let d = "";
+    for (let i = 0; i <= n * 6; i++) {
+      const a = (i * 360) / (n * 6);
+      const rad = rr + amp * Math.sin((i * Math.PI * 2 * n) / (n * 6) + ri * 1.3);
+      const [x, y] = pt(cx, cy, rad, a);
+      d += (i === 0 ? "M" : "L") + ` ${x} ${y} `;
+    }
+    pathEl(svg, d + "Z", { fill: "none", stroke: ink, "stroke-opacity": 0.7, "stroke-width": 0.7 });
+  });
+  circle(svg, cx, cy, r * 0.08, { fill: given ? c("rim-silver") : inlay(val)[0] });
+}
+
+// 11 DOT MATRIX -- the coin carries the game's own grid
+function coinDotMatrix(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  const g = r * 0.30, r0 = r * 0.085;
+  // a legal 4x4 takuzu row pattern, solid vs voided pellets
+  const grid = [0, 1, 0, 1,  1, 0, 1, 0,  0, 1, 1, 0,  1, 0, 0, 1];
+  for (let i = 0; i < 16; i++) {
+    const gx = cx + ((i % 4) - 1.5) * g, gy = cy + (Math.floor(i / 4) - 1.5) * g;
+    if (grid[i] === 0) circle(svg, gx, gy, r0, { fill: ink });
+    else circle(svg, gx, gy, r0, { fill: "none", stroke: ink, "stroke-width": r0 * 0.55 });
+  }
+  if (r >= 20) legendArc(svg, cx, cy, r * 0.80, "BINARY LOGIC", r * 0.145, glint, -58, 58);
+  if (given)
+    circle(svg, cx, cy, r * 0.72, { fill: "none", stroke: c("rim-silver"), "stroke-width": 1.2, "stroke-opacity": 0.9 });
+}
+
+// 12 SPLIT FIELD -- duality as texture, no symbol at all
+function coinSplitField(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1];
+  const step = r >= 20 ? r * 0.14 : r * 0.24;
+  // left half: horizontal hatching, right half: vertical
+  for (let y = -r + step; y < r; y += step) {
+    const half = Math.sqrt(r * r - y * y) * 0.92;
+    line(svg, cx - half, cy + y, cx - r * 0.06, cy + y,
+      { stroke: ink, "stroke-opacity": 0.75, "stroke-width": r * 0.03 });
+  }
+  for (let x = step; x < r; x += step) {
+    const half = Math.sqrt(r * r - x * x) * 0.92;
+    line(svg, cx + x, cy - half, cx + x, cy + half,
+      { stroke: ink, "stroke-opacity": 0.75, "stroke-width": r * 0.03 });
+  }
+  line(svg, cx, cy - r * 0.92, cx, cy + r * 0.92,
+    { stroke: given ? c("rim-silver") : inlay(val)[0], "stroke-width": r * 0.07, "stroke-linecap": "round" });
+}
+
+// =====================================================================
+// gallery assembly
+// =====================================================================
+
+const VARIANTS = [
+  ["1  CASH", coinCash,
+   "The pierced silhouette is the one coin shape you recognise by its hole, and the four cardinal characters (T K Z U) make text the entire device -- no picture at all.",
+   [["Cash (Chinese coin) - Wikipedia", "https://en.wikipedia.org/wiki/Cash_(Chinese_coin)"],
+    ["5 yen coin - Wikipedia", "https://en.wikipedia.org/wiki/5_yen_coin"]]],
+  ["2  LEGEND", coinLegend,
+   "After the text-only dinar tradition: writing IS the ornament. TAKUZU and BINAIRO circle between beaded borders; the only device is the pellet pair at centre -- one solid, one voided, the game's two states.",
+   [["The money with no face: Islamic coins - Medium", "https://medium.com/@HistoryOfMuslims/the-money-with-no-face-how-islamic-coins-broke-the-image-obsession-4ca8b926d4bb"],
+    ["Coin anatomy (legend, exergue) - NGC glossary", "https://www.ngccoin.com/news/article/8094/learn-grading-parts-of-a-coin/"]]],
+  ["3  INCUSE", coinIncuse,
+   "The oldest coin reverse there is: not a design ON the coin but the hammer blow itself, a quartered square punch with opposing quarters raised. Reads as struck metal at any size.",
+   [["Punch-marked coins - Wikipedia", "https://en.wikipedia.org/wiki/Punch-marked_coins"],
+    ["Incuse - Wikipedia", "https://en.wikipedia.org/wiki/Incuse"]]],
+  ["4  BIMETAL", coinBimetal,
+   "The two game metals in one planchet: an iron ring holds a copper core, and the mirror coin swaps them. The colour you read is the ring/core relationship -- the most modern-mint of the set.",
+   [["2 euro coin (bimetallic) - Wikipedia", "https://en.wikipedia.org/wiki/2_euro_coin"]]],
+  ["5  SCALLOP", coinScallop,
+   "The silhouette does all the work: a twelve-lobed scalloped planchet is identifiable in a peripheral glance, even at board scale, before any engraving reads.",
+   [["Hong Kong two-dollar coin (scalloped) - Wikipedia", "https://en.wikipedia.org/wiki/Hong_Kong_two-dollar_coin"]]],
+  ["6  PIERCED", coinPierced,
+   "The holed-coin tradition with a chrysanthemum radial: airy and light where every other coin is solid, and the open centre shows the socket through the coin.",
+   [["50 yen coin (holed, chrysanthemum) - Wikipedia", "https://en.wikipedia.org/wiki/50_yen_coin"]]],
+  ["7  HEPTAGON", coinHeptagon,
+   "The odd-sided planchet after the 50p's curved heptagon, carrying a {7/2} heptagram line device -- the only non-round, non-scalloped shape, unmistakable in a row of circles.",
+   [["Fifty pence (curved heptagon) - Wikipedia", "https://en.wikipedia.org/wiki/Fifty_pence_(British_coin)"]]],
+  ["8  RADIANT", coinRadiant,
+   "Light as the device: a full field of alternating rays from a voided centre, with TOHU WA-VOHU in the exergue arc. The finest line work of the set -- shimmering where the others are solid.",
+   [["Libertad (radiant field) - Wikipedia", "https://en.wikipedia.org/wiki/Libertad_(coin)"]]],
+  ["9  LONG CROSS", coinLongCross,
+   "The medieval hammered-penny grammar: a voided cross running clear to the edge (originally a cut guide against clipping) with three-pellet clusters in the quarters. Instantly old.",
+   [["History of the English penny 1154-1485 (long cross) - Wikipedia", "https://en.wikipedia.org/wiki/History_of_the_English_penny_(1154%E2%80%931485)"]]],
+  ["10  GUILLOCHE", coinGuilloche,
+   "Engine-turned lathe work from watch dials and banknote borders: concentric wave rings that moire against each other. The most precision-instrument coin -- it matches the faceplate's machinery.",
+   [["Guilloche (engine turning) - Wikipedia", "https://en.wikipedia.org/wiki/Guilloch%C3%A9"]]],
+  ["11  DOT MATRIX", coinDotMatrix,
+   "Self-referential: the coin carries a legal 4x4 takuzu grid as raised pellets, solid vs voided, under a BINARY LOGIC legend -- the tactile language of braille coinage put to work as the game itself.",
+   [["Louis Braille Bicentennial dollar (tactile) - Wikipedia", "https://en.wikipedia.org/wiki/Louis_Braille_Bicentennial_Silver_Dollar"]]],
+  ["12  SPLIT FIELD", coinSplitField,
+   "Duality with no symbol at all: the field halves into horizontal and vertical hatching either side of a raised bar. Binary stated purely as texture -- the most abstract statement in the set.",
+   [["Abstractions of value - ANA blog", "https://blog.money.org/coin-collecting/abstractions-of-value"],
+    ["Incuse - Wikipedia", "https://en.wikipedia.org/wiki/Incuse"]]],
+];
+
+const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
+const PANEL_W = 4 * ZCELL + 3 * GAP + 2 * 24;
+const PANEL_H = 246;
+
+function frame(svg, x, y, w, h, label) {
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  const lw = label.length * 7 + 10;
+  rect(svg, x + 18, y - 6, lw, 12, { fill: c("plate") });
+  txt(svg, x + 23, y + 3, label, 10, c("cream"), "start", "bold");
+}
+
+function variantSvg(title, drawCoin) {
+  const svg = [];
+  const W = PANEL_W + 20, H = PANEL_H + 24;
+  rect(svg, 0, 0, W, H, { rx: 8, fill: c("plate"), stroke: c("plate-edge") });
+  frame(svg, 10, 12, PANEL_W, PANEL_H, title);
+  const combos = [[0, false], [1, false], [0, true], [1, true]];
+  const labels = ["IRON", "COPPER", "FIXED", "FIXED"];
+  const rowx = 10 + 24, rowy = 12 + 18;
+  combos.forEach(([val, given], i) => {
+    const sx = rowx + i * (ZCELL + GAP);
+    socket(svg, sx, rowy, ZCELL);
+    drawCoin(svg, sx + ZCELL / 2, rowy + ZCELL / 2, Math.round(ZCELL * 0.33), val, given);
+    txt(svg, sx + ZCELL / 2, rowy + ZCELL + 14, labels[i], 8,
+      given ? c("gold") : c("steel"), "middle");
+  });
+  const strip = [[0, true], [1, false], [1, true], [0, false], null, [1, false], [0, true], [1, true]];
+  const spanw = strip.length * RCELL + (strip.length - 1) * RGAP + 2 * 12;
+  const bx = 10 + Math.round((PANEL_W - spanw) / 2), by = rowy + ZCELL + 24;
+  rect(svg, bx, by, spanw, RCELL + 24, { rx: 10, fill: c("board-bg"), stroke: c("ink") });
+  strip.forEach((cellv, i) => {
+    const sx = bx + 12 + i * (RCELL + RGAP), sy = by + 12;
+    socket(svg, sx, sy, RCELL);
+    if (cellv != null)
+      drawCoin(svg, sx + RCELL / 2, sy + RCELL / 2, Math.round(RCELL * 0.33), cellv[0], cellv[1]);
+  });
+  txt(svg, 10 + PANEL_W - 22, by + RCELL + 33, "AT BOARD SCALE", 8, c("dim"), "end");
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img"`
+    + ` aria-label="${esc(title)}">${svg.join("")}</svg>`;
+}
+
+const stage = document.getElementById("stage");
+stage.innerHTML = VARIANTS.map(([title, fn, why, links]) =>
+  `<div class="panel">${variantSvg(title, fn)}<div class="caption">`
+  + `<div class="why">${esc(why)}</div>`
+  + `<div class="insp">INSPIRATION: `
+  + links.map(([label, url]) => `<a href="${url}" target="_blank" rel="noopener">${esc(label)}</a>`).join(" · ")
+  + `</div></div></div>`).join("");
+
+})();
+</script>
+</body>
+</html>
