@@ -485,6 +485,7 @@ const COIN_METAL = {
   blue:     ["#9ba8bb", "#788da6", "#54677d", "#303842"],
   olive:    ["#98ac86", "#809c50", "#627b2c", "#3f4c23"],
   regal:    ["#bea9dc", "#8255b5", "#6624a0", "#2f0c4e"],
+  oxblood:  ["#b3676c", "#8f4046", "#6b2e33", "#331417"],
 };
 
 // gem cuts for the gems skin (amethyst/topaz/aqua from the Dupre ramps)
@@ -886,9 +887,9 @@ function drawDiscRunic(svg, cx, cy, r, val, given) {
   if (given) metalGivenRing(svg, cx, cy, r, m);
 }
 
-// PIERCED -- gunmetal vs gold, round hole and chrysanthemum radial
+// PIERCED -- blue vs deep oxblood, round hole and chrysanthemum radial
 function drawDiscPierced(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "gunmetal" : "gold";
+  const m = val === 0 ? "blue" : "oxblood";
   metalBlank(svg, cx, cy, r, m, given);
   const ink = mDeep(m);
   if (r >= 20)

@@ -1368,6 +1368,18 @@ coins define exactly four fills and four edges -- shared, not per-coin."
     (should (= (length (dom-by-tag svg 'radialGradient)) 4))
     (should (= (length (dom-by-tag svg 'linearGradient)) 4))))
 
+(ert-deftest test-takuzu-ui-pierced-wears-blue-and-oxblood ()
+  "Normal: the pierced coin lightened off the socket -- blue for 0 instead
+of gunmetal, deep oxblood for 1 instead of gold."
+  (let ((takuzu-coin-skin 'pierced))
+    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
+      (takuzu--draw-disc c0 50 50 33 0 nil)
+      (takuzu--draw-disc c1 50 50 33 1 nil)
+      (should (dom-by-id c0 "^m-blue-fill$"))
+      (should-not (dom-by-id c0 "^m-gunmetal-fill$"))
+      (should (dom-by-id c1 "^m-oxblood-fill$"))
+      (should-not (dom-by-id c1 "^m-gold-fill$")))))
+
 (ert-deftest test-takuzu-ui-bimetal-wears-dupre-colours ()
   "Normal: the bimetal coin strikes the Dupre palette -- a blue ring with a
 silver core and olive accents for 0, a terracotta ring with a gold core and

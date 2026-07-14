@@ -296,7 +296,7 @@ omits it)."
 ;; --- coin skins ---
 
 (defconst takuzu--coin-skin-registry
-  '((pierced   takuzu--draw-disc-pierced   gunmetal gold)
+  '((pierced   takuzu--draw-disc-pierced   blue     oxblood)
     (machined  takuzu--draw-disc-machined  nickel   gold)
     (cash      takuzu--draw-disc-cash      iron     gold)
     (gems      takuzu--draw-disc-gems      silver   gold)
@@ -342,7 +342,8 @@ thumbwheel through it in order."
     (walnut   "#a98a68" "#755837" "#4a3520" "#1f150b")
     (blue     "#9ba8bb" "#788da6" "#54677d" "#303842")
     (olive    "#98ac86" "#809c50" "#627b2c" "#3f4c23")
-    (regal    "#bea9dc" "#8255b5" "#6624a0" "#2f0c4e"))
+    (regal    "#bea9dc" "#8255b5" "#6624a0" "#2f0c4e")
+    (oxblood  "#b3676c" "#8f4046" "#6b2e33" "#331417"))
   "Coin metals as (NAME GLINT HI BASE DEEP), light to dark.
 Every ramp is drawn from the Dupre (WIP) theme palette so the coins sit in
 the faceplate's own colour world: silver/nickel from the silver and ground
@@ -703,8 +704,9 @@ GIVEN rings the coin in the contrasting metal."
     (when given (takuzu--metal-given-ring svg cx cy r m))))
 
 (defun takuzu--draw-disc-pierced (svg cx cy r val given)
-  "Draw the pierced coin of VAL at CX,CY radius R on SVG: gunmetal vs gold,
-a round hole under a chrysanthemum radial."
+  "Draw the pierced coin of VAL at CX,CY radius R on SVG: blue vs deep
+oxblood, a round hole under a chrysanthemum radial.  The blue body sits a
+step lighter than the old gunmetal so the coin clears the dark sockets."
   (let* ((m (takuzu--coin-pair-metal 'pierced val))
          (ink (takuzu--metal m 3)))
     (takuzu--metal-blank svg cx cy r m given)
