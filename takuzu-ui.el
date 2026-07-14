@@ -96,6 +96,10 @@ boards stretch the stage to keep it.")
 (defconst takuzu--event-h 30 "Height of the event annunciator strip below the board.")
 (defconst takuzu--event-tick 0.08 "Seconds between event-lamp pulse frames.")
 (defconst takuzu--event-breath 2.8 "Seconds per breathing cycle of a pulsing event lamp.")
+(defconst takuzu--invalid-hold 2.0
+  "Seconds the INVALID lamp holds full brightness before dimming.")
+(defconst takuzu--invalid-fade 0.6
+  "Seconds the INVALID lamp takes to dim after its hold window.")
 (defconst takuzu--event-dur takuzu--event-breath
   "Seconds an event lamp pulses before it goes dark.
 A single breathing cycle: the lamp breathes once and fades out rather than
@@ -461,7 +465,7 @@ frame's top break.  The frames have fixed heights sized to their contents;
 whatever height is left spreads as even gaps between them."
   (let* ((w takuzu--panel-w) (cx (+ x (/ w 2)))
          (fx (+ x 8)) (fw (- w 16))
-         (time-h 44) (size-h 46) (level-h 84) (left-h 62) (state-h 110)
+         (time-h 44) (size-h 46) (level-h 84) (left-h 62) (state-h 78)
          (gap (/ (- h 12 8 time-h size-h level-h left-h state-h) 4.0))
          (fy (+ y 12.0)))
     (svg-rectangle svg x y w h :rx 10 :fill (takuzu--c :well) :stroke (takuzu--c :panel-edge))
@@ -489,7 +493,7 @@ whatever height is left spreads as even gaps between them."
 (defun takuzu--legend-item-width (it charw kgap)
   "Estimated pixel width of legend item IT with CHARW and key-gap KGAP."
   (pcase (car it)
-    ((or 'word 'flashword) (* (length (nth 1 it)) charw))
+    ((or 'word 'flashword 'litword) (* (length (nth 1 it)) charw))
     (_ (+ (* (length (nth 1 it)) charw) kgap (* (length (nth 2 it)) charw)))))
 
 (defun takuzu--draw-legend-line (svg x y width size items)
@@ -514,6 +518,11 @@ Each item is (word WORD) -- word with its first letter gold-underlined -- or
                  (takuzu--legend-glyph svg cx y size (substring w 0 1)
                                        (if on (takuzu--c :gold-hi) (takuzu--c :steel)) on)
                  (takuzu--legend-glyph svg (+ cx charw) y size (substring w 1) (takuzu--c :dim))))
+              ((eq (car it) 'litword)
+               (let ((w (nth 1 it)) (on (nth 2 it)))
+                 (takuzu--legend-glyph svg cx y size (substring w 0 1) (takuzu--c :gold) t)
+                 (takuzu--legend-glyph svg (+ cx charw) y size (substring w 1)
+                                       (if on (takuzu--c :lamp-cyan) (takuzu--c :dim)))))
               ((eq (car it) 'keyed)
                (let ((k (nth 1 it)) (l (nth 2 it)))
                  (takuzu--legend-glyph svg cx y size k (takuzu--c :gold) t)
@@ -538,11 +547,25 @@ Each item is (word WORD) -- word with its first letter gold-underlined -- or
             (max 0 (min 255 (round (+ (chan a 1) (* k (- (chan b 1) (chan a 1)))))))
             (max 0 (min 255 (round (+ (chan a 2) (* k (- (chan b 2) (chan a 2))))))))))
 
+(defun takuzu--event-duration ()
+  "Seconds the current event lamp stays lit before the pulse timer clears it."
+  (if (eq takuzu--event 'invalid)
+      (+ takuzu--invalid-hold takuzu--invalid-fade)
+    takuzu--event-dur))
+
 (defun takuzu--event-intensity ()
-  "Pulse intensity 0..1 of the current event, a slow breathing over elapsed time."
+  "Pulse intensity 0..1 of the current event.
+Most events breathe slowly over their elapsed time.  INVALID instead holds
+full brightness for `takuzu--invalid-hold' seconds and then dims over
+`takuzu--invalid-fade' -- a steady warning, not a breath."
   (if (null takuzu--event-time) 0
     (let ((e (float-time (time-subtract (current-time) takuzu--event-time))))
-      (* 0.5 (- 1 (cos (/ (* 2 float-pi e) takuzu--event-breath)))))))
+      (if (eq takuzu--event 'invalid)
+          (cond ((< e takuzu--invalid-hold) 1.0)
+                ((< e (+ takuzu--invalid-hold takuzu--invalid-fade))
+                 (- 1.0 (/ (- e takuzu--invalid-hold) takuzu--invalid-fade)))
+                (t 0))
+        (* 0.5 (- 1 (cos (/ (* 2 float-pi e) takuzu--event-breath))))))))
 
 (defun takuzu--draw-event-annunciator (svg x y w h)
   "Draw the EVENT annunciator strip on SVG at X,Y size W,H.
@@ -577,25 +600,37 @@ incandescent lamp, then fades."
     (svg-circle svg cx cy r :fill (takuzu--c :jewel-off) :stroke (takuzu--c :jewel-off-edge) :stroke-width 0.5)))
 
 (defun takuzu--game-state ()
-  "The current game STATE symbol: ready, solving, solved, or shown."
-  (cond (takuzu--armed 'ready) (takuzu--won 'solved)
-        (takuzu--proven 'shown) (t 'solving)))
+  "The current game STATE symbol: ready, solving, or solved.
+A proven (shown) board counts as solved -- the SOLVED lamp carries the
+failure in its colour instead of a separate SHOWN state."
+  (cond (takuzu--armed 'ready)
+        ((or takuzu--won takuzu--proven) 'solved)
+        (t 'solving)))
+
+(defun takuzu--state-lamps ()
+  "The STATE lamp rows as (LABEL COLOR ON) triples.
+READY and SOLVED are steady.  SOLVING follows the flash cycle so the lamp
+blinks while a game is in play and goes dark once it ends.  SOLVED lights
+green on a win and red when the solution was proven instead -- a reveal is
+a failed solve."
+  (let ((state (takuzu--game-state)))
+    (list (list "READY" (takuzu--c :lamp-green) (eq state 'ready))
+          (list "SOLVING" (takuzu--c :lamp-amber)
+                (and (eq state 'solving) (takuzu--flash-on-p)))
+          (list "SOLVED" (if (and takuzu--proven (not takuzu--won))
+                             (takuzu--c :fail)
+                           (takuzu--c :lamp-green))
+                (eq state 'solved)))))
 
 (defun takuzu--draw-state-lamps (svg x y w h)
-  "Draw the framed STATE lamp group on SVG at X,Y size W,H.
-READY/SOLVING/SOLVED/SHOWN track the game state; ASSIST is its own mode lamp."
+  "Draw the framed STATE lamp group on SVG at X,Y size W,H."
   (takuzu--draw-frame svg x y w h "STATE")
-  (let* ((state (takuzu--game-state))
-         (lamps `((ready "READY" ,(takuzu--c :lamp-green) ,(eq state 'ready))
-                  (solving "SOLVING" ,(takuzu--c :lamp-amber) ,(eq state 'solving))
-                  (solved "SOLVED" ,(takuzu--c :lamp-green) ,(eq state 'solved))
-                  (shown "SHOWN" ,(takuzu--c :fail) ,(eq state 'shown))
-                  (assist "ASSIST" ,(takuzu--c :lamp-cyan) ,takuzu--assist)))
+  (let* ((lamps (takuzu--state-lamps))
          (n (length lamps)) (top (+ y 16)) (bot (- (+ y h) 12))
          (rowstep (/ (- bot top) (float (1- n)))) (jx (+ x 22)))
     (cl-loop for lamp in lamps for i from 0 do
-             (let ((ly (round (+ top (* i rowstep)))) (lab (nth 1 lamp))
-                   (col (nth 2 lamp)) (on (nth 3 lamp)))
+             (let ((ly (round (+ top (* i rowstep)))) (lab (nth 0 lamp))
+                   (col (nth 1 lamp)) (on (nth 2 lamp)))
                (takuzu--draw-jewel svg jx ly 6 col on)
                (takuzu--txt svg (+ jx 13) (+ ly 3) lab 7
                             (if on (takuzu--c :cream) (takuzu--c :steel)) "start")))))
@@ -616,7 +651,7 @@ New key flashes to prompt the start."
     (takuzu--draw-legend-line
      svg x (+ y 52) width 10
      `((keyed "SPC" "CYCLE") (word "UNDO") (keyed "?" "HINT")
-       (word "CHECK") (word "ASSIST")))))
+       (word "CHECK") (litword "ASSIST" ,takuzu--assist)))))
 
 (defun takuzu--faceplate-width ()
   "Pixel width of the faceplate for the current board size."
@@ -998,7 +1033,7 @@ expiry mechanism, and a lamp lit in a buried buffer must still go dark."
     (with-current-buffer buf
       (if (or (null takuzu--event-time)
               (> (float-time (time-subtract (current-time) takuzu--event-time))
-                 takuzu--event-dur))
+                 (takuzu--event-duration)))
           (progn (setq takuzu--event nil takuzu--event-time nil)
                  (takuzu--cancel-timer takuzu--event-timer)
                  (takuzu--redraw buf))

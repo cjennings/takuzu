@@ -538,14 +538,14 @@ hint's last tier answers with an honest from-the-solution label."
     (should (string-lessp mid "#ff0000"))))
 
 (ert-deftest test-takuzu-ui-game-state ()
-  "Normal: game state maps armed/won/proven flags; armed takes precedence."
+  "Normal: game state is ready/solving/solved; a proven board is solved too."
   (with-temp-buffer
     (setq takuzu--armed nil takuzu--won nil takuzu--proven nil)
     (should (eq (takuzu--game-state) 'solving))
     (setq takuzu--won t)
     (should (eq (takuzu--game-state) 'solved))
     (setq takuzu--won nil takuzu--proven t)
-    (should (eq (takuzu--game-state) 'shown))
+    (should (eq (takuzu--game-state) 'solved))
     (setq takuzu--armed '(:size 4 :difficulty easy))
     (should (eq (takuzu--game-state) 'ready))))
 
@@ -866,20 +866,102 @@ instruments overprint each other unless the stage grows to fit them."
       (should (eq (car svg) 'svg)))))
 
 (ert-deftest test-takuzu-ui-draw-state-lamps ()
-  "Normal: the STATE lamp group draws all five labelled lamps in every state."
+  "Normal: the STATE lamp group draws exactly READY/SOLVING/SOLVED.
+SHOWN and ASSIST are gone: a proven board is a failed solve (red SOLVED),
+and assist lives in the strip under the board."
   (with-temp-buffer
     (dolist (spec '((ready . ((:size 4 :difficulty easy) nil nil))
                     (solving . (nil nil nil))
                     (solved . (nil t nil))
-                    (shown . (nil nil t))))
+                    (solved . (nil nil t))))
       (pcase-let ((`(,armed ,won ,proven) (cdr spec)))
-        (setq takuzu--armed armed takuzu--won won takuzu--proven proven
-              takuzu--assist (eq (car spec) 'solving))
+        (setq takuzu--armed armed takuzu--won won takuzu--proven proven)
         (should (eq (takuzu--game-state) (car spec)))
         (let ((svg (svg-create 200 200)))
-          (takuzu--draw-state-lamps svg 8 8 160 118)
-          ;; STATE header + one label per lamp
-          (should (= (length (dom-by-tag svg 'text)) 6)))))))
+          (takuzu--draw-state-lamps svg 8 8 160 86)
+          (let ((texts (mapcar #'dom-text (dom-by-tag svg 'text))))
+            ;; STATE header + one label per lamp, no retired labels
+            (should (= (length texts) 4))
+            (should-not (member "SHOWN" texts))
+            (should-not (member "ASSIST" texts))))))))
+
+(ert-deftest test-takuzu-ui-state-lamps-solved-color ()
+  "Normal: SOLVED lights green on a win and red on a proven (failed) board."
+  (with-temp-buffer
+    (setq takuzu--armed nil takuzu--won t takuzu--proven nil)
+    (let ((solved (assoc "SOLVED" (takuzu--state-lamps))))
+      (should (nth 2 solved))
+      (should (equal (nth 1 solved) (takuzu--c :lamp-green))))
+    (setq takuzu--won nil takuzu--proven t)
+    (let ((solved (assoc "SOLVED" (takuzu--state-lamps))))
+      (should (nth 2 solved))
+      (should (equal (nth 1 solved) (takuzu--c :fail))))))
+
+(ert-deftest test-takuzu-ui-state-lamps-solving-flashes ()
+  "Normal: the SOLVING lamp follows the flash cycle mid-game, off once solved."
+  (with-temp-buffer
+    (setq takuzu--armed nil takuzu--won nil takuzu--proven nil)
+    (cl-letf (((symbol-function 'takuzu--flash-on-p) (lambda () t)))
+      (should (nth 2 (assoc "SOLVING" (takuzu--state-lamps)))))
+    (cl-letf (((symbol-function 'takuzu--flash-on-p) (lambda () nil)))
+      (should-not (nth 2 (assoc "SOLVING" (takuzu--state-lamps)))))
+    (setq takuzu--won t)
+    (cl-letf (((symbol-function 'takuzu--flash-on-p) (lambda () t)))
+      (should-not (nth 2 (assoc "SOLVING" (takuzu--state-lamps)))))))
+
+(ert-deftest test-takuzu-ui-legend-assist-lit ()
+  "Normal: assist mode lights the ASSIST legend word in the strip under the board."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (setq takuzu--assist nil)
+    (let ((off (let ((svg (takuzu--svg)))
+                 (with-temp-buffer (svg-print svg) (buffer-string)))))
+      (should-not (string-match-p (takuzu--c :lamp-cyan) off)))
+    (setq takuzu--assist t)
+    (let ((on (let ((svg (takuzu--svg)))
+                (with-temp-buffer (svg-print svg) (buffer-string)))))
+      (should (string-match-p (takuzu--c :lamp-cyan) on)))))
+
+(ert-deftest test-takuzu-ui-event-intensity-invalid-holds ()
+  "Boundary: the INVALID lamp holds full brightness for its hold window, then dims.
+Craig's spec: stay lit two seconds, then dim -- not the breathing pulse the
+other events use."
+  (with-temp-buffer
+    (let ((t0 (current-time)))
+      (setq takuzu--event 'invalid takuzu--event-time t0)
+      (cl-letf (((symbol-function 'current-time)
+                 (lambda () (time-add t0 0.1))))
+        (should (= (takuzu--event-intensity) 1.0)))
+      (cl-letf (((symbol-function 'current-time)
+                 (lambda () (time-add t0 (- takuzu--invalid-hold 0.1)))))
+        (should (= (takuzu--event-intensity) 1.0)))
+      (cl-letf (((symbol-function 'current-time)
+                 (lambda () (time-add t0 (+ takuzu--invalid-hold
+                                            (* 0.5 takuzu--invalid-fade))))))
+        (let ((k (takuzu--event-intensity)))
+          (should (< 0.3 k 0.7))))
+      (cl-letf (((symbol-function 'current-time)
+                 (lambda () (time-add t0 (+ takuzu--invalid-hold
+                                            takuzu--invalid-fade 0.1)))))
+        (should (= (takuzu--event-intensity) 0))))))
+
+(ert-deftest test-takuzu-ui-event-pulse-invalid-expiry ()
+  "Boundary: the invalid pulse survives past the breathing duration, then clears.
+The hold-plus-fade window is longer than the one-breath duration other
+events get, so the pulse timer must not cut it short."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (let ((t0 (current-time)))
+      (setq takuzu--event 'invalid takuzu--event-time t0)
+      (cl-letf (((symbol-function 'current-time)
+                 (lambda () (time-add t0 (- takuzu--invalid-hold 0.1)))))
+        (takuzu--event-pulse (current-buffer))
+        (should (eq takuzu--event 'invalid)))
+      (cl-letf (((symbol-function 'current-time)
+                 (lambda () (time-add t0 (+ takuzu--invalid-hold
+                                            takuzu--invalid-fade 0.2)))))
+        (takuzu--event-pulse (current-buffer))
+        (should (null takuzu--event))))))
 
 (ert-deftest test-takuzu-ui-draw-event-annunciator ()
   "Normal: the annunciator draws six legend cells; the active one lights up."
