@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Takuzu coin-design gallery v8: BIMETAL COLOURWAYS.  The drum-11 bimetal
+     geometry (ring, core, dotted joint, centre pin) struck in versions of
+     Craig's swatch palettes.  Palette A (panels 1-5): Sand #BFB48F, Taupe
+     Grey #564E58, Burnt Rose #904E55, Parchment #F2EFE9, Carbon Black
+     #252627.  Palette B (panels 6-10): Sunflower Gold #FFC145, Ocean Blue
+     #1D84B5, Porcelain #FFFFFB, Carbon Black #252422, Olive Wood #7A542E.
+     Each panel is a complete two-colour skin -- ring/core/accent per colour
+     -- so a keeper can replace (or join) the Dupre bimetal as-is.  Same
+     struck-metal engine, librsvg-safe, ports 1:1 to svg.el. -->
+<title>Takuzu — Coin Prototypes v8 (Bimetal Colourways)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 16px 60px;
+    display: flex; flex-direction: column; align-items: center;
+    background: #0b0a08; font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: #969385;
+  }
+  .head { width: 560px; max-width: 100%; margin-bottom: 10px; }
+  .head h1 { margin: 0; font-size: 26px; color: #b99640; font-style: italic; }
+  .head p { margin: 4px 0 0; font-size: 11px; color: #7c838a; }
+  .panel { width: 560px; max-width: 100%; margin-top: 26px; }
+  .panel svg { display: block; width: 100%; height: auto; }
+  .caption {
+    border: 1px solid #201d17; border-top: none; border-radius: 0 0 8px 8px;
+    background: #0a0c0d; padding: 10px 14px 12px; font-size: 11.5px; line-height: 1.5;
+  }
+  .caption .why { color: #969385; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>TAKUZU / COIN PROTOTYPES V8</h1>
+  <p>BIMETAL COLOURWAYS - A: SAND / TAUPE / ROSE / PARCHMENT / CARBON &middot; B: SUNFLOWER / OCEAN / PORCELAIN / CARBON / OLIVE WOOD</p>
+</div>
+<div id="stage"></div>
+
+<script>
+"use strict";
+(function () {
+
+const COLORS = {
+  "plate": "#1b1710", "plate-edge": "#2c2620", "panel-edge": "#201d17",
+  "well": "#0a0c0d", "board-bg": "#14110c",
+  "socket": "#0c0a07", "socket-edge": "#05040a",
+  "ink": "#000000", "white": "#ffffff",
+  "gold": "#b99640", "cream": "#f3e7c5",
+  "steel": "#969385", "dim": "#7c838a",
+  "rim-silver": "#c3c9d1", "rim-iron": "#3a3e44",
+};
+const c = k => COLORS[k];
+
+// --- the five swatches as struck-metal ramps: [glint, hi, base, deep] ---
+
+const MAT = {
+  // palette A
+  sand:      ["#eae3c8", "#d5cbaa", "#bfb48f", "#6e6749"],
+  taupe:     ["#a099a5", "#78707d", "#564e58", "#2a262c"],
+  rose:      ["#cf9298", "#af6b71", "#904e55", "#48262a"],
+  parchment: ["#ffffff", "#f9f7f2", "#f2efe9", "#8f8a80"],
+  carbon:    ["#6f7173", "#47494c", "#252627", "#0b0b0c"],
+  // palette B
+  sunflower: ["#ffe3a4", "#ffd274", "#ffc145", "#94691f"],
+  ocean:     ["#82c3de", "#4aa2c9", "#1d84b5", "#0e415a"],
+  porcelain: ["#ffffff", "#fffffd", "#fffffb", "#9b9b93"],
+  coal:      ["#6e6c68", "#454340", "#252422", "#0b0b0a"],
+  olivewood: ["#c49a67", "#9d7647", "#7a542e", "#3b2814"],
+};
+const LIGHT = new Set(["sand", "parchment", "sunflower", "porcelain"]);
+const glint = m => MAT[m][0], hi = m => MAT[m][1];
+const base = m => MAT[m][2], deep = m => MAT[m][3];
+
+const attrs = o => Object.entries(o)
+  .filter(([, v]) => v != null)
+  .map(([k, v]) => ` ${k}="${v}"`).join("");
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const rect = (svg, x, y, w, h, o) => svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}"${attrs(o)}/>`);
+const circle = (svg, cx, cy, r, o) => svg.push(`<circle cx="${cx}" cy="${cy}" r="${r}"${attrs(o)}/>`);
+const ellipse = (svg, cx, cy, rx, ry, o) => svg.push(`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"${attrs(o)}/>`);
+function txt(svg, x, y, str, size, color, anchor, weight) {
+  svg.push(`<text x="${x}" y="${y}" font-family="monospace" font-size="${size}"`
+    + ` fill="${color}" text-anchor="${anchor || "start"}"`
+    + ` font-weight="${weight || "normal"}">${esc(str)}</text>`);
+}
+
+function ensureMat(svg, m) {
+  if (!svg.mats) svg.mats = new Set();
+  if (svg.mats.has(m)) return;
+  svg.mats.add(m);
+  svg.push(`<radialGradient id="m-${m}-fill" cx="0.34" cy="0.28" r="1.05">`
+    + `<stop offset="0" stop-color="${glint(m)}"/>`
+    + `<stop offset="0.22" stop-color="${hi(m)}"/>`
+    + `<stop offset="0.62" stop-color="${base(m)}"/>`
+    + `<stop offset="1" stop-color="${deep(m)}"/>`
+    + `</radialGradient>`
+    + `<linearGradient id="m-${m}-edge" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="${glint(m)}"/>`
+    + `<stop offset="0.5" stop-color="${base(m)}"/>`
+    + `<stop offset="1" stop-color="${deep(m)}"/>`
+    + `</linearGradient>`);
+}
+const mfill = m => `url(#m-${m}-fill)`;
+const medge = m => `url(#m-${m}-edge)`;
+const fixedInk = m => LIGHT.has(m) ? c("rim-iron") : c("rim-silver");
+
+function metalSheen(svg, cx, cy, r) {
+  ellipse(svg, cx - r * 0.30, cy - r * 0.34, r * 0.34, r * 0.18,
+    { fill: c("white"), "fill-opacity": 0.18 });
+  ellipse(svg, cx - r * 0.38, cy - r * 0.42, r * 0.10, r * 0.055,
+    { fill: c("white"), "fill-opacity": 0.55 });
+}
+function givenRing(svg, cx, cy, r, m) {
+  circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: fixedInk(m), "stroke-width": 1.6 });
+  circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.3 });
+}
+
+function socket(svg, sx, sy, cell) {
+  rect(svg, sx, sy, cell, cell, {
+    rx: cell * 0.18, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1,
+  });
+}
+
+// the drum-11 bimetal geometry: ring, core, dotted joint, centre pin
+function bimetal(svg, cx, cy, r, spec, given) {
+  const [ring, core, accent] = spec;
+  ensureMat(svg, ring); ensureMat(svg, core);
+  circle(svg, cx, cy, r, { fill: mfill(ring), stroke: c("ink"), "stroke-width": 0.7, "stroke-opacity": 0.8 });
+  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(ring), "stroke-width": r * 0.09 });
+  circle(svg, cx, cy, r * 0.60, { fill: mfill(core), stroke: deep(ring), "stroke-width": 1 });
+  circle(svg, cx, cy, r * 0.60, { fill: "none", stroke: medge(core), "stroke-width": r * 0.05, "stroke-opacity": 0.8 });
+  if (r >= 20) {
+    const seg = (2 * Math.PI * r * 0.80) / 44;
+    circle(svg, cx, cy, r * 0.80, {
+      fill: "none", stroke: base(accent), "stroke-width": r * 0.045, "stroke-opacity": 0.85,
+      "stroke-dasharray": `${(seg * 0.4).toFixed(2)} ${(seg * 0.6).toFixed(2)}`,
+    });
+  }
+  metalSheen(svg, cx, cy, r);
+  circle(svg, cx, cy, r * 0.07, { fill: hi(accent), stroke: c("ink"), "stroke-width": 0.5 });
+  if (given) givenRing(svg, cx, cy, r, ring);
+}
+
+// each variant: [title, spec for colour 0, spec for colour 1, caption]
+// spec = [ring, core, accent]
+const VARIANTS = [
+  ["1  INK AND PAGE",
+   ["carbon", "parchment", "rose"], ["parchment", "carbon", "sand"],
+   "The inverse pair at maximum contrast: carbon ring around a parchment core with a burnt-rose accent, flipped to parchment around carbon with sand. The strongest board read of the set."],
+  ["2  ROSE AND SAND",
+   ["rose", "parchment", "carbon"], ["sand", "carbon", "rose"],
+   "Burnt rose holding parchment, carbon dotting the joint -- against sand holding carbon with a rose accent. Warm both sides, told apart by the ring's weight."],
+  ["3  TAUPE AND ROSE",
+   ["taupe", "sand", "rose"], ["rose", "parchment", "taupe"],
+   "The two muted tones lead: taupe around sand with rose accents, rose around parchment with taupe. The dustiest, most vintage pairing."],
+  ["4  DESERT",
+   ["sand", "taupe", "parchment"], ["rose", "carbon", "parchment"],
+   "Sand around taupe and rose around carbon, parchment accents on both. The one colourway where the accent matches across the pair, like two denominations of one currency."],
+  ["5  NIGHT AND DAY",
+   ["carbon", "rose", "parchment"], ["parchment", "taupe", "rose"],
+   "Carbon holding a burnt-rose heart with parchment dots, against parchment holding taupe with rose. Dark-warm vs light-cool without repeating Ink and Page."],
+  ["6  HARBOUR",
+   ["ocean", "porcelain", "sunflower"], ["sunflower", "coal", "ocean"],
+   "Palette B opens loud: ocean blue around porcelain with sunflower dots, against sunflower around carbon with ocean. Cold-bright vs hot-dark -- the strongest read of the B set."],
+  ["7  TIDE LINE",
+   ["porcelain", "ocean", "olivewood"], ["olivewood", "sunflower", "porcelain"],
+   "Porcelain holding ocean with olive-wood accents, against olive wood holding sunflower with porcelain. Sea against shore; the warmest B pairing."],
+  ["8  NIGHT WATCH",
+   ["coal", "sunflower", "ocean"], ["porcelain", "olivewood", "sunflower"],
+   "Carbon around a sunflower heart with ocean dots -- a lit lantern -- against porcelain around olive wood. Dark-lit vs light-earth."],
+  ["9  DRIFTWOOD",
+   ["olivewood", "porcelain", "ocean"], ["ocean", "sunflower", "coal"],
+   "Olive wood holding porcelain, ocean dotting the joint, against ocean holding sunflower with carbon. Both sides carry blue somewhere, told apart by the wood."],
+  ["10  SOVEREIGN",
+   ["sunflower", "coal", "porcelain"], ["coal", "porcelain", "sunflower"],
+   "The B-palette inverse pair, cousin to Ink and Page: sunflower around carbon flipped to carbon around porcelain, sunflower pinning both. Maximum contrast, gold-first."],
+];
+
+const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
+const PANEL_W = 4 * ZCELL + 3 * GAP + 2 * 24;
+const PANEL_H = 246;
+
+function frame(svg, x, y, w, h, label) {
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  const lw = label.length * 7 + 10;
+  rect(svg, x + 18, y - 6, lw, 12, { fill: c("plate") });
+  txt(svg, x + 23, y + 3, label, 10, c("cream"), "start", "bold");
+}
+
+function variantSvg(title, spec0, spec1) {
+  const svg = [];
+  const W = PANEL_W + 20, H = PANEL_H + 24;
+  const draw = (x, y, r, val, given) =>
+    bimetal(svg, x, y, r, val === 0 ? spec0 : spec1, given);
+  rect(svg, 0, 0, W, H, { rx: 8, fill: c("plate"), stroke: c("plate-edge") });
+  frame(svg, 10, 12, PANEL_W, PANEL_H, title);
+  const combos = [[0, false], [1, false], [0, true], [1, true]];
+  const labels = ["COLOUR 0", "COLOUR 1", "FIXED", "FIXED"];
+  const rowx = 10 + 24, rowy = 12 + 18;
+  combos.forEach(([val, given], i) => {
+    const sx = rowx + i * (ZCELL + GAP);
+    socket(svg, sx, rowy, ZCELL);
+    draw(sx + ZCELL / 2, rowy + ZCELL / 2, Math.round(ZCELL * 0.33), val, given);
+    txt(svg, sx + ZCELL / 2, rowy + ZCELL + 14, labels[i], 8,
+      given ? c("gold") : c("steel"), "middle");
+  });
+  const strip = [[0, true], [1, false], [1, true], [0, false], null, [1, false], [0, true], [1, true]];
+  const spanw = strip.length * RCELL + (strip.length - 1) * RGAP + 2 * 12;
+  const bx = 10 + Math.round((PANEL_W - spanw) / 2), by = rowy + ZCELL + 24;
+  rect(svg, bx, by, spanw, RCELL + 24, { rx: 10, fill: c("board-bg"), stroke: c("ink") });
+  strip.forEach((cellv, i) => {
+    const sx = bx + 12 + i * (RCELL + RGAP), sy = by + 12;
+    socket(svg, sx, sy, RCELL);
+    if (cellv != null)
+      draw(sx + RCELL / 2, sy + RCELL / 2, Math.round(RCELL * 0.33), cellv[0], cellv[1]);
+  });
+  txt(svg, 10 + PANEL_W - 22, by + RCELL + 33, "AT BOARD SCALE", 8, c("dim"), "end");
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img"`
+    + ` aria-label="${esc(title)}">${svg.join("")}</svg>`;
+}
+
+const stage = document.getElementById("stage");
+stage.innerHTML = VARIANTS.map(([title, s0, s1, why]) =>
+  `<div class="panel">${variantSvg(title, s0, s1)}<div class="caption">`
+  + `<div class="why">${esc(why)}</div></div></div>`).join("");
+
+})();
+</script>
+</body>
+</html>
