@@ -297,9 +297,9 @@ omits it)."
 
 (defconst takuzu--coin-skin-registry
   '((pierced   takuzu--draw-disc-pierced   gunmetal gold)
+    (machined  takuzu--draw-disc-machined  nickel   gold)
     (cash      takuzu--draw-disc-cash      iron     gold)
     (gems      takuzu--draw-disc-gems      silver   gold)
-    (machined  takuzu--draw-disc-machined  nickel   gold)
     (lamp      takuzu--draw-disc-lamp      nil      nil)
     (jewel     takuzu--draw-disc-jewel     nil      nil)
     (compass   takuzu--draw-disc-compass   nil      nil)

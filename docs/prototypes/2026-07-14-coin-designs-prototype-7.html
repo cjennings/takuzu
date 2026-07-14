@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Takuzu coin-design gallery v7: CARVED ORNAMENT.  From Craig's third
+     inspiration photo: a walnut-ringed medallion filled with silver acanthus
+     filigree beside a beaded gold plate carrying carved red-lacquer foliage.
+     The photo pair IS the two-colour grammar -- bright ornament on a dark
+     wood body vs dark lacquer ornament on a bright gold body -- so most
+     skins here strike colour 0 in walnut+metal and colour 1 in gold+lacquer.
+     A small foliage engine (curled acanthus leaf, fleur-de-lis, palmette
+     fan) composes every face.  librsvg-safe primitives only (paths, circles,
+     gradients), so keepers port 1:1 to svg.el. -->
+<title>Takuzu — Coin Prototypes v7 (Carved Ornament)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 16px 60px;
+    display: flex; flex-direction: column; align-items: center;
+    background: #0b0a08; font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: #969385;
+  }
+  .head { width: 560px; max-width: 100%; margin-bottom: 10px; }
+  .head h1 { margin: 0; font-size: 26px; color: #b99640; font-style: italic; }
+  .head p { margin: 4px 0 0; font-size: 11px; color: #7c838a; }
+  .panel { width: 560px; max-width: 100%; margin-top: 26px; }
+  .panel svg { display: block; width: 100%; height: auto; }
+  .caption {
+    border: 1px solid #201d17; border-top: none; border-radius: 0 0 8px 8px;
+    background: #0a0c0d; padding: 10px 14px 12px; font-size: 11.5px; line-height: 1.5;
+  }
+  .caption .why { color: #969385; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>TAKUZU / COIN PROTOTYPES V7</h1>
+  <p>CARVED ORNAMENT - ACANTHUS FILIGREE ON WOOD, LACQUER FOLIAGE ON GOLD</p>
+</div>
+<div id="stage"></div>
+
+<script>
+"use strict";
+(function () {
+
+const COLORS = {
+  "plate": "#1b1710", "plate-edge": "#2c2620", "panel-edge": "#201d17",
+  "well": "#0a0c0d", "board-bg": "#14110c",
+  "socket": "#0c0a07", "socket-edge": "#05040a",
+  "ink": "#000000", "white": "#ffffff",
+  "gold": "#b99640", "cream": "#f3e7c5",
+  "steel": "#969385", "dim": "#7c838a",
+  "rim-silver": "#c3c9d1", "rim-iron": "#3a3e44",
+};
+const c = k => COLORS[k];
+
+// --- materials: [glint, hi, base, deep].  Metals, woods, and the carved
+// cinnabar lacquer all ride one table so ornament and body pick freely. ---
+
+const MAT = {
+  silver:   ["#f4f6f8", "#dfe3e7", "#aab0b7", "#62676e"],
+  pewter:   ["#e6e9ec", "#c2c8cf", "#8f96a0", "#4c5158"],
+  gold:     ["#f8e7ae", "#e8cd76", "#b99640", "#6d5520"],
+  copper:   ["#f4c193", "#d99a5e", "#b87333", "#6f4218"],
+  iron:     ["#8e949b", "#5a5f66", "#33363b", "#191b1e"],
+  bronze:   ["#e0b184", "#c89858", "#8c6a3f", "#4e3319"],
+  gunmetal: ["#7f868e", "#565d66", "#363b42", "#1d2024"],
+  oak:      ["#e7d3a4", "#cbaa6d", "#a17c46", "#513a1c"],
+  walnut:   ["#a98a68", "#755837", "#4a3520", "#1f150b"],
+  lacquer:  ["#e08a72", "#b03a2b", "#7a1d15", "#3a0c08"],
+};
+const LIGHT = new Set(["silver", "pewter", "gold", "oak"]);
+const glint = m => MAT[m][0], hi = m => MAT[m][1];
+const base = m => MAT[m][2], deep = m => MAT[m][3];
+
+const attrs = o => Object.entries(o)
+  .filter(([, v]) => v != null)
+  .map(([k, v]) => ` ${k}="${v}"`).join("");
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const rect = (svg, x, y, w, h, o) => svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}"${attrs(o)}/>`);
+const circle = (svg, cx, cy, r, o) => svg.push(`<circle cx="${cx}" cy="${cy}" r="${r}"${attrs(o)}/>`);
+const ellipse = (svg, cx, cy, rx, ry, o) => svg.push(`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"${attrs(o)}/>`);
+const pathEl = (svg, d, o) => svg.push(`<path d="${d}"${attrs(o)}/>`);
+function txt(svg, x, y, str, size, color, anchor, weight) {
+  svg.push(`<text x="${x}" y="${y}" font-family="monospace" font-size="${size}"`
+    + ` fill="${color}" text-anchor="${anchor || "start"}"`
+    + ` font-weight="${weight || "normal"}">${esc(str)}</text>`);
+}
+
+const pt = (cx, cy, rr, deg) => {
+  const a = (deg - 90) * Math.PI / 180;
+  return [+(cx + rr * Math.cos(a)).toFixed(2), +(cy + rr * Math.sin(a)).toFixed(2)];
+};
+
+function ensureMat(svg, m) {
+  if (!svg.mats) svg.mats = new Set();
+  if (svg.mats.has(m)) return;
+  svg.mats.add(m);
+  svg.push(`<radialGradient id="m-${m}-fill" cx="0.34" cy="0.28" r="1.05">`
+    + `<stop offset="0" stop-color="${glint(m)}"/>`
+    + `<stop offset="0.22" stop-color="${hi(m)}"/>`
+    + `<stop offset="0.62" stop-color="${base(m)}"/>`
+    + `<stop offset="1" stop-color="${deep(m)}"/>`
+    + `</radialGradient>`
+    + `<linearGradient id="m-${m}-edge" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="${glint(m)}"/>`
+    + `<stop offset="0.5" stop-color="${base(m)}"/>`
+    + `<stop offset="1" stop-color="${deep(m)}"/>`
+    + `</linearGradient>`);
+}
+const mfill = m => `url(#m-${m}-fill)`;
+const medge = m => `url(#m-${m}-edge)`;
+const fixedInk = m => LIGHT.has(m) ? c("rim-iron") : c("rim-silver");
+
+function givenRing(svg, cx, cy, r, m) {
+  circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: fixedInk(m), "stroke-width": 1.6 });
+  circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.3 });
+}
+
+// --- the two bodies from the photo ---
+
+// dark turned wood with a raised rounded ring frame
+function woodBody(svg, cx, cy, r, wood, given) {
+  ensureMat(svg, wood);
+  circle(svg, cx, cy, r, { fill: mfill(wood), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
+  circle(svg, cx, cy, r * 0.90, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.16 });
+  circle(svg, cx, cy, r * 0.81, { fill: "none", stroke: deep(wood), "stroke-width": 0.8, "stroke-opacity": 0.6 });
+  circle(svg, cx, cy, r * 0.985, { fill: "none", stroke: deep(wood), "stroke-width": 0.8, "stroke-opacity": 0.6 });
+  ellipse(svg, cx - r * 0.30, cy - r * 0.34, r * 0.36, r * 0.20,
+    { fill: c("white"), "fill-opacity": 0.08 });
+  if (given) givenRing(svg, cx, cy, r, wood);
+}
+
+// polished gold plate with a beaded rim
+function goldBody(svg, cx, cy, r, m, given, detailed) {
+  ensureMat(svg, m);
+  circle(svg, cx, cy, r, { fill: mfill(m), stroke: c("ink"), "stroke-width": 0.7, "stroke-opacity": 0.8 });
+  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(m), "stroke-width": r * 0.09 });
+  if (detailed)
+    for (let i = 0; i < 30; i++)
+      circle(svg, ...pt(cx, cy, r * 0.90, i * 12), r * 0.038, { fill: hi(m), "fill-opacity": 0.9 });
+  ellipse(svg, cx - r * 0.30, cy - r * 0.34, r * 0.34, r * 0.18,
+    { fill: c("white"), "fill-opacity": 0.18 });
+  ellipse(svg, cx - r * 0.38, cy - r * 0.42, r * 0.10, r * 0.055,
+    { fill: c("white"), "fill-opacity": 0.55 });
+  if (given) givenRing(svg, cx, cy, r, m);
+}
+
+// --- the foliage engine ---
+
+// local frame at a bearing: S sideways, O outward unit vectors
+function frameAt(deg) {
+  const t = deg * Math.PI / 180;
+  return { S: [Math.cos(t), Math.sin(t)], O: [Math.sin(t), -Math.cos(t)] };
+}
+const fp = (bx, by, f, u, v) =>
+  `${(bx + u * f.S[0] + v * f.O[0]).toFixed(2)} ${(by + u * f.S[1] + v * f.O[1]).toFixed(2)}`;
+
+// a curled acanthus leaf: base at BX,BY pointing along DEG, length LEN,
+// width WID, CURL bending the tip sideways.  Scalloped sides + midrib.
+function leaf(svg, bx, by, deg, len, wid, curl, m, o) {
+  const f = frameAt(deg);
+  const U = (u, v) => fp(bx, by, f, wid * (u + curl * v * v), len * v);
+  const d = `M ${U(0, 0)}`
+    + ` Q ${U(0.55, 0.10)} ${U(0.42, 0.30)}`
+    + ` Q ${U(0.24, 0.36)} ${U(0.48, 0.50)}`
+    + ` Q ${U(0.28, 0.60)} ${U(0.38, 0.72)}`
+    + ` Q ${U(0.24, 0.87)} ${U(0, 1)}`
+    + ` Q ${U(-0.24, 0.87)} ${U(-0.38, 0.72)}`
+    + ` Q ${U(-0.28, 0.60)} ${U(-0.48, 0.50)}`
+    + ` Q ${U(-0.24, 0.36)} ${U(-0.42, 0.30)}`
+    + ` Q ${U(-0.55, 0.10)} ${U(0, 0)} Z`;
+  pathEl(svg, d, Object.assign({ fill: base(m), stroke: deep(m),
+    "stroke-width": Math.max(0.5, len * 0.045) }, o));
+  pathEl(svg, `M ${U(0, 0.08)} Q ${U(curl > 0 ? 0.10 : -0.10, 0.5)} ${U(0, 0.86)}`,
+    { fill: "none", stroke: glint(m), "stroke-width": Math.max(0.4, len * 0.05),
+      "stroke-opacity": 0.75 });
+}
+
+// a fleur-de-lis: centre petal, two side curls, a waist band
+function fleur(svg, bx, by, deg, len, m) {
+  const f = frameAt(deg);
+  const U = (u, v) => fp(bx, by, f, len * u, len * v);
+  pathEl(svg, `M ${U(0, 0.12)} Q ${U(0.14, 0.5)} ${U(0, 1)} Q ${U(-0.14, 0.5)} ${U(0, 0.12)} Z`,
+    { fill: base(m), stroke: deep(m), "stroke-width": Math.max(0.4, len * 0.04) });
+  for (const s of [1, -1])
+    pathEl(svg, `M ${U(0.06 * s, 0.16)} Q ${U(0.44 * s, 0.34)} ${U(0.40 * s, 0.68)}`
+      + ` Q ${U(0.38 * s, 0.80)} ${U(0.26 * s, 0.80)}`
+      + ` Q ${U(0.30 * s, 0.56)} ${U(0.06 * s, 0.28)} Z`,
+      { fill: base(m), stroke: deep(m), "stroke-width": Math.max(0.4, len * 0.04) });
+  pathEl(svg, `M ${U(-0.26, 0.20)} L ${U(0.26, 0.20)} L ${U(0.26, 0.30)} L ${U(-0.26, 0.30)} Z`,
+    { fill: hi(m), stroke: deep(m), "stroke-width": Math.max(0.3, len * 0.03) });
+  circle(svg, ...pt(bx, by, 0, 0), 0, {});
+}
+
+// a palmette fan: FINGERS narrow leaves splayed from one base
+function palmette(svg, bx, by, deg, len, m, fingers) {
+  const n = fingers || 5, spread = 78;
+  for (let i = 0; i < n; i++) {
+    const a = deg - spread / 2 + (i * spread) / (n - 1);
+    const k = 1 - 0.28 * Math.abs((i - (n - 1) / 2) / ((n - 1) / 2));
+    leaf(svg, bx, by, a, len * k, len * 0.26, 0, m);
+  }
+}
+
+// a flower boss: dome + petal ring
+function boss(svg, cx, cy, r, m, petals) {
+  ensureMat(svg, m);
+  const n = petals || 6;
+  for (let i = 0; i < n; i++)
+    circle(svg, ...pt(cx, cy, r * 0.85, (i * 360) / n), r * 0.48,
+      { fill: base(m), stroke: deep(m), "stroke-width": Math.max(0.4, r * 0.08) });
+  circle(svg, cx, cy, r * 0.55, { fill: hi(m), stroke: deep(m), "stroke-width": Math.max(0.4, r * 0.08) });
+  circle(svg, cx - r * 0.15, cy - r * 0.18, r * 0.16, { fill: c("white"), "fill-opacity": 0.6 });
+}
+
+function socket(svg, sx, sy, cell) {
+  rect(svg, sx, sy, cell, cell, {
+    rx: cell * 0.18, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1,
+  });
+}
+
+// per-colour materials for the photo grammar: bright ornament on dark wood
+// vs dark lacquer ornament on bright gold
+const PHOTO = [
+  { body: "walnut", wood: true, orn: "pewter" },
+  { body: "gold", wood: false, orn: "lacquer" },
+];
+
+function bodyFor(svg, cx, cy, r, p, given, detailed) {
+  if (p.wood) woodBody(svg, cx, cy, r, p.body, given);
+  else goldBody(svg, cx, cy, r, p.body, given, detailed);
+}
+
+// =====================================================================
+// The six designs.  drawCoin(svg, cx, cy, r, val, given).
+// =====================================================================
+
+// 1 ACANTHUS WHORL -- the photo pair itself: eight curled leaves
+function coinWhorl(svg, cx, cy, r, val, given) {
+  const p = PHOTO[val];
+  const detailed = r >= 20;
+  bodyFor(svg, cx, cy, r, p, given, detailed);
+  const n = detailed ? 8 : 6;
+  for (let i = 0; i < n; i++) {
+    const [bx2, by2] = pt(cx, cy, r * 0.12, (i * 360) / n);
+    leaf(svg, bx2, by2, (i * 360) / n, r * 0.60, r * 0.30, 0.35, p.orn);
+  }
+  boss(svg, cx, cy, r * (detailed ? 0.14 : 0.17), p.orn, 6);
+}
+
+// 2 FLEUR CROSS -- four fleurs-de-lis at the cardinals, sprigs between
+function coinFleur(svg, cx, cy, r, val, given) {
+  const p = PHOTO[val];
+  const detailed = r >= 20;
+  bodyFor(svg, cx, cy, r, p, given, detailed);
+  for (const a of [0, 90, 180, 270]) {
+    const [bx2, by2] = pt(cx, cy, r * 0.16, a);
+    fleur(svg, bx2, by2, a, r * 0.56, p.orn);
+  }
+  if (detailed)
+    for (const a of [45, 135, 225, 315]) {
+      const [bx2, by2] = pt(cx, cy, r * 0.20, a);
+      leaf(svg, bx2, by2, a, r * 0.34, r * 0.14, 0.25, p.orn);
+    }
+  boss(svg, cx, cy, r * 0.12, p.orn, 6);
+}
+
+// 3 LAUREL RING -- paired leaves circling the rim, berries between
+function coinLaurel(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "bronze";
+  const body = val === 0 ? "gunmetal" : "oak";
+  const detailed = r >= 20;
+  ensureMat(svg, body);
+  if (val === 0) goldBody(svg, cx, cy, r, body, given, false);
+  else woodBody(svg, cx, cy, r, body, given);
+  const n = detailed ? 10 : 7;
+  for (let i = 0; i < n; i++) {
+    const a = (i * 360) / n;
+    const [bx2, by2] = pt(cx, cy, r * 0.62, a);
+    leaf(svg, bx2, by2, a + 58, r * 0.30, r * 0.13, 0.15, m);
+    leaf(svg, bx2, by2, a + 122, r * 0.30, r * 0.13, -0.15, m);
+    if (detailed && i % 2 === 0)
+      for (const [dr2, da2] of [[0.50, -8], [0.46, 0], [0.50, 8]])
+        circle(svg, ...pt(cx, cy, r * dr2, a + da2), r * 0.035, { fill: hi(m) });
+  }
+  boss(svg, cx, cy, r * 0.13, m, detailed ? 6 : 5);
+}
+
+// 4 PALMETTE FAN -- anthemion fans radiating from an engraved hub
+function coinPalmette(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "gold";
+  const body = val === 0 ? "gunmetal" : "copper";
+  const detailed = r >= 20;
+  goldBody(svg, cx, cy, r, body, given, false);
+  const n = detailed ? 6 : 4;
+  for (let i = 0; i < n; i++) {
+    const a = (i * 360) / n;
+    const [bx2, by2] = pt(cx, cy, r * 0.24, a);
+    palmette(svg, bx2, by2, a, r * 0.42, m, detailed ? 5 : 3);
+  }
+  circle(svg, cx, cy, r * 0.20, { fill: "none", stroke: deep(m), "stroke-width": r * 0.035, "stroke-opacity": 0.8 });
+  boss(svg, cx, cy, r * 0.11, m, 6);
+}
+
+// 5 VINE SPIRAL -- one climbing vine, leaves alternating, berry clusters
+function coinVine(svg, cx, cy, r, val, given) {
+  const p = val === 0 ? { body: "walnut", wood: true, orn: "gold" }
+                      : { body: "oak", wood: true, orn: "lacquer" };
+  const detailed = r >= 20;
+  bodyFor(svg, cx, cy, r, p, given, detailed);
+  const turns = detailed ? 2.1 : 1.5, steps = detailed ? 60 : 36;
+  let d = "";
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const a = t * turns * 360, rr = r * (0.10 + 0.58 * t);
+    const [x, y] = pt(cx, cy, rr, a);
+    d += (i === 0 ? "M" : "L") + ` ${x} ${y} `;
+  }
+  pathEl(svg, d, { fill: "none", stroke: base(p.orn), "stroke-width": r * 0.045, "stroke-linecap": "round" });
+  const leaves = detailed ? 7 : 4;
+  for (let i = 1; i <= leaves; i++) {
+    const t = i / (leaves + 0.5);
+    const a = t * turns * 360, rr = r * (0.10 + 0.58 * t);
+    const [bx2, by2] = pt(cx, cy, rr, a);
+    leaf(svg, bx2, by2, a + (i % 2 ? 55 : -55), r * 0.26, r * 0.12, i % 2 ? 0.25 : -0.25, p.orn);
+  }
+  if (detailed)
+    for (const [dr2, da2] of [[0.42, 150], [0.60, 290], [0.30, 40]])
+      for (let b = 0; b < 3; b++)
+        circle(svg, ...pt(cx, cy, r * (dr2 + 0.035 * b), da2 + 9 * b), r * 0.04, { fill: hi(p.orn) });
+}
+
+// 6 TUDOR BLOOM -- a layered rose of petals over leaf tips
+function coinBloom(svg, cx, cy, r, val, given) {
+  const p = PHOTO[val];
+  const detailed = r >= 20;
+  bodyFor(svg, cx, cy, r, p, given, detailed);
+  if (detailed)
+    for (let i = 0; i < 8; i++) {
+      const [bx2, by2] = pt(cx, cy, r * 0.52, i * 45 + 22.5);
+      leaf(svg, bx2, by2, i * 45 + 22.5, r * 0.26, r * 0.13, 0.2, p.orn);
+    }
+  for (let i = 0; i < 8; i++)
+    circle(svg, ...pt(cx, cy, r * 0.42, i * 45), r * 0.21,
+      { fill: base(p.orn), stroke: deep(p.orn), "stroke-width": Math.max(0.5, r * 0.03) });
+  for (let i = 0; i < 8; i++)
+    circle(svg, ...pt(cx, cy, r * 0.24, i * 45 + 22.5), r * 0.13,
+      { fill: hi(p.orn), stroke: deep(p.orn), "stroke-width": Math.max(0.4, r * 0.025) });
+  boss(svg, cx, cy, r * 0.13, p.orn, 6);
+}
+
+const VARIANTS = [
+  ["1  ACANTHUS WHORL", coinWhorl,
+   "The photo pair, struck directly: eight curled acanthus leaves whorling from a flower boss. Colour 0 is silver-pewter filigree in a turned walnut ring; colour 1 carved red lacquer on a beaded gold plate."],
+  ["2  FLEUR CROSS", coinFleur,
+   "Four fleurs-de-lis at the cardinals with leaf sprigs between -- the right-hand coin's radiating layout. Same material grammar: bright metal on dark wood vs dark lacquer on bright gold."],
+  ["3  LAUREL RING", coinLaurel,
+   "A laurel wreath circling the face, berry trios between the pairs. Silver on gunmetal vs bronze on light oak -- the one design where colour 1 goes bright-on-light wood."],
+  ["4  PALMETTE FAN", coinPalmette,
+   "Six anthemion fans radiating from an engraved hub, the Greek cousin of the acanthus whorl. Silver on gunmetal vs gold on copper, all metal -- for contrast against the wood-bodied skins."],
+  ["5  VINE SPIRAL", coinVine,
+   "One vine climbs from the heart to the rim, leaves alternating sides, berry clusters where it rests. Gold vine on walnut vs red lacquer vine on light oak -- two woods, no gold plate."],
+  ["6  TUDOR BLOOM", coinBloom,
+   "A layered eight-petal rose over peeking leaf tips, boss at the heart. The photo grammar again: pewter bloom in the walnut ring, lacquer bloom on the beaded gold."],
+];
+
+const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
+const PANEL_W = 4 * ZCELL + 3 * GAP + 2 * 24;
+const PANEL_H = 246;
+
+function frame(svg, x, y, w, h, label) {
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  const lw = label.length * 7 + 10;
+  rect(svg, x + 18, y - 6, lw, 12, { fill: c("plate") });
+  txt(svg, x + 23, y + 3, label, 10, c("cream"), "start", "bold");
+}
+
+function variantSvg(title, drawCoin) {
+  const svg = [];
+  const W = PANEL_W + 20, H = PANEL_H + 24;
+  rect(svg, 0, 0, W, H, { rx: 8, fill: c("plate"), stroke: c("plate-edge") });
+  frame(svg, 10, 12, PANEL_W, PANEL_H, title);
+  const combos = [[0, false], [1, false], [0, true], [1, true]];
+  const labels = ["COLOUR 0", "COLOUR 1", "FIXED", "FIXED"];
+  const rowx = 10 + 24, rowy = 12 + 18;
+  combos.forEach(([val, given], i) => {
+    const sx = rowx + i * (ZCELL + GAP);
+    socket(svg, sx, rowy, ZCELL);
+    drawCoin(svg, sx + ZCELL / 2, rowy + ZCELL / 2, Math.round(ZCELL * 0.33), val, given);
+    txt(svg, sx + ZCELL / 2, rowy + ZCELL + 14, labels[i], 8,
+      given ? c("gold") : c("steel"), "middle");
+  });
+  const strip = [[0, true], [1, false], [1, true], [0, false], null, [1, false], [0, true], [1, true]];
+  const spanw = strip.length * RCELL + (strip.length - 1) * RGAP + 2 * 12;
+  const bx = 10 + Math.round((PANEL_W - spanw) / 2), by = rowy + ZCELL + 24;
+  rect(svg, bx, by, spanw, RCELL + 24, { rx: 10, fill: c("board-bg"), stroke: c("ink") });
+  strip.forEach((cellv, i) => {
+    const sx = bx + 12 + i * (RCELL + RGAP), sy = by + 12;
+    socket(svg, sx, sy, RCELL);
+    if (cellv != null)
+      drawCoin(svg, sx + RCELL / 2, sy + RCELL / 2, Math.round(RCELL * 0.33), cellv[0], cellv[1]);
+  });
+  txt(svg, 10 + PANEL_W - 22, by + RCELL + 33, "AT BOARD SCALE", 8, c("dim"), "end");
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img"`
+    + ` aria-label="${esc(title)}">${svg.join("")}</svg>`;
+}
+
+const stage = document.getElementById("stage");
+stage.innerHTML = VARIANTS.map(([title, fn, why]) =>
+  `<div class="panel">${variantSvg(title, fn)}<div class="caption">`
+  + `<div class="why">${esc(why)}</div></div></div>`).join("");
+
+})();
+</script>
+</body>
+</html>

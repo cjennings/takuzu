@@ -1283,7 +1283,7 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to pierced; favourites lead the cycle."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'pierced))
   (should (equal takuzu--coin-skins
-                 '(pierced cash gems machined lamp jewel compass
+                 '(pierced machined cash gems lamp jewel compass
                    guilloche runic scallop bimetal matrix split rosette))))
 
 (ert-deftest test-takuzu-ui-runic-carves-wood ()
@@ -1325,7 +1325,7 @@ with no games recorded it says so."
     (test-takuzu-ui--setup-4)
     (let ((takuzu-coin-skin 'pierced))
       (takuzu-cycle-skin)
-      (should (eq takuzu-coin-skin 'cash))
+      (should (eq takuzu-coin-skin 'machined))
       (dotimes (_ (1- (length takuzu--coin-skins)))
         (takuzu-cycle-skin))
       (should (eq takuzu-coin-skin 'pierced)))))
@@ -1493,8 +1493,8 @@ two-piece needle instead of the sixteen rays."
   "Normal: the skin selector shows the tape-counter index and never a name."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((pierced . "01") (cash . "02") (gems . "03")
-                    (machined . "04") (lamp . "05")))
+    (dolist (case '((pierced . "01") (machined . "02") (cash . "03")
+                    (gems . "04") (lamp . "05")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
         (should (member (cdr case) texts))
