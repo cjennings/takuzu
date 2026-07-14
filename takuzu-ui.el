@@ -1053,14 +1053,24 @@ lathe grooves under a sweeping light catch.  GIVEN knurls the rim."
 GIVEN draws the skin's fixed-coin marking."
   (funcall (takuzu--coin-skin-drawer takuzu-coin-skin) svg cx cy r val given))
 
-(defun takuzu-cycle-skin ()
-  "Switch to the next coin skin and redraw."
-  (interactive)
+(defun takuzu--cycle-skin-by (step)
+  "Turn the coin drum by STEP positions (negative turns back) and redraw."
   (let* ((pos (or (cl-position takuzu-coin-skin takuzu--coin-skins) 0))
-         (next (nth (mod (1+ pos) (length takuzu--coin-skins)) takuzu--coin-skins)))
+         (next (nth (mod (+ pos step) (length takuzu--coin-skins))
+                    takuzu--coin-skins)))
     (setq takuzu-coin-skin next)
     (takuzu--set-status (format "Coin skin: %s." next)))
   (takuzu--redraw))
+
+(defun takuzu-cycle-skin ()
+  "Switch to the next coin skin and redraw."
+  (interactive)
+  (takuzu--cycle-skin-by 1))
+
+(defun takuzu-cycle-skin-back ()
+  "Switch to the previous coin skin and redraw."
+  (interactive)
+  (takuzu--cycle-skin-by -1))
 
 (defun takuzu--draw-skin-selector (svg cx fy)
   "Draw the COIN frame's innards on SVG, centred on CX with the frame top at FY.
@@ -2198,6 +2208,7 @@ unlabelled on the faceplate -- discoverable by feel, like the hjkl keys."
   "i" #'takuzu-help
   "t" #'takuzu-stats
   "w" #'takuzu-cycle-skin
+  "W" #'takuzu-cycle-skin-back
   "1" #'takuzu-jump-size
   "4" #'takuzu-jump-size
   "6" #'takuzu-jump-size

@@ -1389,6 +1389,20 @@ the ring holding a heart of the other wood, with no centre dot."
         (takuzu-cycle-skin))
       (should (eq takuzu-coin-skin 'pierced)))))
 
+(ert-deftest test-takuzu-ui-cycle-skin-back-walks-and-wraps ()
+  "Normal/Boundary: W walks the drum backward and wraps past the head."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (should (eq (keymap-lookup takuzu-mode-map "w") 'takuzu-cycle-skin))
+    (should (eq (keymap-lookup takuzu-mode-map "W") 'takuzu-cycle-skin-back))
+    (let ((takuzu-coin-skin 'pierced))
+      (takuzu-cycle-skin-back)
+      (should (eq takuzu-coin-skin 'sovereign))
+      (takuzu-cycle-skin-back)
+      (should (eq takuzu-coin-skin 'filigree))
+      (takuzu-cycle-skin-back)
+      (should (eq takuzu-coin-skin 'rosette)))))
+
 (ert-deftest test-takuzu-ui-every-skin-has-a-drawer ()
   "Normal: every skin in the cycle list resolves to a draw function.
 A skin added to the list without a drawer would silently fall back to lamp."

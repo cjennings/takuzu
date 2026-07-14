@@ -1934,12 +1934,15 @@ function toggleAssist() {
 }
 
 // Mirror of takuzu-cycle-skin: turn the thumbwheel to the next coin skin.
-function cycleSkin() {
+function cycleSkinBy(step) {
+  const n = COIN_SKINS.length;
   const pos = Math.max(0, COIN_SKINS.indexOf(state.coinSkin));
-  state.coinSkin = COIN_SKINS[(pos + 1) % COIN_SKINS.length];
+  state.coinSkin = COIN_SKINS[(pos + step + n) % n];
   setStatus(`Coin skin: ${state.coinSkin}.`);
   redraw();
 }
+const cycleSkin = () => cycleSkinBy(1);
+const cycleSkinBack = () => cycleSkinBy(-1);
 
 function help() {
   state.help = !state.help;
@@ -2100,6 +2103,7 @@ document.addEventListener("keydown", e => {
     case "i": help(); return;
     case "q": message("Close the tab to quit."); return;
     case "w": cycleSkin(); return;
+    case "W": cycleSkinBack(); return;
     case "1": case "4": case "6": case "8": jumpSize(e.key); return;
   }
 });
