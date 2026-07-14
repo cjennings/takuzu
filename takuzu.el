@@ -1,7 +1,7 @@
 ;;; takuzu.el --- Binairo / Takuzu binary logic puzzle -*- lexical-binding: t -*-
 
 ;; Author: Craig Jennings <craigmartinjennings@gmail.com>
-;; Version: 0.7.0
+;; Version: 0.8.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: games
 ;; SPDX-License-Identifier: GPL-3.0-or-later
