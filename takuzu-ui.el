@@ -297,7 +297,7 @@ omits it)."
 
 (defconst takuzu--coin-skin-registry
   '((sovereign takuzu--draw-disc-sovereign coal     beech)
-    (pierced   takuzu--draw-disc-pierced   berkeley cardinal)
+    (collegiate takuzu--draw-disc-collegiate berkeley cardinal)
     (machined  takuzu--draw-disc-machined  nickel   gold)
     (cash      takuzu--draw-disc-cash      iron     gold)
     (gems      takuzu--draw-disc-gems      silver   gold)
@@ -321,10 +321,11 @@ a new skin is always APPENDED at the tail of the table, so every
 existing design keeps its drum position forever.  The lamp/jewel/compass
 skins carry their own colours, so their metals are nil.")
 
-(defcustom takuzu-coin-skin 'pierced
+(defcustom takuzu-coin-skin (caar takuzu--coin-skin-registry)
   "The coin skin drawn on the board.
-The catalogue lives in `takuzu--coin-skin-registry'; w turns the COIN
-thumbwheel through it in order."
+Defaults to coinset 1 -- the head of `takuzu--coin-skin-registry'; w and
+W turn the COIN thumbwheel forward and back, and r (refresh) returns the
+drum to coinset 1."
   :type (cons 'choice (mapcar (lambda (row) (list 'const (car row)))
                               takuzu--coin-skin-registry))
   :group 'takuzu)
@@ -348,8 +349,8 @@ thumbwheel through it in order."
     (olive    "#98ac86" "#809c50" "#627b2c" "#3f4c23")
     (regal    "#bea9dc" "#8255b5" "#6624a0" "#2f0c4e")
     (oxblood  "#b3676c" "#8f4046" "#6b2e33" "#331417")
-    (berkeley "#7fa3cc" "#3f6b9e" "#003262" "#001830")
-    (cardinal "#cf7a7a" "#ad4646" "#8c1515" "#420808")
+    (berkeley "#5d82ab" "#2b5484" "#00284f" "#001022")
+    (cardinal "#b35c5c" "#8f3030" "#701010" "#320505")
     (beech    "#f0dfc4" "#ddc19a" "#c4a377" "#6b5133")
     (coal     "#6e6c68" "#454340" "#252422" "#0b0b0a")
     (sunflower "#ffe3a4" "#ffd274" "#ffc145" "#94691f")
@@ -784,16 +785,15 @@ gallery, panel 13, iterated live."
                   :stroke ink :stroke-width 1)
       (svg-circle svg cx cy h :fill "none"
                   :stroke (format "url(#m-%s-edge)" core)
-                  :stroke-width (* r 0.04) :stroke-opacity 0.8))
-    (takuzu--metal-sheen svg cx cy r)))
+                  :stroke-width (* r 0.04) :stroke-opacity 0.8))))
 
-(defun takuzu--draw-disc-pierced (svg cx cy r val given)
-  "Draw the pierced coin of VAL at CX,CY radius R on SVG.
-School colours: Berkeley blue with a California-gold chrysanthemum for
-0, Stanford cardinal with a silver-white one for 1.  A user coin is a
-flat face -- no hole, no raised centre; only a FIXED coin is pierced,
-its hole ringed in the contrast metal."
-  (let* ((m (takuzu--coin-pair-metal 'pierced val))
+(defun takuzu--draw-disc-collegiate (svg cx cy r val given)
+  "Draw the collegiate coin of VAL at CX,CY radius R on SVG.
+School colours, struck dark: Berkeley blue with a California-gold
+chrysanthemum for 0, Stanford cardinal with a silver-white one for 1.
+A user coin is a flat face; a FIXED coin carries a white-filled centre
+ringed in the contrast metal."
+  (let* ((m (takuzu--coin-pair-metal 'collegiate val))
          (accent (if (eql val 0) 'sunflower 'silver)))
     (takuzu--metal-blank svg cx cy r m given)
     (when (>= r 20)
@@ -810,7 +810,7 @@ its hole ringed in the contrast metal."
            'stroke-opacity 0.75 'stroke-width 0.8))))
     (when given
       (let ((h (* r 0.28)))
-        (svg-circle svg cx cy h :fill (takuzu--c :socket)
+        (svg-circle svg cx cy h :fill (takuzu--c :white)
                     :stroke (takuzu--metal m 3) :stroke-width 1.4)
         (svg-circle svg cx cy (+ h 1.8) :fill "none"
                     :stroke (takuzu--metal-fixed-ink m)
@@ -2109,7 +2109,7 @@ honestly at each tier."
   (message "%s" (takuzu--stats-summary)))
 
 (defun takuzu-reset ()
-  "Clear every non-given cell."
+  "Clear every non-given cell and return the coin drum to coinset 1."
   (interactive)
   (takuzu--playing-only
   (let ((n takuzu--size))
@@ -2118,7 +2118,8 @@ honestly at each tier."
         (unless (takuzu-board-given-p takuzu--board r c)
           (takuzu-board-set takuzu--board r c nil))))
     (setq takuzu--won nil takuzu--proven nil takuzu--history nil
-          takuzu--start-time (current-time))
+          takuzu--start-time (current-time)
+          takuzu-coin-skin (car takuzu--coin-skins))
     ;; the refresh tick cancels its timer at a win; a replay needs it back
     (unless (timerp takuzu--timer)
       (takuzu--start-refresh-timer (current-buffer)))

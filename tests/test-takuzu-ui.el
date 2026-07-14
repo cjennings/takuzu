@@ -1280,12 +1280,21 @@ with no games recorded it says so."
 ;; --- coin skins ---
 
 (ert-deftest test-takuzu-ui-coin-skin-default-and-set ()
-  "Normal: the skin defcustom defaults to pierced; favourites lead the cycle."
-  (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'pierced))
+  "Normal: the skin defcustom defaults to the drum's head; order is stable."
+  (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value)))
+              (car takuzu--coin-skins)))
   (should (equal takuzu--coin-skins
-                 '(sovereign pierced machined cash gems lamp jewel compass
+                 '(sovereign collegiate machined cash gems lamp jewel compass
                    guilloche runic scallop bimetal matrix split rosette
                    filigree))))
+
+(ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
+  "Normal: r (refresh) turns the coin drum back to coinset 1."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (let ((takuzu-coin-skin 'runic))
+      (takuzu-reset)
+      (should (eq takuzu-coin-skin (car takuzu--coin-skins))))))
 
 (ert-deftest test-takuzu-ui-filigree-wheel-gems-and-metals ()
   "Normal: the filigree wheel is silver for 0, dark pewter for 1, with six
@@ -1335,7 +1344,7 @@ the ring holding a heart of the other wood, with no centre dot."
                              (dom-by-tag f0 'circle))))
         (should heart)
         (should (<= (dom-attr heart 'r) (* 33 0.32))))
-      ;; no hole anywhere, no pin anywhere
+      ;; no hole anywhere, no pin anywhere, and matte -- no specular sheen
       (dolist (svg (list c0 c1 f0 f1))
         (should-not (seq-find (lambda (n)
                                 (equal (dom-attr n 'fill) (takuzu--c :socket)))
@@ -1343,7 +1352,8 @@ the ring holding a heart of the other wood, with no centre dot."
         (should-not (seq-find (lambda (n)
                                 (or (equal (dom-attr n 'fill) (takuzu--metal 'coal 1))
                                     (equal (dom-attr n 'fill) (takuzu--metal 'sunflower 1))))
-                              (dom-by-tag svg 'circle)))))))
+                              (dom-by-tag svg 'circle)))
+        (should (= (length (dom-by-tag svg 'ellipse)) 0))))))
 
 (ert-deftest test-takuzu-ui-runic-carves-wood ()
   "Normal: the runic coin is oak for 0, walnut for 1, with carved rune lines."
@@ -1382,12 +1392,12 @@ the ring holding a heart of the other wood, with no centre dot."
   "Normal: the skin command walks the whole list and wraps back around."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (let ((takuzu-coin-skin 'pierced))
+    (let ((takuzu-coin-skin 'collegiate))
       (takuzu-cycle-skin)
       (should (eq takuzu-coin-skin 'machined))
       (dotimes (_ (1- (length takuzu--coin-skins)))
         (takuzu-cycle-skin))
-      (should (eq takuzu-coin-skin 'pierced)))))
+      (should (eq takuzu-coin-skin 'collegiate)))))
 
 (ert-deftest test-takuzu-ui-cycle-skin-back-walks-and-wraps ()
   "Normal/Boundary: W walks the drum backward and wraps past the head."
@@ -1395,7 +1405,7 @@ the ring holding a heart of the other wood, with no centre dot."
     (test-takuzu-ui--setup-4)
     (should (eq (keymap-lookup takuzu-mode-map "w") 'takuzu-cycle-skin))
     (should (eq (keymap-lookup takuzu-mode-map "W") 'takuzu-cycle-skin-back))
-    (let ((takuzu-coin-skin 'pierced))
+    (let ((takuzu-coin-skin 'collegiate))
       (takuzu-cycle-skin-back)
       (should (eq takuzu-coin-skin 'sovereign))
       (takuzu-cycle-skin-back)
@@ -1441,11 +1451,11 @@ coins define exactly four fills and four edges -- shared, not per-coin."
     (should (= (length (dom-by-tag svg 'radialGradient)) 4))
     (should (= (length (dom-by-tag svg 'linearGradient)) 4))))
 
-(ert-deftest test-takuzu-ui-pierced-wears-college-colours ()
-  "Normal: the pierced pair in school colours -- Berkeley blue with gold
-accents for 0, Stanford cardinal with silver accents for 1.  Only a FIXED
-coin is pierced; user coins are flat faces with no centre hole."
-  (let ((takuzu-coin-skin 'pierced))
+(ert-deftest test-takuzu-ui-collegiate-wears-college-colours ()
+  "Normal: the collegiate pair in school colours -- Berkeley blue with gold
+accents for 0, Stanford cardinal with silver accents for 1.  User coins are
+flat faces; a FIXED coin carries a white-filled centre, never a black hole."
+  (let ((takuzu-coin-skin 'collegiate))
     (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
           (fx (svg-create 100 100)))
       (takuzu--draw-disc c0 50 50 33 0 nil)
@@ -1460,13 +1470,18 @@ coin is pierced; user coins are flat faces with no centre hole."
       (should (seq-find (lambda (n)
                           (equal (dom-attr n 'stroke) (takuzu--metal 'silver 2)))
                         (dom-by-tag c1 'path)))
-      ;; user coins are flat; only the fixed coin is pierced
-      (dolist (svg (list c0 c1))
+      ;; user coins are flat; the fixed centre is white, and no coin
+      ;; anywhere carries the old black hole
+      (dolist (svg (list c0 c1 fx))
         (should-not (seq-find (lambda (n)
                                 (equal (dom-attr n 'fill) (takuzu--c :socket)))
                               (dom-by-tag svg 'circle))))
+      (dolist (svg (list c0 c1))
+        (should-not (seq-find (lambda (n)
+                                (equal (dom-attr n 'fill) (takuzu--c :white)))
+                              (dom-by-tag svg 'circle))))
       (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'fill) (takuzu--c :socket)))
+                          (equal (dom-attr n 'fill) (takuzu--c :white)))
                         (dom-by-tag fx 'circle))))))
 
 (ert-deftest test-takuzu-ui-bimetal-wears-dupre-colours ()
@@ -1615,7 +1630,7 @@ two-piece needle instead of the sixteen rays."
   "Normal: the skin selector shows the tape-counter index and never a name."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((sovereign . "01") (pierced . "02") (machined . "03")
+    (dolist (case '((sovereign . "01") (collegiate . "02") (machined . "03")
                     (cash . "04") (filigree . "16")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))

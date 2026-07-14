@@ -457,13 +457,14 @@ const state = {
   pendingStart: false,
   difficulty: null,
   help: false,
-  coinSkin: "pierced", // mirror of takuzu-coin-skin (pierced is the default)
+  coinSkin: "sovereign", // mirror of takuzu-coin-skin (coinset 1 is the default)
 };
 
 // a new skin is always appended at the tail -- existing positions never change
-const COIN_SKINS = ["sovereign", "pierced", "machined", "cash", "gems", "lamp",
-                    "jewel", "compass", "guilloche", "runic", "scallop",
-                    "bimetal", "matrix", "split", "rosette", "filigree"];
+const COIN_SKINS = ["sovereign", "collegiate", "machined", "cash", "gems",
+                    "lamp", "jewel", "compass", "guilloche", "runic",
+                    "scallop", "bimetal", "matrix", "split", "rosette",
+                    "filigree"];
 
 // --- the struck-metal engine (mirror of takuzu--coin-metal-tones etc.) ---
 
@@ -486,9 +487,9 @@ const COIN_METAL = {
   olive:    ["#98ac86", "#809c50", "#627b2c", "#3f4c23"],
   regal:    ["#bea9dc", "#8255b5", "#6624a0", "#2f0c4e"],
   oxblood:  ["#b3676c", "#8f4046", "#6b2e33", "#331417"],
-  // the pierced pair's school colours
-  berkeley: ["#7fa3cc", "#3f6b9e", "#003262", "#001830"],
-  cardinal: ["#cf7a7a", "#ad4646", "#8c1515", "#420808"],
+  // the collegiate pair's school colours, struck dark
+  berkeley: ["#5d82ab", "#2b5484", "#00284f", "#001022"],
+  cardinal: ["#b35c5c", "#8f3030", "#701010", "#320505"],
   // the sovereign skin's woods and gold
   beech:     ["#f0dfc4", "#ddc19a", "#c4a377", "#6b5133"],
   coal:      ["#6e6c68", "#454340", "#252422", "#0b0b0a"],
@@ -948,12 +949,11 @@ function drawDiscSovereign(svg, cx, cy, r, val, given) {
     circle(svg, cx, cy, h, { fill: mfill(core), stroke: ink, "stroke-width": 1 });
     circle(svg, cx, cy, h, { fill: "none", stroke: medge(core), "stroke-width": r * 0.04, "stroke-opacity": 0.8 });
   }
-  metalSheen(svg, cx, cy, r);
 }
 
-// PIERCED -- school colours: Berkeley blue + gold radial vs Stanford
-// cardinal + silver radial; only a FIXED coin is pierced, user coins flat
-function drawDiscPierced(svg, cx, cy, r, val, given) {
+// COLLEGIATE -- school colours struck dark: Berkeley blue + gold radial vs
+// Stanford cardinal + silver; user coins flat, fixed carry a white centre
+function drawDiscCollegiate(svg, cx, cy, r, val, given) {
   const m = val === 0 ? "berkeley" : "cardinal";
   const accent = val === 0 ? "sunflower" : "silver";
   metalBlank(svg, cx, cy, r, m, given);
@@ -966,7 +966,7 @@ function drawDiscPierced(svg, cx, cy, r, val, given) {
     }
   if (!given) return;
   const h = r * 0.28;
-  circle(svg, cx, cy, h, { fill: c("socket"), stroke: mDeep(m), "stroke-width": 1.4 });
+  circle(svg, cx, cy, h, { fill: c("white"), stroke: mDeep(m), "stroke-width": 1.4 });
   circle(svg, cx, cy, h + 1.8, { fill: "none", stroke: mFixedInk(m), "stroke-width": 1.6 });
 }
 
@@ -1129,7 +1129,8 @@ function drawDiscMachined(svg, cx, cy, r, val, given) {
 const COIN_DRAWERS = {
   filigree: drawDiscFiligree,
   sovereign: drawDiscSovereign, jewel: drawDiscJewel, compass: drawDiscCompass,
-  guilloche: drawDiscGuilloche, runic: drawDiscRunic, pierced: drawDiscPierced,
+  guilloche: drawDiscGuilloche, runic: drawDiscRunic,
+  collegiate: drawDiscCollegiate,
   scallop: drawDiscScallop, bimetal: drawDiscBimetal, cash: drawDiscCash,
   matrix: drawDiscMatrix, gems: drawDiscGems, split: drawDiscSplit,
   rosette: drawDiscRosette, machined: drawDiscMachined,
@@ -1921,6 +1922,7 @@ function reset() {
       if (!givenP(state.board, r, cc)) state.board.cells[r * n + cc] = null;
   state.won = false; state.proven = false; state.history = [];
   state.startTime = Date.now();
+  state.coinSkin = COIN_SKINS[0];
   // the refresh tick cancels its timer at a win; a replay needs it back
   if (timers.refresh == null) startRefreshTimer();
   setStatus("");
