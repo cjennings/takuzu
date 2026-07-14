@@ -1093,32 +1093,26 @@ While the help overlay is up, a movement key dismisses it instead of moving."
         (takuzu--set-status ""))))
   (takuzu--redraw)))
 
-(defun takuzu--forced-cell ()
-  "First empty cell whose value is forced to a single legal option.
-Return (ROW COL VALUE) or nil when no cell is forced."
-  (let ((n takuzu--size) (found nil))
-    (cl-block scan
-      (dotimes (r n)
-        (dotimes (c n)
-          (when (null (takuzu-board-ref takuzu--board r c))
-            (let ((vals (takuzu--legal-values takuzu--board r c)))
-              (when (and vals (null (cdr vals)))
-                (setq found (list r c (car vals)))
-                (cl-return-from scan)))))))
-    found))
-
 (defun takuzu-hint ()
-  "Fill the first cell whose value current logic pins down."
+  "Fill the next cell a hint technique pins down, naming the technique.
+Escalates automatically: a forced cell first, then a depth-1 hypothesis
+cell, and as a last resort a cell taken from the solution, labelled
+honestly at each tier."
   (interactive)
   (takuzu--playing-only
   (if (or takuzu--won takuzu--proven)
       (takuzu--set-status takuzu--msg-finished)
-    (let ((found (takuzu--forced-cell)))
+    (let ((found (takuzu-next-hint takuzu--board takuzu--solution)))
       (if (not found)
-          (takuzu--set-status "No cell is forced right now -- reason further." 'no-hint)
+          (takuzu--set-status "No empty cell left to hint." 'no-hint)
         (setq takuzu--cursor (cons (nth 0 found) (nth 1 found)))
         (takuzu--set-current (nth 2 found))
-        (takuzu--set-status "Filled a forced cell." 'hint))))
+        (takuzu--set-status
+         (pcase (nth 3 found)
+           ('forced "Filled a forced cell.")
+           ('hypothesis "Hypothesis hint: only one colour survives here.")
+           (_ "No logic path found -- filled from the solution."))
+         'hint))))
   (takuzu--redraw)))
 
 (defun takuzu-check ()

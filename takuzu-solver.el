@@ -154,6 +154,35 @@ Return \\='contradiction when neither color survives propagation."
                   (cl-return-from hp))))))))
     moved))
 
+(defun takuzu-next-hint (board &optional solution)
+  "Return the next fillable cell of BOARD and the technique that found it.
+The result is (ROW COL VALUE TECHNIQUE) where TECHNIQUE is `forced' (a naked
+single), `hypothesis' (a depth-1 hypothesis resolves the cell), or
+`solution' (taken from SOLUTION when neither logic tier names a cell).
+Return nil when BOARD has no empty cell, or when no technique applies and
+SOLUTION is nil.  BOARD is unchanged."
+  (let ((n (takuzu-board-size board)))
+    (cl-block hint
+      (dotimes (r n)
+        (dotimes (c n)
+          (when (null (takuzu-board-ref board r c))
+            (let ((vals (takuzu--legal-values board r c)))
+              (when (and vals (null (cdr vals)))
+                (cl-return-from hint (list r c (car vals) 'forced)))))))
+      (dotimes (r n)
+        (dotimes (c n)
+          (when (null (takuzu-board-ref board r c))
+            (let ((f (takuzu--forced-by-hypothesis board r c)))
+              (when (and f (not (eq f 'contradiction)))
+                (cl-return-from hint (list r c f 'hypothesis)))))))
+      (when solution
+        (dotimes (r n)
+          (dotimes (c n)
+            (when (null (takuzu-board-ref board r c))
+              (cl-return-from hint
+                (list r c (takuzu-board-ref solution r c) 'solution))))))
+      nil)))
+
 (defun takuzu-grade (board)
   "Grade puzzle BOARD as \\='easy, \\='medium, or \\='hard.
 easy: naked-single propagation solves it.  medium: depth-1 hypothesis is needed.

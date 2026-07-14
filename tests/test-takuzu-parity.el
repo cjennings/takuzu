@@ -36,11 +36,12 @@
                     (plist-get case-plist :givens)))))
 
 (defun test-takuzu-parity--forced (board)
-  "The engine's forced cell for BOARD, as a list or nil."
-  (with-temp-buffer
-    (setq-local takuzu--size (takuzu-board-size board))
-    (setq-local takuzu--board board)
-    (takuzu--forced-cell)))
+  "The engine's first naked-single cell for BOARD, as (ROW COL VALUE) or nil.
+The corpus froze forced-tier answers only, so a hint that escalates past
+the forced tier maps to nil here."
+  (let ((hint (takuzu-next-hint board)))
+    (and hint (eq (nth 3 hint) 'forced)
+         (list (nth 0 hint) (nth 1 hint) (nth 2 hint)))))
 
 (ert-deftest test-takuzu-parity-corpus-replays-clean ()
   "Normal/Boundary/Error: every frozen fixture answer still holds.

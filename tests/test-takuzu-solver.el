@@ -104,5 +104,55 @@ colour survives -- exercising the contradiction branch of the grader step."
                                             nil nil nil nil  nil nil nil nil))))
     (should (null (takuzu--hypothesis-step board)))))
 
+;; A generated medium 6x6 frozen after naked-single propagation reached its
+;; fixpoint: no cell is forced, the board is not full, and (grade = medium)
+;; depth-1 hypothesis is guaranteed to progress.
+(defconst test-takuzu-solver--stalled-6
+  (vector nil 1 nil nil nil nil  nil 1 0 0 1 nil  nil 0 nil nil nil nil
+          nil nil nil nil 0 nil  0 nil 1 nil nil 0  nil nil nil 0 nil 1)
+  "Propagation-stalled medium 6x6 position.")
+
+(defconst test-takuzu-solver--stalled-6-solution
+  (vector 1 1 0 1 0 0  1 1 0 0 1 0  0 0 1 1 0 1  1 0 0 1 0 1
+          0 1 1 0 1 0  0 0 1 0 1 1)
+  "The unique solution of `test-takuzu-solver--stalled-6'.")
+
+(ert-deftest test-takuzu-next-hint-forced ()
+  "Normal: a naked single is reported as a forced cell."
+  (let ((b (takuzu-make-board 4 (vector 0 0 nil nil  nil nil nil nil
+                                        nil nil nil nil  nil nil nil nil))))
+    (should (equal (takuzu-next-hint b) '(0 2 1 forced)))))
+
+(ert-deftest test-takuzu-next-hint-escalates-to-hypothesis ()
+  "Normal: with no forced cell, the hint names a hypothesis-resolved cell.
+The fixture is a medium board at its propagation fixpoint, so the forced
+tier has nothing and the hypothesis tier must produce the answer."
+  (let* ((b (takuzu-make-board 6 test-takuzu-solver--stalled-6))
+         (hint (takuzu-next-hint b)))
+    (should hint)
+    (should (eq (nth 3 hint) 'hypothesis))
+    (should (eql (nth 2 hint)
+                 (aref test-takuzu-solver--stalled-6-solution
+                       (+ (* 6 (nth 0 hint)) (nth 1 hint)))))))
+
+(ert-deftest test-takuzu-next-hint-solution-fallback ()
+  "Normal: when no technique applies, the hint falls back to the solution.
+An empty board forces nothing and every hypothesis survives both colours,
+so only the solution tier can answer."
+  (let* ((b (takuzu-make-board 4))
+         (sol (takuzu-make-board 4 (vector 0 1 0 1  1 0 1 0
+                                           0 1 1 0  1 0 0 1)))
+         (hint (takuzu-next-hint b sol)))
+    (should (equal hint '(0 0 0 solution)))))
+
+(ert-deftest test-takuzu-next-hint-full-board-nil ()
+  "Boundary: a full board has nothing to hint."
+  (let ((b (takuzu-make-board 4 test-takuzu-solver--solved-4)))
+    (should (null (takuzu-next-hint b)))))
+
+(ert-deftest test-takuzu-next-hint-no-solution-nil ()
+  "Error: no technique applies and no solution was supplied -- nil, no error."
+  (should (null (takuzu-next-hint (takuzu-make-board 4)))))
+
 (provide 'test-takuzu-solver)
 ;;; test-takuzu-solver.el ends here

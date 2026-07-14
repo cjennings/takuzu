@@ -182,18 +182,6 @@ specular arc on the top-left corner."
     (let ((e (takuzu--error-vector)))
       (should e) (should (aref e 0)) (should (aref e 8)) (should-not (aref e 1)))))
 
-(ert-deftest test-takuzu-ui-forced-cell ()
-  "Normal: forced-cell finds a single-legal-value cell, nil when none."
-  (with-temp-buffer
-    (setq takuzu--size 4
-          takuzu--board (takuzu-make-board 4 (vector 0 0 nil nil nil nil nil nil
-                                                     nil nil nil nil nil nil nil nil)))
-    ;; cell (0,2) cannot be 0 (would make 0 0 0 triple), so it is forced to 1.
-    (let ((f (takuzu--forced-cell)))
-      (should f) (should (equal (list (nth 0 f) (nth 1 f) (nth 2 f)) '(0 2 1)))))
-  (with-temp-buffer
-    (setq takuzu--size 4 takuzu--board (takuzu-make-board 4))
-    (should (null (takuzu--forced-cell)))))
 
 ;; --- game-action logic ---
 
@@ -433,6 +421,22 @@ the size-dependent layout and both disc styles (a given and a placed cell)."
     (takuzu-hint)
     (should (eql (takuzu-board-ref takuzu--board 0 2) 1))
     (should (string-match-p "forced" takuzu--status))))
+
+(ert-deftest test-takuzu-ui-hint-escalates-to-solution ()
+  "Normal: with no logic-derivable cell, hint fills from the solution and says so.
+An empty board has no forced cell and no hypothesis-resolvable cell, so the
+hint's last tier answers with an honest from-the-solution label."
+  (test-takuzu-ui--with-buffer
+    (setq takuzu--size 4 takuzu--generating nil takuzu--armed nil
+          takuzu--won nil takuzu--proven nil takuzu--assist nil takuzu--status ""
+          takuzu--cursor '(3 . 3) takuzu--history nil takuzu--start-time (current-time)
+          takuzu--solution (takuzu-make-board 4 test-takuzu-ui--solution-4)
+          takuzu--board (takuzu-make-board 4))
+    (takuzu-hint)
+    (should (eql (takuzu-board-ref takuzu--board 0 0)
+                 (aref test-takuzu-ui--solution-4 0)))
+    (should (equal takuzu--cursor '(0 . 0)))
+    (should (string-match-p "solution" takuzu--status))))
 
 (ert-deftest test-takuzu-ui-check-full-but-wrong ()
   "Error: a full but rule-breaking board reports the break."
