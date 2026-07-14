@@ -117,6 +117,22 @@ colour survives -- exercising the contradiction branch of the grader step."
           0 1 1 0 1 0  0 0 1 0 1 1)
   "The unique solution of `test-takuzu-solver--stalled-6'.")
 
+(ert-deftest test-takuzu-scan-empty-cells ()
+  "Normal/Boundary: the empty-cell scan visits row-major and stops at a hit.
+A full board scans nothing; a never-matching function returns nil."
+  (let ((b (takuzu-make-board 4 (vector 0 nil nil nil  nil nil nil nil
+                                        nil nil nil nil  nil nil nil nil))))
+    ;; first empty cell in row-major order is (0,1)
+    (should (equal (takuzu--scan-empty-cells b (lambda (r c) (list r c)))
+                   '(0 1)))
+    ;; a non-matching fn scans everything and returns nil
+    (should-not (takuzu--scan-empty-cells b (lambda (_r _c) nil))))
+  (let ((full (takuzu-make-board 4 test-takuzu-solver--solved-4))
+        (calls 0))
+    (should-not (takuzu--scan-empty-cells
+                 full (lambda (_r _c) (setq calls (1+ calls)) t)))
+    (should (= calls 0))))
+
 (ert-deftest test-takuzu-next-hint-forced ()
   "Normal: a naked single is reported as a forced cell."
   (let ((b (takuzu-make-board 4 (vector 0 0 nil nil  nil nil nil nil

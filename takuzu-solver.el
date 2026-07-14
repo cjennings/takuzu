@@ -124,6 +124,17 @@ returning."
 
 ;; --- difficulty grader ---
 
+(defun takuzu--scan-empty-cells (board fn)
+  "Call FN with ROW and COL of each empty cell of BOARD, in row-major order.
+Return FN's first non-nil result, or nil when no empty cell yields one."
+  (let ((n (takuzu-board-size board)))
+    (cl-block scan
+      (dotimes (r n)
+        (dotimes (c n)
+          (when (null (takuzu-board-ref board r c))
+            (let ((hit (funcall fn r c)))
+              (when hit (cl-return-from scan hit)))))))))
+
 (defun takuzu--forced-by-hypothesis (board row col)
   "The value forced at empty ROW,COL of BOARD by depth-1 hypothesis, or nil.
 Return \\='contradiction when neither color survives propagation."
@@ -140,19 +151,15 @@ Return \\='contradiction when neither color survives propagation."
 
 (defun takuzu--hypothesis-step (board)
   "Fill one cell of BOARD by hypothesis and propagate.  Return t if it progressed."
-  (let ((n (takuzu-board-size board)) (moved nil))
-    (cl-block hp
-      (dotimes (r n)
-        (dotimes (c n)
-          (when (null (takuzu-board-ref board r c))
-            (let ((f (takuzu--forced-by-hypothesis board r c)))
-              (cond
-               ((eq f 'contradiction) (cl-return-from hp))
-               (f (takuzu-board-set board r c f)
-                  (takuzu--propagate board)
-                  (setq moved t)
-                  (cl-return-from hp))))))))
-    moved))
+  (pcase (takuzu--scan-empty-cells
+          board (lambda (r c)
+                  (let ((f (takuzu--forced-by-hypothesis board r c)))
+                    (and f (list r c f)))))
+    (`(,_ ,_ contradiction) nil)
+    (`(,r ,c ,v)
+     (takuzu-board-set board r c v)
+     (takuzu--propagate board)
+     t)))
 
 (defun takuzu-next-hint (board &optional solution)
   "Return the next fillable cell of BOARD and the technique that found it.
@@ -161,27 +168,20 @@ single), `hypothesis' (a depth-1 hypothesis resolves the cell), or
 `solution' (taken from SOLUTION when neither logic tier names a cell).
 Return nil when BOARD has no empty cell, or when no technique applies and
 SOLUTION is nil.  BOARD is unchanged."
-  (let ((n (takuzu-board-size board)))
-    (cl-block hint
-      (dotimes (r n)
-        (dotimes (c n)
-          (when (null (takuzu-board-ref board r c))
-            (let ((vals (takuzu--legal-values board r c)))
-              (when (and vals (null (cdr vals)))
-                (cl-return-from hint (list r c (car vals) 'forced)))))))
-      (dotimes (r n)
-        (dotimes (c n)
-          (when (null (takuzu-board-ref board r c))
-            (let ((f (takuzu--forced-by-hypothesis board r c)))
-              (when (and f (not (eq f 'contradiction)))
-                (cl-return-from hint (list r c f 'hypothesis)))))))
-      (when solution
-        (dotimes (r n)
-          (dotimes (c n)
-            (when (null (takuzu-board-ref board r c))
-              (cl-return-from hint
-                (list r c (takuzu-board-ref solution r c) 'solution))))))
-      nil)))
+  (or (takuzu--scan-empty-cells
+       board (lambda (r c)
+               (let ((vals (takuzu--legal-values board r c)))
+                 (when (and vals (null (cdr vals)))
+                   (list r c (car vals) 'forced)))))
+      (takuzu--scan-empty-cells
+       board (lambda (r c)
+               (let ((f (takuzu--forced-by-hypothesis board r c)))
+                 (when (and f (not (eq f 'contradiction)))
+                   (list r c f 'hypothesis)))))
+      (and solution
+           (takuzu--scan-empty-cells
+            board (lambda (r c)
+                    (list r c (takuzu-board-ref solution r c) 'solution))))))
 
 (defun takuzu-grade (board)
   "Grade puzzle BOARD as \\='easy, \\='medium, or \\='hard.
