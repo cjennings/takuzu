@@ -1253,6 +1253,24 @@ Shows the three rules over the console shell; any key returns to the game."
          (next (nth (mod (1+ (or (cl-position takuzu--size sizes) 0)) (length sizes)) sizes)))
     (takuzu-ui-arm next (takuzu--current-difficulty))))
 
+(defun takuzu--digit-size (digit)
+  "Return the board size for the DIGIT character, or nil for a dead digit.
+4, 6, and 8 pick their size directly.  1 lands on 10 first; from 10 it
+advances to 12, and from 12 back to 10, so repeated presses toggle the two
+double-digit sizes."
+  (pcase digit
+    (?4 4) (?6 6) (?8 8)
+    (?1 (if (= takuzu--size 10) 12 10))
+    (_ nil)))
+
+(defun takuzu-jump-size (&optional digit)
+  "Arm a fresh game at the size DIGIT picks; a dead digit does nothing.
+Interactively, DIGIT is the key that invoked the command.  Deliberately
+unlabelled on the faceplate -- discoverable by feel, like the hjkl keys."
+  (interactive)
+  (when-let ((size (takuzu--digit-size (or digit last-command-event))))
+    (takuzu-ui-arm size (takuzu--current-difficulty))))
+
 (defun takuzu-cycle-level ()
   "Cycle to the next level (difficulty) and arm a fresh game at it."
   (interactive)
@@ -1277,7 +1295,11 @@ Shows the three rules over the console shell; any key returns to the game."
   "s" #'takuzu-cycle-size
   "l" #'takuzu-cycle-level
   "n" #'takuzu-new
-  "i" #'takuzu-help)
+  "i" #'takuzu-help
+  "1" #'takuzu-jump-size
+  "4" #'takuzu-jump-size
+  "6" #'takuzu-jump-size
+  "8" #'takuzu-jump-size)
 
 (defun takuzu--stop-timer ()
   "Cancel the refresh timer if running."

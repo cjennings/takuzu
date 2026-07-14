@@ -467,6 +467,41 @@ hint's last tier answers with an honest from-the-solution label."
         (should takuzu--armed)
         (should (= takuzu--size 8))))))
 
+(ert-deftest test-takuzu-ui-digit-size ()
+  "Normal/Boundary: digit keys map to board sizes; 1 walks 10 -> 12 -> 10.
+Direct digits pick their size; 1 lands on 10 first, a second press advances
+to 12, and after that it toggles between the two; other digits map to nil."
+  (with-temp-buffer
+    (setq takuzu--size 6)
+    (should (= (takuzu--digit-size ?4) 4))
+    (should (= (takuzu--digit-size ?6) 6))
+    (should (= (takuzu--digit-size ?8) 8))
+    (should (= (takuzu--digit-size ?1) 10))
+    (setq takuzu--size 10)
+    (should (= (takuzu--digit-size ?1) 12))
+    (setq takuzu--size 12)
+    (should (= (takuzu--digit-size ?1) 10))
+    (should-not (takuzu--digit-size ?5))
+    (should-not (takuzu--digit-size ?0))))
+
+(ert-deftest test-takuzu-ui-jump-size-arms-at-digit ()
+  "Normal: a digit key arms a fresh game at that size; a dead digit is a no-op."
+  (test-takuzu-ui--arming
+    (with-temp-buffer
+      (takuzu-mode)
+      (setq takuzu--size 6 takuzu--difficulty 'easy)
+      (let ((last-command-event ?4))
+        (takuzu-jump-size))
+      (with-current-buffer "*Takuzu*"
+        (should takuzu--armed)
+        (should (= takuzu--size 4)))))
+  (with-temp-buffer
+    (takuzu-mode)
+    (setq takuzu--size 6)
+    (let ((last-command-event ?5))
+      (takuzu-jump-size))
+    (should (= takuzu--size 6))))
+
 (ert-deftest test-takuzu-ui-cycle-level ()
   "Normal: cycling level arms a fresh game at the next level."
   (test-takuzu-ui--arming
