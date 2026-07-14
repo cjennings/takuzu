@@ -422,12 +422,9 @@ the size-dependent layout and both disc styles (a given and a placed cell)."
 (ert-deftest test-takuzu-ui-hint-fills-forced-cell ()
   "Normal: hint fills a forced cell and says so."
   (test-takuzu-ui--with-buffer
-    (setq takuzu--size 4 takuzu--generating nil takuzu--armed nil
-          takuzu--won nil takuzu--proven nil takuzu--assist nil takuzu--status ""
-          takuzu--cursor '(3 . 3) takuzu--history nil takuzu--start-time (current-time)
-          takuzu--solution (takuzu-make-board 4 test-takuzu-ui--solution-4)
-          takuzu--board (takuzu-make-board 4 (vector 0 0 nil nil nil nil nil nil
-                                                     nil nil nil nil nil nil nil nil)))
+    (test-takuzu-ui--setup-4 (vector 0 0 nil nil  nil nil nil nil
+                                     nil nil nil nil  nil nil nil nil))
+    (setq takuzu--cursor '(3 . 3))
     (takuzu-hint)
     (should (eql (takuzu-board-ref takuzu--board 0 2) 1))
     (should (string-match-p "forced" takuzu--status))))
@@ -437,11 +434,8 @@ the size-dependent layout and both disc styles (a given and a placed cell)."
 An empty board has no forced cell and no hypothesis-resolvable cell, so the
 hint's last tier answers with an honest from-the-solution label."
   (test-takuzu-ui--with-buffer
-    (setq takuzu--size 4 takuzu--generating nil takuzu--armed nil
-          takuzu--won nil takuzu--proven nil takuzu--assist nil takuzu--status ""
-          takuzu--cursor '(3 . 3) takuzu--history nil takuzu--start-time (current-time)
-          takuzu--solution (takuzu-make-board 4 test-takuzu-ui--solution-4)
-          takuzu--board (takuzu-make-board 4))
+    (test-takuzu-ui--setup-4)
+    (setq takuzu--cursor '(3 . 3))
     (takuzu-hint)
     (should (eql (takuzu-board-ref takuzu--board 0 0)
                  (aref test-takuzu-ui--solution-4 0)))
