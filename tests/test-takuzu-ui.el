@@ -854,15 +854,19 @@ header, grade + clock present in play, cursor visible, coins render)."
       (let ((before (buffer-string)))
         (takuzu-right)
         (should-not (equal (buffer-string) before)))
-      ;; cycle places a coin at the cursor, undo takes it back
-      (let ((cur takuzu--cursor))
-        (when (takuzu-board-given-p takuzu--board (car cur) (cdr cur))
-          (takuzu-down))
-        (let ((r (car takuzu--cursor)) (c (cdr takuzu--cursor)))
-          (takuzu-cycle)
-          (should (takuzu-board-ref takuzu--board r c))
-          (takuzu-undo)
-          (should-not (takuzu-board-ref takuzu--board r c))))
+      ;; cycle places a coin at the cursor, undo takes it back -- park the
+      ;; cursor on the first non-given cell, wherever this puzzle put one
+      (cl-block park
+        (dotimes (rr 4)
+          (dotimes (cc 4)
+            (unless (takuzu-board-given-p takuzu--board rr cc)
+              (setq takuzu--cursor (cons rr cc))
+              (cl-return-from park)))))
+      (let ((r (car takuzu--cursor)) (c (cdr takuzu--cursor)))
+        (takuzu-cycle)
+        (should (takuzu-board-ref takuzu--board r c))
+        (takuzu-undo)
+        (should-not (takuzu-board-ref takuzu--board r c)))
       ;; hint, check, assist, reset all function and report
       (takuzu-hint)
       (should (string-match-p "forced\\|Hypothesis\\|solution" takuzu--status))
