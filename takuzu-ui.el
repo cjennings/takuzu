@@ -50,6 +50,11 @@
     ;; board coins
     :disc0 "#4d5f75" :disc1 "#8f5236" :bezel "#a8aeb5"
     :disc0-edge "#6f839c" :disc1-edge "#b8734f"
+    :disc0-deep "#2c3745" :disc1-deep "#4f2c1c"
+    ;; coin-skin metals (compass medallions) and the fixed-coin rim
+    :coin-iron-hi "#5a5f66" :coin-iron "#33363b" :coin-iron-deep "#1a1c20"
+    :coin-copper-hi "#d99a5e" :coin-copper "#b87333" :coin-copper-deep "#6f4218"
+    :rim-silver "#c3c9d1"
     ;; nixie tubes
     :amber "#ff9a3c" :amber-off "#3a2a1c" :amber-hi "#ffbf7a"
     :tube-glass "#0b0807" :tube-edge "#2c261d" :tube-halo "#ff8c32"
@@ -273,10 +278,42 @@ omits it)."
          (filled (- total (takuzu--empty-count))))
     (* 100 (/ filled (float total)))))
 
-(defun takuzu--draw-disc (svg cx cy r val given)
-  "Draw a disc of VAL on SVG at CX,CY radius R.
-Givens wear a thin dulled-silver bezel; placed discs a thin lighter lip of their
-own colour."
+;; --- coin skins ---
+
+(defcustom takuzu-coin-skin 'lamp
+  "The coin skin drawn on the board.
+lamp is the shipped matte disc, jewel a domed pilot-lamp jewel, and
+compass an iron-and-copper medallion engraved with a compass rose."
+  :type '(choice (const lamp) (const jewel) (const compass))
+  :group 'takuzu)
+
+(defconst takuzu--coin-skins '(lamp jewel compass)
+  "Skin cycle order for `takuzu-cycle-skin' and the selector counter.")
+
+(defun takuzu--coin-pt (cx cy rr deg)
+  "The point at DEG degrees (12 o'clock = 0) and radius RR around CX,CY."
+  (let ((a (* (- deg 90) (/ float-pi 180))))
+    (cons (+ cx (* rr (cos a))) (+ cy (* rr (sin a))))))
+
+(defun takuzu--ensure-coin-gradient (svg id gcx gcy gr stops)
+  "Define radial gradient ID on SVG once: centre GCX,GCY radius GR with STOPS.
+Coordinates are objectBoundingBox fractions, so every coin that fills with
+this id gets the gradient scaled to its own circle -- one def serves the
+whole board.  STOPS is a list of (OFFSET . PALETTE-KEY)."
+  (unless (dom-by-id svg (concat "^" id "$"))
+    (dom-append-child svg
+      (apply #'dom-node 'radialGradient
+             (list (cons 'id id) (cons 'cx gcx) (cons 'cy gcy) (cons 'r gr))
+             (mapcar (lambda (stop)
+                       (dom-node 'stop
+                                 (list (cons 'offset (car stop))
+                                       (cons 'stop-color (takuzu--c (cdr stop))))))
+                     stops)))))
+
+(defun takuzu--draw-disc-lamp (svg cx cy r val given)
+  "Draw the lamp-lip disc of VAL on SVG at CX,CY radius R.
+Givens wear a thin dulled-silver bezel; placed discs a thin lighter lip of
+their own colour."
   (let ((fill (if (eql val 0) (takuzu--c :disc0) (takuzu--c :disc1)))
         (edge (if (eql val 0) (takuzu--c :disc0-edge) (takuzu--c :disc1-edge))))
     (if given
@@ -284,6 +321,122 @@ own colour."
           (svg-circle svg cx cy (+ r 1) :fill "none" :stroke (takuzu--c :ink) :stroke-width 1)
           (svg-circle svg cx cy r :fill fill :stroke (takuzu--c :bezel) :stroke-width 1.2))
       (svg-circle svg cx cy r :fill fill :stroke edge :stroke-width 1.2))))
+
+(defun takuzu--draw-disc-jewel (svg cx cy r val given)
+  "Draw the jewel-dome disc of VAL on SVG at CX,CY radius R.
+A domed pilot-lamp jewel: radial depth and a hard specular catch.
+GIVEN seats a thin brass collar around the jewel."
+  (let ((id (format "takuzu-coin-jewel-%d" val)))
+    (takuzu--ensure-coin-gradient
+     svg id 0.38 0.32 0.85
+     (if (eql val 0)
+         '((0 . :disc0-edge) (0.45 . :disc0) (1 . :disc0-deep))
+       '((0 . :disc1-edge) (0.45 . :disc1) (1 . :disc1-deep))))
+    (svg-circle svg cx cy r :fill (format "url(#%s)" id)
+                :stroke (takuzu--c :ink) :stroke-width 1)
+    (svg-ellipse svg (- cx (* r 0.34)) (- cy (* r 0.38)) (* r 0.16) (* r 0.10)
+                 :fill (takuzu--c :white) :fill-opacity 0.55)
+    (when given
+      (svg-circle svg cx cy (+ r 1.6) :fill "none"
+                  :stroke (takuzu--c :gold) :stroke-width 1.6)
+      (svg-circle svg cx cy (+ r 2.6) :fill "none"
+                  :stroke (takuzu--c :gold-hi) :stroke-width 0.6 :stroke-opacity 0.6))))
+
+(defun takuzu--draw-disc-compass (svg cx cy r val given)
+  "Draw the compass-rose medallion of VAL on SVG at CX,CY radius R.
+VAL 0 is a dark-iron medallion with copper rays; VAL 1 its mirror.  The
+dentate border only draws when R is large enough to keep it legible (2x
+showcase scale, not board scale).  GIVEN adds a bright silver rim ring."
+  (let* ((iron (eql val 0))
+         (id (format "takuzu-coin-body-%d" val))
+         (body-base (takuzu--c (if iron :coin-iron :coin-copper)))
+         (body-hi (takuzu--c (if iron :coin-iron-hi :coin-copper-hi)))
+         (body-deep (takuzu--c (if iron :coin-iron-deep :coin-copper-deep)))
+         (ink (takuzu--c (if iron :coin-copper :coin-iron)))
+         (glint (takuzu--c (if iron :coin-copper-hi :coin-iron-hi)))
+         (detailed (>= r 20)))
+    (ignore body-hi)
+    (takuzu--ensure-coin-gradient
+     svg id 0.36 0.30 0.95
+     (if iron
+         '((0 . :coin-iron-hi) (0.5 . :coin-iron) (1 . :coin-iron-deep))
+       '((0 . :coin-copper-hi) (0.5 . :coin-copper) (1 . :coin-copper-deep))))
+    (svg-circle svg cx cy r :fill (format "url(#%s)" id)
+                :stroke body-deep :stroke-width 1.2)
+    (when given
+      (svg-circle svg cx cy (+ r 1.5) :fill "none"
+                  :stroke (takuzu--c :rim-silver) :stroke-width 1.6)
+      (svg-circle svg cx cy (+ r 2.6) :fill "none"
+                  :stroke (takuzu--c :white) :stroke-width 0.5 :stroke-opacity 0.35))
+    (when detailed
+      (let (teeth)
+        (dotimes (i 32)
+          (push (takuzu--coin-pt cx cy (* r (if (cl-oddp i) 0.87 0.78)) (* i 11.25))
+                teeth))
+        (svg-polygon svg (nreverse teeth)
+                     :fill "none" :stroke ink :stroke-opacity 0.8 :stroke-width 0.7)))
+    (let ((big (* r (if detailed 0.68 0.74))))
+      (dotimes (i 8)
+        (let ((a (* i 45.0)))
+          (svg-polygon svg (list (takuzu--coin-pt cx cy big a)
+                                 (takuzu--coin-pt cx cy (* r 0.14) (+ a 22))
+                                 (takuzu--coin-pt cx cy (* r 0.14) (- a 22)))
+                       :fill ink)))
+      (dotimes (i 8)
+        (let ((a (+ (* i 45.0) 22.5)))
+          (svg-polygon svg (list (takuzu--coin-pt cx cy (* big 0.62) a)
+                                 (takuzu--coin-pt cx cy (* r 0.10) (+ a 30))
+                                 (takuzu--coin-pt cx cy (* r 0.10) (- a 30)))
+                       :fill glint :fill-opacity 0.85))))
+    (svg-circle svg cx cy (* r 0.10) :fill body-base
+                :stroke ink :stroke-width (* r 0.04))))
+
+(defun takuzu--draw-disc (svg cx cy r val given)
+  "Draw the coin for VAL on SVG at CX,CY radius R in the current skin.
+GIVEN draws the skin's fixed-coin marking."
+  (pcase takuzu-coin-skin
+    ('jewel (takuzu--draw-disc-jewel svg cx cy r val given))
+    ('compass (takuzu--draw-disc-compass svg cx cy r val given))
+    (_ (takuzu--draw-disc-lamp svg cx cy r val given))))
+
+(defun takuzu-cycle-skin ()
+  "Switch to the next coin skin and redraw."
+  (interactive)
+  (let* ((pos (or (cl-position takuzu-coin-skin takuzu--coin-skins) 0))
+         (next (nth (mod (1+ pos) (length takuzu--coin-skins)) takuzu--coin-skins)))
+    (setq takuzu-coin-skin next)
+    (takuzu--set-status (format "Coin skin: %s." next)))
+  (takuzu--redraw))
+
+(defun takuzu--draw-skin-selector (svg x y)
+  "Draw the coin-skin selector on SVG at X,Y: a tape counter and thumbwheel.
+The counter window shows the skin's index on the drum, the skin's name is
+etched beside it, and the ridged thumbwheel names the key that turns it."
+  (let* ((pos (or (cl-position takuzu-coin-skin takuzu--coin-skins) 0))
+         (wx (+ x 46)) (wy (+ y 10)))
+    (takuzu--txt svg x (+ y 6) "COIN" 9 (takuzu--c :steel))
+    ;; tape-counter window: dark drum glass, amber index, drum separator
+    (svg-rectangle svg x (+ y 10) 36 22 :rx 3
+                   :fill (takuzu--c :tube-glass) :stroke (takuzu--c :tube-edge))
+    (takuzu--txt svg (+ x 18) (+ y 26) (format "%02d" (1+ pos))
+                 13 (takuzu--c :amber) "middle")
+    (svg-line svg (+ x 18) (+ y 12) (+ x 18) (+ y 30)
+              :stroke (takuzu--c :ink) :stroke-width 0.6 :stroke-opacity 0.6)
+    (svg-rectangle svg (+ x 1.5) (+ y 11.5) 33 6 :rx 2
+                   :fill (takuzu--c :white) :fill-opacity 0.05)
+    ;; the thumbwheel: a ridged edge proud of the plate
+    (svg-rectangle svg wx wy 11 26 :rx 5
+                   :fill (takuzu--c :knob) :stroke (takuzu--c :knob-edge) :stroke-width 0.8)
+    (dotimes (i 4)
+      (let ((ly (+ wy 5 (* i 5.4))))
+        (svg-line svg (+ wx 1.5) ly (+ wx 9.5) ly
+                  :stroke (takuzu--c :ink) :stroke-opacity 0.55 :stroke-width 1)
+        (svg-line svg (+ wx 1.5) (1+ ly) (+ wx 9.5) (1+ ly)
+                  :stroke (takuzu--c :white) :stroke-opacity 0.10 :stroke-width 0.8)))
+    ;; the key that turns the wheel, and the skin on the drum
+    (takuzu--legend-glyph svg (+ wx 16) (+ y 26) 10 "W" (takuzu--c :gold) t)
+    (takuzu--txt svg x (+ y 42) (upcase (symbol-name takuzu-coin-skin))
+                 8 (takuzu--c :dim))))
 
 (defun takuzu--draw-cursor-bezel (svg sx sy cell)
   "Draw the cursor on SVG as a machined brass bezel ring on the socket rim.
@@ -761,6 +914,8 @@ extra room."
     (takuzu--draw-board svg ppad boardy)
     (let* ((px (+ ppad boardw takuzu--stage-gap))
            (ptop (takuzu--panel-top)))
+      ;; the skin selector sits in the title band, clear of the panel column
+      (takuzu--draw-skin-selector svg (- px 96) (+ ppad 2))
       (takuzu--draw-panel svg px ptop (- bottom ptop)))
     (let ((evy (+ bottom 12)))
       (takuzu--draw-event-annunciator svg ppad evy (takuzu--strip-width) takuzu--event-h)
@@ -1382,6 +1537,7 @@ unlabelled on the faceplate -- discoverable by feel, like the hjkl keys."
   "n" #'takuzu-new
   "i" #'takuzu-help
   "t" #'takuzu-stats
+  "w" #'takuzu-cycle-skin
   "1" #'takuzu-jump-size
   "4" #'takuzu-jump-size
   "6" #'takuzu-jump-size

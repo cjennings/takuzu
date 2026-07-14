@@ -1279,5 +1279,74 @@ with no games recorded it says so."
         (should (string-match-p "0W 0L" s))
         (should (string-match-p "0W 1L" s))))))
 
+;; --- coin skins ---
+
+(ert-deftest test-takuzu-ui-coin-skin-default-and-set ()
+  "Normal: the skin defcustom defaults to lamp; the skin list has all three."
+  (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'lamp))
+  (should (equal takuzu--coin-skins '(lamp jewel compass))))
+
+(ert-deftest test-takuzu-ui-cycle-skin-cycles ()
+  "Normal: the skin command walks lamp -> jewel -> compass -> lamp."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (let ((takuzu-coin-skin 'lamp))
+      (takuzu-cycle-skin)
+      (should (eq takuzu-coin-skin 'jewel))
+      (takuzu-cycle-skin)
+      (should (eq takuzu-coin-skin 'compass))
+      (takuzu-cycle-skin)
+      (should (eq takuzu-coin-skin 'lamp)))))
+
+(ert-deftest test-takuzu-ui-draw-disc-dispatches-by-skin ()
+  "Normal: each skin draws its signature shapes through the one entry point."
+  (dolist (case '((lamp . ((radialGradient . 0) (polygon . 0)))
+                  (jewel . ((radialGradient . 1) (ellipse . 1)))
+                  (compass . ((radialGradient . 1) (polygon . 17)))))
+    (let ((takuzu-coin-skin (car case))
+          (svg (svg-create 100 100)))
+      (takuzu--draw-disc svg 50 50 33 0 nil)
+      (dolist (want (cdr case))
+        (should (= (length (dom-by-tag svg (car want))) (cdr want)))))))
+
+(ert-deftest test-takuzu-ui-jewel-given-wears-collar ()
+  "Normal: a fixed jewel adds the two brass collar rings."
+  (let ((takuzu-coin-skin 'jewel))
+    (let ((plain (svg-create 100 100)) (fixed (svg-create 100 100)))
+      (takuzu--draw-disc plain 50 50 33 1 nil)
+      (takuzu--draw-disc fixed 50 50 33 1 t)
+      (should (= (- (length (dom-by-tag fixed 'circle))
+                    (length (dom-by-tag plain 'circle)))
+                 2)))))
+
+(ert-deftest test-takuzu-ui-compass-lod-drops-dentate-at-board-scale ()
+  "Boundary: the compass dentate border draws at 2x but not below r=20."
+  (let ((takuzu-coin-skin 'compass))
+    (let ((big (svg-create 100 100)) (small (svg-create 100 100)))
+      (takuzu--draw-disc big 50 50 33 0 nil)
+      (takuzu--draw-disc small 50 50 16 0 nil)
+      (should (= (length (dom-by-tag big 'polygon)) 17))
+      (should (= (length (dom-by-tag small 'polygon)) 16)))))
+
+(ert-deftest test-takuzu-ui-shared-coin-gradients-defined-once ()
+  "Boundary: two coins of both colours share one gradient def per colour."
+  (let ((takuzu-coin-skin 'jewel)
+        (svg (svg-create 200 100)))
+    (takuzu--draw-disc svg 40 50 16 0 nil)
+    (takuzu--draw-disc svg 80 50 16 0 nil)
+    (takuzu--draw-disc svg 120 50 16 1 nil)
+    (takuzu--draw-disc svg 160 50 16 1 nil)
+    (should (= (length (dom-by-tag svg 'radialGradient)) 2))))
+
+(ert-deftest test-takuzu-ui-skin-selector-shows-counter ()
+  "Normal: the faceplate carries the skin selector with the tape-counter index."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (dolist (case '((lamp . "01") (jewel . "02") (compass . "03")))
+      (let* ((takuzu-coin-skin (car case))
+             (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
+        (should (member (cdr case) texts))
+        (should (member "COIN" texts))))))
+
 (provide 'test-takuzu-ui)
 ;;; test-takuzu-ui.el ends here
