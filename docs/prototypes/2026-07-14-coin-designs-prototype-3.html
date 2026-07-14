@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Takuzu coin-design gallery v3: iron & copper mystical medallions.
+     Craig's steer after v2: a medallion in real dark iron with copper
+     highlights, carrying an elaborate but abstract symbol.  The symbol
+     grammar is drawn from historic talismans and amulets -- concentric
+     organization (dentate border, character band between fine rules, open
+     field, central geometric figure), radial symmetry, star polygons,
+     angular sigil linework with terminal circles, field dots as stars --
+     abstracted so no real religious or occult symbol is reproduced.
+     Colour 0 is dark iron inlaid with copper; colour 1 is its mirror.
+     FIXED coins add a bright silver rim ring.  Engravings drop their fine
+     band at board scale so the coin stays readable.  librsvg-safe. -->
+<title>Takuzu — Coin Prototypes v3 (Medallions)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 0 60px;
+    display: flex; flex-direction: column; align-items: center;
+    background: #0b0a08; font-family: ui-monospace, Menlo, Consolas, monospace;
+  }
+  #stage svg { display: block; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<script>
+"use strict";
+(function () {
+
+// --- console palette ---
+
+const COLORS = {
+  "plate": "#1b1710", "plate-edge": "#2c2620", "panel-edge": "#201d17",
+  "well": "#0a0c0d", "board-bg": "#14110c",
+  "socket": "#0c0a07", "socket-edge": "#05040a",
+  "ink": "#000000", "white": "#ffffff",
+  "gold": "#b99640", "gold-hi": "#dcc061", "cream": "#f3e7c5",
+  "steel": "#969385", "dim": "#7c838a", "wash": "#2c2f32",
+  "rim-silver": "#c3c9d1",
+};
+const c = k => COLORS[k];
+
+// the two materials: dark iron and warm copper, each [hi, base, deep]
+const METAL = {
+  iron:   ["#5a5f66", "#33363b", "#1a1c20"],
+  copper: ["#d99a5e", "#b87333", "#6f4218"],
+};
+// val 0: iron body, copper engraving.  val 1: the mirror.
+const body = v => METAL[v === 0 ? "iron" : "copper"];
+const inlay = v => METAL[v === 0 ? "copper" : "iron"];
+
+// --- svg string helpers ---
+
+const attrs = o => Object.entries(o)
+  .filter(([, v]) => v != null)
+  .map(([k, v]) => ` ${k}="${v}"`).join("");
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const rect = (svg, x, y, w, h, o) => svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}"${attrs(o)}/>`);
+const circle = (svg, cx, cy, r, o) => svg.push(`<circle cx="${cx}" cy="${cy}" r="${r}"${attrs(o)}/>`);
+const line = (svg, x1, y1, x2, y2, o) => svg.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${attrs(o)}/>`);
+const pathEl = (svg, d, o) => svg.push(`<path d="${d}"${attrs(o)}/>`);
+const polygon = (svg, pts, o) => svg.push(`<polygon points="${pts.map(p => p.join(",")).join(" ")}"${attrs(o)}/>`);
+function txt(svg, x, y, str, size, color, anchor, weight) {
+  svg.push(`<text x="${x}" y="${y}" font-family="monospace" font-size="${size}"`
+    + ` fill="${color}" text-anchor="${anchor || "start"}"`
+    + ` font-weight="${weight || "normal"}">${esc(str)}</text>`);
+}
+
+let uid = 0;
+const gid = () => `coin3-g${++uid}`;
+
+// point on the circle at DEG (12 o'clock = -90) and radius RR
+const pt = (cx, cy, rr, deg) => {
+  const a = (deg - 90) * Math.PI / 180;
+  return [+(cx + rr * Math.cos(a)).toFixed(2), +(cy + rr * Math.sin(a)).toFixed(2)];
+};
+
+function metalFill(svg, m) {
+  const g = gid();
+  svg.push(`<radialGradient id="${g}" cx="0.36" cy="0.30" r="0.95">`
+    + `<stop offset="0" stop-color="${m[0]}"/>`
+    + `<stop offset="0.5" stop-color="${m[1]}"/>`
+    + `<stop offset="1" stop-color="${m[2]}"/>`
+    + `</radialGradient>`);
+  return `url(#${g})`;
+}
+
+function socket(svg, sx, sy, cell) {
+  rect(svg, sx, sy, cell, cell, {
+    rx: cell * 0.18, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1,
+  });
+}
+
+// medallion base: struck metal blank with a raised rim; silver ring when fixed
+function blank(svg, cx, cy, r, val, given) {
+  const b = body(val);
+  circle(svg, cx, cy, r, { fill: metalFill(svg, b), stroke: b[2], "stroke-width": 1.2 });
+  circle(svg, cx, cy, r - 1.4, { fill: "none", stroke: b[0], "stroke-opacity": 0.45, "stroke-width": 0.8 });
+  if (given) {
+    circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: c("rim-silver"), "stroke-width": 1.6 });
+    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.35 });
+  }
+}
+
+// the legend band: fine double rule with tick characters, skipped at small r
+function legendBand(svg, cx, cy, r, ink, detailed) {
+  if (!detailed) return;
+  circle(svg, cx, cy, r * 0.84, { fill: "none", stroke: ink, "stroke-opacity": 0.75, "stroke-width": 0.6 });
+  circle(svg, cx, cy, r * 0.68, { fill: "none", stroke: ink, "stroke-opacity": 0.75, "stroke-width": 0.6 });
+  for (let i = 0; i < 24; i++) {
+    const [x1, y1] = pt(cx, cy, r * 0.71, i * 15);
+    const [x2, y2] = pt(cx, cy, r * (i % 2 ? 0.78 : 0.81), i * 15);
+    line(svg, x1, y1, x2, y2, { stroke: ink, "stroke-opacity": 0.8, "stroke-width": 0.7 });
+  }
+}
+
+// =====================================================================
+// Six medallion symbols.  drawCoin(svg, cx, cy, r, val, given); each keeps
+// a bold central figure so the engraving survives board scale.
+// =====================================================================
+
+// 1 OCTAGRAM SEAL — two interlocking squares as open strokework, terminal
+//   dots at the points, a ringed boss at centre, character band outside.
+function coinOctagram(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  const detailed = r >= 20;
+  legendBand(svg, cx, cy, r, ink, detailed);
+  const R = r * (detailed ? 0.56 : 0.66);
+  for (const off of [0, 45]) {
+    const sq = [0, 90, 180, 270].map(d => pt(cx, cy, R, d + off));
+    polygon(svg, sq, { fill: "none", stroke: ink, "stroke-width": r * 0.05, "stroke-linejoin": "miter" });
+  }
+  for (let i = 0; i < 8; i++) {
+    const [x, y] = pt(cx, cy, R, i * 45);
+    circle(svg, x, y, r * 0.05, { fill: glint });
+  }
+  circle(svg, cx, cy, r * 0.14, { fill: "none", stroke: ink, "stroke-width": r * 0.045 });
+  circle(svg, cx, cy, r * 0.045, { fill: glint });
+}
+
+// 2 PLANETARY SIGIL — an angular continuous sigil line with terminal
+//   circles, crossing a central ring: the seal-script look of the old
+//   planetary squares, invented fresh here.
+function coinSigil(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  const detailed = r >= 20;
+  legendBand(svg, cx, cy, r, ink, detailed);
+  const s = r * (detailed ? 0.52 : 0.62), w = r * 0.055;
+  circle(svg, cx, cy, s * 0.52, { fill: "none", stroke: ink, "stroke-width": w });
+  const p1 = pt(cx, cy, s, 0), p2 = pt(cx, cy, s * 0.9, 135), p3 = pt(cx, cy, s * 0.95, 240);
+  pathEl(svg, `M ${p1[0]} ${p1[1]} L ${cx} ${cy - s * 0.15} L ${p2[0]} ${p2[1]}`,
+    { fill: "none", stroke: ink, "stroke-width": w, "stroke-linecap": "round" });
+  pathEl(svg, `M ${cx - s * 0.5} ${cy} L ${cx + s * 0.5} ${cy} M ${p3[0]} ${p3[1]} L ${cx - s * 0.5} ${cy}`,
+    { fill: "none", stroke: ink, "stroke-width": w, "stroke-linecap": "round" });
+  for (const p of [p1, p2, p3])
+    circle(svg, p[0], p[1], r * 0.06, { fill: "none", stroke: glint, "stroke-width": w * 0.8 });
+  circle(svg, cx, cy, r * 0.04, { fill: glint });
+}
+
+// 3 COMPASS ROSE — sixteen alternating rays after the marquetry star,
+//   inside a dentate (zig-zag) border in place of the character band.
+function coinCompass(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  const detailed = r >= 20;
+  if (detailed) {
+    const teeth = [];
+    for (let i = 0; i < 32; i++)
+      teeth.push(pt(cx, cy, r * (i % 2 ? 0.87 : 0.78), i * 11.25));
+    polygon(svg, teeth, { fill: "none", stroke: ink, "stroke-opacity": 0.8, "stroke-width": 0.7 });
+  }
+  const R = r * (detailed ? 0.68 : 0.74);
+  for (let i = 0; i < 8; i++) {
+    const tip = pt(cx, cy, R, i * 45);
+    const b1 = pt(cx, cy, r * 0.14, i * 45 + 22);
+    const b2 = pt(cx, cy, r * 0.14, i * 45 - 22);
+    polygon(svg, [tip, b1, b2], { fill: ink });
+  }
+  for (let i = 0; i < 8; i++) {
+    const tip = pt(cx, cy, R * 0.62, i * 45 + 22.5);
+    const b1 = pt(cx, cy, r * 0.10, i * 45 + 22.5 + 30);
+    const b2 = pt(cx, cy, r * 0.10, i * 45 + 22.5 - 30);
+    polygon(svg, [tip, b1, b2], { fill: glint, "fill-opacity": 0.85 });
+  }
+  circle(svg, cx, cy, r * 0.10, { fill: body(val)[1], stroke: ink, "stroke-width": r * 0.04 });
+}
+
+// 4 ROSETTE — the six-petal overlapping-circle rosette of carved stonework,
+//   ringed by a scalloped band.
+function coinRosette(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  const detailed = r >= 20;
+  const R = r * (detailed ? 0.50 : 0.60), pr = R * 0.5;
+  if (detailed) {
+    const seg = (2 * Math.PI * r * 0.78) / 18;
+    circle(svg, cx, cy, r * 0.78, {
+      fill: "none", stroke: ink, "stroke-opacity": 0.8, "stroke-width": r * 0.05,
+      "stroke-dasharray": `${(seg * 0.62).toFixed(2)} ${(seg * 0.38).toFixed(2)}`,
+    });
+  }
+  circle(svg, cx, cy, R, { fill: "none", stroke: ink, "stroke-width": r * 0.045 });
+  for (let i = 0; i < 6; i++) {
+    const [px, py] = pt(cx, cy, pr, i * 60);
+    circle(svg, px, py, pr, { fill: "none", stroke: ink, "stroke-width": r * 0.04 });
+  }
+  circle(svg, cx, cy, r * 0.045, { fill: glint });
+  for (let i = 0; i < 6; i++) {
+    const [px, py] = pt(cx, cy, R * 0.82, i * 60 + 30);
+    circle(svg, px, py, r * 0.028, { fill: glint });
+  }
+}
+
+// 5 SERPENT RING — an ouroboros abstracted to a scaled ring biting its own
+//   tail, a crescent and three star dots held inside.
+function coinSerpent(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  const detailed = r >= 20;
+  const R = r * 0.66, w = r * 0.10;
+  // the ring body with a bite gap at one o'clock
+  const a0 = pt(cx, cy, R, 55), a1 = pt(cx, cy, R, 5);
+  pathEl(svg, `M ${a0[0]} ${a0[1]} A ${R} ${R} 0 1 1 ${a1[0]} ${a1[1]}`,
+    { fill: "none", stroke: ink, "stroke-width": w, "stroke-linecap": "round" });
+  if (detailed) {
+    const seg = (2 * Math.PI * R) / 40;
+    pathEl(svg, `M ${a0[0]} ${a0[1]} A ${R} ${R} 0 1 1 ${a1[0]} ${a1[1]}`, {
+      fill: "none", stroke: glint, "stroke-width": w * 0.4, "stroke-opacity": 0.6,
+      "stroke-dasharray": `${(seg * 0.4).toFixed(2)} ${(seg * 0.6).toFixed(2)}`,
+    });
+  }
+  // head wedge at the gap
+  const h0 = pt(cx, cy, R + w * 0.7, 22), h1 = pt(cx, cy, R - w * 0.7, 22), h2 = pt(cx, cy, R, 52);
+  polygon(svg, [h0, h1, h2], { fill: ink });
+  // crescent: two offset arcs
+  pathEl(svg, `M ${cx - R * 0.34} ${cy - R * 0.30} A ${R * 0.45} ${R * 0.45} 0 1 0 ${cx + R * 0.34} ${cy - R * 0.30} `
+    + `A ${R * 0.56} ${R * 0.56} 0 1 1 ${cx - R * 0.34} ${cy - R * 0.30} Z`,
+    { fill: glint, "fill-opacity": 0.9 });
+  for (const [dx, dy] of [[0, -R * 0.62], [-R * 0.28, R * 0.10], [R * 0.28, R * 0.10]])
+    circle(svg, cx + dx, cy + dy, r * 0.035, { fill: glint });
+}
+
+// 6 ASTRAL DIAL — an astrolabe face: minute ticks around the limb, a
+//   rotated square rete over an off-centre ring, star dots in the field.
+function coinDial(svg, cx, cy, r, val, given) {
+  blank(svg, cx, cy, r, val, given);
+  const ink = inlay(val)[1], glint = inlay(val)[0];
+  const detailed = r >= 20;
+  if (detailed)
+    for (let i = 0; i < 36; i++) {
+      const long = i % 3 === 0;
+      const [x1, y1] = pt(cx, cy, r * 0.84, i * 10);
+      const [x2, y2] = pt(cx, cy, r * (long ? 0.74 : 0.79), i * 10);
+      line(svg, x1, y1, x2, y2, { stroke: ink, "stroke-opacity": 0.8, "stroke-width": long ? 0.9 : 0.6 });
+    }
+  const R = r * (detailed ? 0.58 : 0.68);
+  const sq = [45, 135, 225, 315].map(d => pt(cx, cy, R, d));
+  polygon(svg, sq, { fill: "none", stroke: ink, "stroke-width": r * 0.05, "stroke-linejoin": "miter" });
+  circle(svg, cx - R * 0.22, cy - R * 0.18, R * 0.42, { fill: "none", stroke: ink, "stroke-width": r * 0.045 });
+  line(svg, cx - R * 0.7, cy + R * 0.55, cx + R * 0.75, cy - R * 0.6,
+    { stroke: glint, "stroke-width": r * 0.04, "stroke-linecap": "round" });
+  for (const d of [70, 160, 290])
+    circle(svg, ...pt(cx, cy, R * 0.8, d), r * 0.035, { fill: glint });
+  circle(svg, cx, cy, r * 0.04, { fill: glint });
+}
+
+const VARIANTS = [
+  ["1  OCTAGRAM SEAL", "interlocked squares, terminal dots, character band", coinOctagram],
+  ["2  PLANETARY SIGIL", "angular seal-script line with terminal circles", coinSigil],
+  ["3  COMPASS ROSE", "sixteen rays inside a dentate border", coinCompass],
+  ["4  ROSETTE", "six-petal stonework rosette, scalloped band", coinRosette],
+  ["5  SERPENT RING", "scaled ring biting its tail, crescent and stars", coinSerpent],
+  ["6  ASTRAL DIAL", "astrolabe limb ticks, square rete, star dots", coinDial],
+];
+
+// --- panel layout (as v1/v2) ---
+
+const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
+const PANEL_W = 4 * ZCELL + 3 * GAP + 2 * 24;
+const PANEL_H = 264;
+
+function frame(svg, x, y, w, h, label) {
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  rect(svg, x + 3, y + 3, w - 6, h - 6, { rx: 6, fill: "none", stroke: c("wash"), "stroke-width": 1, "stroke-opacity": 0.6 });
+  const lw = label.length * 7 + 10;
+  rect(svg, x + 18, y - 6, lw, 12, { fill: c("plate") });
+  txt(svg, x + 23, y + 3, label, 10, c("cream"), "start", "bold");
+}
+
+function drawVariantPanel(svg, x, y, title, note, drawCoin) {
+  frame(svg, x, y, PANEL_W, PANEL_H, title);
+  txt(svg, x + 23, y + 24, note, 9, c("dim"));
+  const combos = [[0, false], [1, false], [0, true], [1, true]];
+  const labels = ["IRON + COPPER", "COPPER + IRON", "FIXED", "FIXED"];
+  const rowx = x + 24, rowy = y + 40;
+  combos.forEach(([val, given], i) => {
+    const sx = rowx + i * (ZCELL + GAP);
+    socket(svg, sx, rowy, ZCELL);
+    drawCoin(svg, sx + ZCELL / 2, rowy + ZCELL / 2, Math.round(ZCELL * 0.33), val, given);
+    txt(svg, sx + ZCELL / 2, rowy + ZCELL + 16, labels[i], 8,
+      given ? c("gold") : c("steel"), "middle");
+  });
+  const strip = [[0, true], [1, false], [1, true], [0, false], null, [1, false], [0, true], [1, true]];
+  const spanw = strip.length * RCELL + (strip.length - 1) * RGAP + 2 * 12;
+  const bx = x + Math.round((PANEL_W - spanw) / 2), by = rowy + ZCELL + 34;
+  rect(svg, bx, by, spanw, RCELL + 24, { rx: 10, fill: c("board-bg"), stroke: c("ink") });
+  strip.forEach((cellv, i) => {
+    const sx = bx + 12 + i * (RCELL + RGAP), sy = by + 12;
+    socket(svg, sx, sy, RCELL);
+    if (cellv != null)
+      drawCoin(svg, sx + RCELL / 2, sy + RCELL / 2, Math.round(RCELL * 0.33), cellv[0], cellv[1]);
+  });
+  txt(svg, x + PANEL_W - 22, by + RCELL + 36, "AT BOARD SCALE", 8, c("dim"), "end");
+}
+
+// --- page assembly ---
+
+const MARGIN = 34, TITLE_H = 74, VGAP = 26;
+const W = PANEL_W + 2 * MARGIN;
+const H = TITLE_H + VARIANTS.length * (PANEL_H + VGAP) + MARGIN;
+
+const svg = [];
+rect(svg, 0, 0, W, H, { rx: 16, fill: c("plate"), stroke: c("plate-edge") });
+txt(svg, MARGIN, 44, "TAKUZU", 30, c("gold"), "start", "bold");
+txt(svg, MARGIN + 132, 44, "/", 30, c("gold-hi"));
+txt(svg, MARGIN + 152, 32, "COIN PROTOTYPES V3", 11, c("steel"));
+txt(svg, MARGIN + 152, 46, "IRON & COPPER MEDALLIONS - ABSTRACT TALISMAN ENGRAVINGS", 9, c("dim"));
+txt(svg, W - MARGIN, 32, "2026-07-14", 10, c("steel"), "end");
+
+VARIANTS.forEach(([title, note, fn], i) => {
+  drawVariantPanel(svg, MARGIN, TITLE_H + i * (PANEL_H + VGAP), title, note, fn);
+});
+
+document.getElementById("stage").innerHTML =
+  `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" `
+  + `xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Takuzu coin prototypes v3">`
+  + svg.join("") + `</svg>`;
+
+})();
+</script>
+</body>
+</html>
