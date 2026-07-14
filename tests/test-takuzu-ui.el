@@ -1286,7 +1286,34 @@ with no games recorded it says so."
   (should (equal takuzu--coin-skins
                  '(sovereign collegiate machined cash gems lamp jewel compass
                    guilloche runic scallop bimetal matrix split rosette
-                   filigree))))
+                   filigree casino))))
+
+(ert-deftest test-takuzu-ui-casino-chips ()
+  "Normal: the casino skin deals a red chip for 0 and a dark navy chip
+for 1, cream edge spots on both.  A user chip carries the cream inlay
+centre; a fixed chip keeps its own colour's full fill -- no cream inlay
+and no centre dot."
+  (let ((takuzu-coin-skin 'casino))
+    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
+          (f0 (svg-create 100 100)))
+      (takuzu--draw-disc c0 50 50 33 0 nil)
+      (takuzu--draw-disc c1 50 50 33 1 nil)
+      (takuzu--draw-disc f0 50 50 33 0 t)
+      (should (dom-by-id c0 "^m-chipred-fill$"))
+      (should (dom-by-id c1 "^m-berkeley-fill$"))
+      ;; edge spots: a cream dashed ring on every chip
+      (dolist (svg (list c0 c1 f0))
+        (should (seq-find (lambda (n)
+                            (and (equal (dom-attr n 'stroke) "#e9dfc8")
+                                 (dom-attr n 'stroke-dasharray)))
+                          (dom-by-tag svg 'circle))))
+      ;; the cream inlay marks USER chips only; fixed stays full-colour
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'fill) "#e9dfc8"))
+                        (dom-by-tag c0 'circle)))
+      (should-not (seq-find (lambda (n)
+                              (equal (dom-attr n 'fill) "#e9dfc8"))
+                            (dom-by-tag f0 'circle))))))
 
 (ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
   "Normal: r (refresh) turns the coin drum back to coinset 1."
@@ -1409,9 +1436,9 @@ the ring holding a heart of the other wood, with no centre dot."
       (takuzu-cycle-skin-back)
       (should (eq takuzu-coin-skin 'sovereign))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'filigree))
+      (should (eq takuzu-coin-skin 'casino))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'rosette)))))
+      (should (eq takuzu-coin-skin 'filigree)))))
 
 (ert-deftest test-takuzu-ui-every-skin-has-a-drawer ()
   "Normal: every skin in the cycle list resolves to a draw function.

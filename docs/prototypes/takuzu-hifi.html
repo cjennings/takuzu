@@ -464,7 +464,7 @@ const state = {
 const COIN_SKINS = ["sovereign", "collegiate", "machined", "cash", "gems",
                     "lamp", "jewel", "compass", "guilloche", "runic",
                     "scallop", "bimetal", "matrix", "split", "rosette",
-                    "filigree"];
+                    "filigree", "casino"];
 
 // --- the struck-metal engine (mirror of takuzu--coin-metal-tones etc.) ---
 
@@ -496,6 +496,8 @@ const COIN_METAL = {
   sunflower: ["#ffe3a4", "#ffd274", "#ffc145", "#94691f"],
   // the filigree wheel's dark body
   pewter:    ["#9fa3a7", "#6e7276", "#494c50", "#232527"],
+  // the casino chip's red
+  chipred:   ["#cf6f66", "#b04137", "#932a22", "#45100c"],
 };
 
 // gem cuts for the gems skin (amethyst/topaz/aqua from the Dupre ramps)
@@ -897,6 +899,28 @@ function drawDiscRunic(svg, cx, cy, r, val, given) {
   if (given) metalGivenRing(svg, cx, cy, r, m);
 }
 
+// CASINO -- red chip vs dark navy chip, cream edge spots; user chips
+// carry the cream inlay, fixed chips keep their own colour's full fill
+function drawDiscCasino(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "chipred" : "berkeley";
+  const cream = "#e9dfc8", creamDeep = "#9a8f74", ink = mDeep(m);
+  ensureMetal(svg, m);
+  circle(svg, cx, cy, r, { fill: mfill(m), stroke: c("ink"), "stroke-width": 0.9, "stroke-opacity": 0.85 });
+  const rr = r * 0.90, seg = (2 * Math.PI * rr) / 8;
+  circle(svg, cx, cy, rr, {
+    fill: "none", stroke: cream, "stroke-width": r * 0.20,
+    "stroke-dasharray": `${(seg * 0.5).toFixed(2)} ${(seg * 0.5).toFixed(2)}`,
+  });
+  circle(svg, cx, cy, r * 0.78, { fill: "none", stroke: ink, "stroke-width": 0.9, "stroke-opacity": 0.7 });
+  if (r >= 20)
+    for (const k of [0.68, 0.62])
+      circle(svg, cx, cy, r * k, { fill: "none", stroke: ink, "stroke-opacity": 0.35, "stroke-width": 0.7 });
+  if (given)
+    circle(svg, cx, cy, r * 0.52, { fill: mBase(m), stroke: ink, "stroke-width": 0.8, "stroke-opacity": 0.8 });
+  else
+    circle(svg, cx, cy, r * 0.52, { fill: cream, stroke: creamDeep, "stroke-width": 1 });
+}
+
 // FILIGREE -- silver vs dark pewter wheel: six spokes over pierced
 // openwork, a multicolour stone at every felloe, a diamond at the hub
 function filigreeGem(svg, gx, gy, gr, gem, m) {
@@ -1130,7 +1154,7 @@ function drawDiscMachined(svg, cx, cy, r, val, given) {
 
 // Mirror of takuzu--draw-disc: dispatch on the current skin.
 const COIN_DRAWERS = {
-  filigree: drawDiscFiligree,
+  filigree: drawDiscFiligree, casino: drawDiscCasino,
   sovereign: drawDiscSovereign, jewel: drawDiscJewel, compass: drawDiscCompass,
   guilloche: drawDiscGuilloche, runic: drawDiscRunic,
   collegiate: drawDiscCollegiate,

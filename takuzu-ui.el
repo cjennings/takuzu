@@ -311,7 +311,8 @@ omits it)."
     (matrix    takuzu--draw-disc-matrix    bronze   silver)
     (split     takuzu--draw-disc-split     gunmetal copper)
     (rosette   takuzu--draw-disc-rosette   iron     copper)
-    (filigree  takuzu--draw-disc-filigree  silver   pewter))
+    (filigree  takuzu--draw-disc-filigree  silver   pewter)
+    (casino    takuzu--draw-disc-casino    chipred  berkeley))
   "The coin-skin catalogue: (SKIN DRAWER METAL-FOR-0 METAL-FOR-1) rows.
 This one table is the whole configuration -- the cycle order, the
 selector counter, the defcustom choices, the dispatch, and each
@@ -354,7 +355,8 @@ drum to coinset 1."
     (beech    "#f0dfc4" "#ddc19a" "#c4a377" "#6b5133")
     (coal     "#6e6c68" "#454340" "#252422" "#0b0b0a")
     (sunflower "#ffe3a4" "#ffd274" "#ffc145" "#94691f")
-    (pewter   "#9fa3a7" "#6e7276" "#494c50" "#232527"))
+    (pewter   "#9fa3a7" "#6e7276" "#494c50" "#232527")
+    (chipred  "#cf6f66" "#b04137" "#932a22" "#45100c"))
   "Coin metals as (NAME GLINT HI BASE DEEP), light to dark.
 Every ramp is drawn from the Dupre (WIP) theme palette so the coins sit in
 the faceplate's own colour world: silver/nickel from the silver and ground
@@ -786,6 +788,37 @@ gallery, panel 13, iterated live."
       (svg-circle svg cx cy h :fill "none"
                   :stroke (format "url(#m-%s-edge)" core)
                   :stroke-width (* r 0.04) :stroke-opacity 0.8))))
+
+(defun takuzu--draw-disc-casino (svg cx cy r val given)
+  "Draw the casino chip of VAL at CX,CY radius R on SVG.
+A red chip for 0, a dark navy chip for 1, eight cream edge spots riding
+the rim of both.  A user chip carries the cream inlay centre; a fixed
+chip keeps the full fill of its own colour -- no inlay, no centre dot."
+  (let* ((m (takuzu--coin-pair-metal 'casino val))
+         (cream "#e9dfc8")
+         (cream-deep "#9a8f74")
+         (ink (takuzu--metal m 3)))
+    (takuzu--ensure-metal svg m)
+    (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" m)
+                :stroke (takuzu--c :ink) :stroke-width 0.9 :stroke-opacity 0.85)
+    ;; the edge spots: a cream dashed ring riding the rim
+    (let* ((rr (* r 0.90))
+           (seg (/ (* 2 float-pi rr) 8)))
+      (svg-circle svg cx cy rr :fill "none"
+                  :stroke cream :stroke-width (* r 0.20)
+                  :stroke-dasharray (format "%.2f %.2f" (* seg 0.5) (* seg 0.5))))
+    (svg-circle svg cx cy (* r 0.78) :fill "none"
+                :stroke ink :stroke-width 0.9 :stroke-opacity 0.7)
+    (when (>= r 20)
+      (dolist (k '(0.68 0.62))
+        (svg-circle svg cx cy (* r k) :fill "none"
+                    :stroke ink :stroke-opacity 0.35 :stroke-width 0.7)))
+    ;; centre: cream inlay for the player, the chip's own full fill fixed
+    (if given
+        (svg-circle svg cx cy (* r 0.52) :fill (takuzu--metal m 2)
+                    :stroke ink :stroke-width 0.8 :stroke-opacity 0.8)
+      (svg-circle svg cx cy (* r 0.52) :fill cream
+                  :stroke cream-deep :stroke-width 1))))
 
 (defun takuzu--draw-disc-collegiate (svg cx cy r val given)
   "Draw the collegiate coin of VAL at CX,CY radius R on SVG.
