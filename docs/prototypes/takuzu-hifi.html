@@ -460,10 +460,10 @@ const state = {
   coinSkin: "pierced", // mirror of takuzu-coin-skin (pierced is the default)
 };
 
-// the two favourites lead: pierced (the default) at 01, cash at 02
-const COIN_SKINS = ["pierced", "cash", "lamp", "jewel", "compass", "guilloche",
-                    "cross", "scallop", "bimetal", "matrix", "gems", "split",
-                    "rosette", "machined"];
+// the favourites lead: pierced (the default) 01, cash 02, gems 03, machined 04
+const COIN_SKINS = ["pierced", "cash", "gems", "machined", "lamp", "jewel",
+                    "compass", "guilloche", "runic", "scallop", "bimetal",
+                    "matrix", "split", "rosette"];
 
 // --- the struck-metal engine (mirror of takuzu--coin-metal-tones etc.) ---
 
@@ -478,6 +478,9 @@ const COIN_METAL = {
   iron:     ["#8e919a", "#606267", "#363638", "#100f0f"],
   bronze:   ["#e0c266", "#ab8d2e", "#7e671f", "#2d2306"],
   gunmetal: ["#788da6", "#54677d", "#303842", "#202327"],
+  // the runic skin's woods ride the same table (mirror of the Elisp)
+  oak:      ["#e7d3a4", "#cbaa6d", "#a17c46", "#513a1c"],
+  walnut:   ["#a98a68", "#755837", "#4a3520", "#1f150b"],
 };
 
 // gem cuts for the gems skin (amethyst/topaz/aqua from the Dupre ramps)
@@ -490,7 +493,7 @@ const COIN_GEM = {
   topaz:    ["#e0c266", "#ab8d2e", "#544412"],
   aqua:     ["#6ba9bd", "#0096b0", "#1d4049"],
 };
-const COIN_LIGHT = new Set(["silver", "nickel", "gold"]);
+const COIN_LIGHT = new Set(["silver", "nickel", "gold", "oak"]);
 const mGlint = m => COIN_METAL[m][0], mHi = m => COIN_METAL[m][1];
 const mBase = m => COIN_METAL[m][2], mDeep = m => COIN_METAL[m][3];
 const mFixedInk = m => c(COIN_LIGHT.has(m) ? "rim-iron" : "rim-silver");
@@ -655,9 +658,9 @@ function drawDiscJewel(svg, cx, cy, r, val, given) {
   }
 }
 
-// An iron-and-copper compass-rose medallion; val 0 is dark iron with copper
-// rays, val 1 its mirror.  The dentate border only draws when r is large
-// enough to keep it legible; a given adds a bright silver rim ring.
+// Two different compass pieces, not two palettes (mirror of the Elisp):
+// val 0 the dark-iron ray-rose medallion, val 1 a copper bearing dial with
+// a tick ring, an N, and a two-tone needle swung north-east on a pivot.
 function drawDiscCompass(svg, cx, cy, r, val, given) {
   const iron = val === 0;
   const id = `takuzu-coin-body-${val}`;
@@ -674,6 +677,10 @@ function drawDiscCompass(svg, cx, cy, r, val, given) {
     circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: c("rim-silver"), "stroke-width": 1.6 });
     circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.35 });
   }
+  if (iron) compassRose(svg, cx, cy, r, ink, glint, bodyBase, detailed);
+  else compassDial(svg, cx, cy, r, ink, glint, bodyBase, detailed);
+}
+function compassRose(svg, cx, cy, r, ink, glint, hub, detailed) {
   if (detailed) {
     const teeth = [];
     for (let i = 0; i < 32; i++)
@@ -693,7 +700,24 @@ function drawDiscCompass(svg, cx, cy, r, val, given) {
                   coinPt(cx, cy, r * 0.10, a + 30),
                   coinPt(cx, cy, r * 0.10, a - 30)], { fill: glint, "fill-opacity": 0.85 });
   }
-  circle(svg, cx, cy, r * 0.10, { fill: bodyBase, stroke: ink, "stroke-width": r * 0.04 });
+  circle(svg, cx, cy, r * 0.10, { fill: hub, stroke: ink, "stroke-width": r * 0.04 });
+}
+function compassDial(svg, cx, cy, r, ink, glint, hub, detailed) {
+  circle(svg, cx, cy, r * 0.88, { fill: "none", stroke: ink, "stroke-opacity": 0.85, "stroke-width": r * 0.045 });
+  const n = detailed ? 24 : 4;
+  for (let i = 0; i < n; i++) {
+    const a = i * (360 / n), cardinal = i % (n / 4) === 0;
+    const [x1, y1] = coinPt(cx, cy, r * (cardinal ? 0.70 : 0.78), a);
+    const [x2, y2] = coinPt(cx, cy, r * 0.86, a);
+    line(svg, x1, y1, x2, y2, { stroke: ink, "stroke-opacity": cardinal ? 0.9 : 0.6,
+      "stroke-width": r * (cardinal ? 0.05 : 0.025) });
+  }
+  if (detailed) txt(svg, cx, cy - r * 0.38, "N", r * 0.30, ink, "middle");
+  const tipn = coinPt(cx, cy, r * 0.62, 45), tips = coinPt(cx, cy, r * 0.62, 225);
+  const barb1 = coinPt(cx, cy, r * 0.11, 135), barb2 = coinPt(cx, cy, r * 0.11, 315);
+  polygon(svg, [tipn, barb1, barb2], { fill: glint, stroke: ink, "stroke-width": 0.5, "stroke-opacity": 0.6 });
+  polygon(svg, [tips, barb1, barb2], { fill: ink });
+  circle(svg, cx, cy, r * 0.085, { fill: hub, stroke: ink, "stroke-width": r * 0.035 });
 }
 
 // shared gradient defs, one per metal per svg build (mirror of
@@ -800,22 +824,62 @@ function drawDiscGuilloche(svg, cx, cy, r, val, given) {
   circle(svg, cx, cy, r * 0.07, { fill: given ? mFixedInk(m) : ink, "fill-opacity": 0.9 });
 }
 
-// LONG CROSS -- silver vs copper, voided cross and pellet trios
-function drawDiscCross(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "silver" : "copper";
-  metalBlank(svg, cx, cy, r, m, given);
-  const ink = mDeep(m), w = r * 0.13, e = r * 0.94;
-  for (const [dx, dy] of [[1, 0], [0, 1]]) {
-    line(svg, cx - dx * e, cy - dy * e, cx + dx * e, cy + dy * e,
-      { stroke: ink, "stroke-width": w * 2.4, "stroke-opacity": 0.9 });
-    line(svg, cx - dx * e, cy - dy * e, cx + dx * e, cy + dy * e,
-      { stroke: mBase(m), "stroke-width": w * 0.8 });
+// RUNIC -- Anglo-Saxon futhorc carved into a wooden coin, oak vs walnut
+// (mirror of takuzu--runic-segments / takuzu--draw-disc-runic)
+const RUNIC_SEGMENTS = {
+  feoh:  [[0, -0.5, 0, 0.5], [0, -0.42, 0.42, -0.16], [0, -0.08, 0.42, 0.18]],
+  ur:    [[-0.3, -0.5, -0.3, 0.5], [-0.3, -0.5, 0.3, -0.05], [0.3, -0.05, 0.3, 0.5]],
+  thorn: [[-0.22, -0.5, -0.22, 0.5], [-0.22, -0.28, 0.3, -0.02], [0.3, -0.02, -0.22, 0.24]],
+  os:    [[-0.22, -0.5, -0.22, 0.5], [-0.22, -0.45, 0.35, -0.18], [-0.22, -0.12, 0.35, 0.15]],
+  rad:   [[-0.25, -0.5, -0.25, 0.5], [-0.25, -0.5, 0.3, -0.27], [0.3, -0.27, -0.25, -0.02],
+          [-0.25, -0.02, 0.3, 0.5]],
+  cen:   [[0.25, -0.5, -0.25, 0], [-0.25, 0, 0.25, 0.5]],
+  gyfu:  [[-0.3, -0.35, 0.3, 0.35], [0.3, -0.35, -0.3, 0.35]],
+  wynn:  [[-0.25, -0.5, -0.25, 0.5], [-0.25, -0.5, 0.3, -0.28], [0.3, -0.28, -0.25, -0.04]],
+  tir:   [[0, -0.5, 0, 0.5], [0, -0.5, -0.35, -0.14], [0, -0.5, 0.35, -0.14]],
+  daeg:  [[-0.3, -0.5, -0.3, 0.5], [0.3, -0.5, 0.3, 0.5], [-0.3, -0.5, 0.3, 0.5],
+          [0.3, -0.5, -0.3, 0.5]],
+};
+const RUNIC_BAND = ["feoh", "ur", "thorn", "os", "rad", "cen", "gyfu", "wynn"];
+function drawRune(svg, cx, cy, u, rune, ink, hi2, rot) {
+  const rad = rot * Math.PI / 180, co = Math.cos(rad), si = Math.sin(rad);
+  const off = u * 0.07;
+  for (const [x1, y1, x2, y2] of RUNIC_SEGMENTS[rune]) {
+    const ax = cx + u * (x1 * co - y1 * si), ay = cy + u * (x1 * si + y1 * co);
+    const bx = cx + u * (x2 * co - y2 * si), by = cy + u * (x2 * si + y2 * co);
+    line(svg, ax + off, ay + off, bx + off, by + off,
+      { stroke: hi2, "stroke-width": u * 0.12, "stroke-opacity": 0.5, "stroke-linecap": "round" });
+    line(svg, ax, ay, bx, by,
+      { stroke: ink, "stroke-width": u * 0.14, "stroke-opacity": 0.95, "stroke-linecap": "round" });
   }
-  for (const q of [45, 135, 225, 315])
-    for (const [dr, da] of [[0.42, 0], [0.58, -11], [0.58, 11]])
-      circle(svg, ...coinPt(cx, cy, r * dr, q + da), r * 0.055, { fill: mHi(m) });
-  if (given)
-    circle(svg, cx, cy, r * 0.11, { fill: "none", stroke: mFixedInk(m), "stroke-width": 1.6 });
+}
+function drawDiscRunic(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "oak" : "walnut";
+  const ink = mDeep(m), hi2 = mGlint(m), detailed = r >= 20;
+  ensureMetal(svg, m);
+  // the turned blank: matte field and chamfered rim, no metal specular
+  circle(svg, cx, cy, r, { fill: mfill(m), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
+  circle(svg, cx, cy, r - r * 0.05, { fill: "none", stroke: ink, "stroke-width": r * 0.05, "stroke-opacity": 0.55 });
+  circle(svg, cx, cy, r - r * 0.10, { fill: "none", stroke: hi2, "stroke-width": 0.6, "stroke-opacity": 0.25 });
+  // grain: chord-wise curves bowing with the cut, plus a knot at detail
+  for (const k of [-0.42, 0.02, 0.38]) {
+    const hw = r * Math.sqrt(Math.max(0, 0.6724 - k * k));
+    pathEl(svg, `M ${(cx - hw).toFixed(1)} ${(cy + r * k).toFixed(1)} Q ${cx} ${(cy + r * k - r * 0.10).toFixed(1)} ${(cx + hw).toFixed(1)} ${(cy + r * k).toFixed(1)}`,
+      { fill: "none", stroke: ink, "stroke-width": r * 0.03, "stroke-opacity": 0.28 });
+  }
+  if (detailed)
+    circle(svg, cx + r * 0.34, cy + r * 0.22, r * 0.05,
+      { fill: "none", stroke: ink, "stroke-width": r * 0.025, "stroke-opacity": 0.35 });
+  // matte sheen -- broad and faint, wax rather than polish
+  ellipse(svg, cx - r * 0.28, cy - r * 0.32, r * 0.40, r * 0.22,
+    { fill: c("white"), "fill-opacity": 0.07 });
+  if (detailed)
+    for (let i = 0; i < 8; i++) {
+      const [px, py] = coinPt(cx, cy, r * 0.62, i * 45);
+      drawRune(svg, px, py, r * 0.30, RUNIC_BAND[i], ink, hi2, i * 45);
+    }
+  drawRune(svg, cx, cy, r * (detailed ? 0.42 : 0.62), val === 0 ? "tir" : "daeg", ink, hi2, 0);
+  if (given) metalGivenRing(svg, cx, cy, r, m);
 }
 
 // PIERCED -- gunmetal vs gold, round hole and chrysanthemum radial
@@ -994,7 +1058,7 @@ function drawDiscMachined(svg, cx, cy, r, val, given) {
 // Mirror of takuzu--draw-disc: dispatch on the current skin.
 const COIN_DRAWERS = {
   jewel: drawDiscJewel, compass: drawDiscCompass, guilloche: drawDiscGuilloche,
-  cross: drawDiscCross, pierced: drawDiscPierced, scallop: drawDiscScallop,
+  runic: drawDiscRunic, pierced: drawDiscPierced, scallop: drawDiscScallop,
   bimetal: drawDiscBimetal, cash: drawDiscCash, matrix: drawDiscMatrix,
   gems: drawDiscGems, split: drawDiscSplit, rosette: drawDiscRosette,
   machined: drawDiscMachined,
@@ -1004,8 +1068,8 @@ function drawDisc(svg, cx, cy, r, val, given) {
 }
 
 // Mirror of takuzu--draw-skin-selector: the COIN frame's innards, centred on
-// cx with the frame top at fy.  A tape counter shows the skin's index, a
-// ridged thumbwheel names the key that turns it, the skin reads underneath.
+// cx with the frame top at fy.  A tape counter shows the skin's index and a
+// ridged thumbwheel names the key that turns it; no skin is named on the plate.
 function drawSkinSelector(svg, cx, fy) {
   const pos = Math.max(0, COIN_SKINS.indexOf(state.coinSkin));
   const x0 = cx - 32, wx = x0 + 41, wy = fy + 10;
@@ -1021,9 +1085,6 @@ function drawSkinSelector(svg, cx, fy) {
     line(svg, wx + 1.5, ly + 1, wx + 9.5, ly + 1, { stroke: c("white"), "stroke-opacity": 0.10, "stroke-width": 0.8 });
   }
   legendGlyph(svg, wx + 16, fy + 28, 10, "W", c("gold"), true);
-  // the default lamp skin goes unnamed, like factory hardware before any swap
-  if (state.coinSkin !== "lamp")
-    txt(svg, cx, fy + 48, state.coinSkin.toUpperCase(), 8, c("dim"), "middle");
 }
 
 // The cursor: a machined bezel ring seated on the socket rim, catching light

@@ -1280,11 +1280,44 @@ with no games recorded it says so."
 ;; --- coin skins ---
 
 (ert-deftest test-takuzu-ui-coin-skin-default-and-set ()
-  "Normal: the skin defcustom defaults to pierced; the skin list has all thirteen."
+  "Normal: the skin defcustom defaults to pierced; favourites lead the cycle."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value))) 'pierced))
   (should (equal takuzu--coin-skins
-                 '(pierced cash lamp jewel compass guilloche cross
-                   scallop bimetal matrix gems split rosette machined))))
+                 '(pierced cash gems machined lamp jewel compass
+                   guilloche runic scallop bimetal matrix split rosette))))
+
+(ert-deftest test-takuzu-ui-runic-carves-wood ()
+  "Normal: the runic coin is oak for 0, walnut for 1, with carved rune lines."
+  (let ((takuzu-coin-skin 'runic))
+    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
+      (takuzu--draw-disc c0 50 50 33 0 nil)
+      (takuzu--draw-disc c1 50 50 33 1 nil)
+      (should (dom-by-id c0 "^m-oak-fill$"))
+      (should (dom-by-id c1 "^m-walnut-fill$"))
+      (should (> (length (dom-by-tag c0 'line)) 10)))))
+
+(ert-deftest test-takuzu-ui-runic-lod-band-drops-at-board-scale ()
+  "Boundary: the futhorc band carves at 2x; board scale keeps the centre rune."
+  (let ((takuzu-coin-skin 'runic))
+    (let ((big (svg-create 100 100)) (small (svg-create 100 100)))
+      (takuzu--draw-disc big 50 50 33 0 nil)
+      (takuzu--draw-disc small 50 50 16 0 nil)
+      (should (> (length (dom-by-tag big 'line))
+                 (length (dom-by-tag small 'line))))
+      (should (> (length (dom-by-tag small 'line)) 0)))))
+
+(ert-deftest test-takuzu-ui-runic-given-rings-in-contrast ()
+  "Normal: a fixed oak coin rings in iron; a fixed walnut coin in silver."
+  (let ((takuzu-coin-skin 'runic))
+    (let ((oak (svg-create 100 100)) (wal (svg-create 100 100)))
+      (takuzu--draw-disc oak 50 50 33 0 t)
+      (takuzu--draw-disc wal 50 50 33 1 t)
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'stroke) (takuzu--c :rim-iron)))
+                        (dom-by-tag oak 'circle)))
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'stroke) (takuzu--c :rim-silver)))
+                        (dom-by-tag wal 'circle))))))
 
 (ert-deftest test-takuzu-ui-cycle-skin-cycles ()
   "Normal: the skin command walks the whole list and wraps back around."
@@ -1412,6 +1445,21 @@ jewel and compass sets."
         (should (equal (dom-attr (car stops) 'stop-color)
                        (takuzu--c (cdr case))))))))
 
+(ert-deftest test-takuzu-ui-compass-vals-are-different-instruments ()
+  "Normal: colour 0 is the ray-rose medallion; colour 1 a needle dial.
+The two pieces must differ in kind, not just palette: the rose is all
+polygons with no tick lines, the dial carries tick lines, an N, and a
+two-piece needle instead of the sixteen rays."
+  (let ((takuzu-coin-skin 'compass))
+    (let ((rose (svg-create 100 100)) (dial (svg-create 100 100)))
+      (takuzu--draw-disc rose 50 50 33 0 nil)
+      (takuzu--draw-disc dial 50 50 33 1 nil)
+      (should (>= (length (dom-by-tag rose 'polygon)) 16))
+      (should (= (length (dom-by-tag rose 'line)) 0))
+      (should (> (length (dom-by-tag dial 'line)) 8))
+      (should (<= (length (dom-by-tag dial 'polygon)) 4))
+      (should (member "N" (mapcar #'dom-texts (dom-by-tag dial 'text)))))))
+
 (ert-deftest test-takuzu-ui-compass-given-wears-silver-rim ()
   "Normal: a fixed compass medallion rings in bright silver."
   (let ((takuzu-coin-skin 'compass))
@@ -1442,18 +1490,17 @@ jewel and compass sets."
     (should (= (length (dom-by-tag svg 'radialGradient)) 2))))
 
 (ert-deftest test-takuzu-ui-skin-selector-shows-counter ()
-  "Normal: the faceplate carries the skin selector with the tape-counter index."
+  "Normal: the skin selector shows the tape-counter index and never a name."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((pierced . "01") (cash . "02") (lamp . "03")))
+    (dolist (case '((pierced . "01") (cash . "02") (gems . "03")
+                    (machined . "04") (lamp . "05")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
         (should (member (cdr case) texts))
         (should (member "COIN" texts))
-        ;; the default skin shows no name on the drum; the others do
-        (if (eq (car case) 'lamp)
-            (should-not (member "LAMP" texts))
-          (should (member (upcase (symbol-name (car case))) texts)))))))
+        ;; the drum shows only the index -- no skin is named on the plate
+        (should-not (member (upcase (symbol-name (car case))) texts))))))
 
 (provide 'test-takuzu-ui)
 ;;; test-takuzu-ui.el ends here

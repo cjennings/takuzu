@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Takuzu coin-design gallery v6: JEWELED MEDALLIONS.  Two grammars from
+     Craig's inspiration photos: (a) gothic rose-window / reliquary openwork
+     -- tracery windows cut through the planchet with cabochons set at the
+     lights -- and (b) domed brooch bosses -- concentric cabochon rings on an
+     engraved field around a raised central stone in a castellated collet.
+     Rides the v5 struck-metal engine (per-skin metal pairs, lit rim, hard
+     specular) and adds a gem engine: every stone is a collet ring + a
+     radial-gradient cabochon + a specular dot.  librsvg-safe primitives
+     only, so keepers port 1:1 to svg.el skins on the registry. -->
+<title>Takuzu — Coin Prototypes v6 (Jeweled Medallions)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 16px 60px;
+    display: flex; flex-direction: column; align-items: center;
+    background: #0b0a08; font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: #969385;
+  }
+  .head { width: 560px; max-width: 100%; margin-bottom: 10px; }
+  .head h1 { margin: 0; font-size: 26px; color: #b99640; font-style: italic; }
+  .head p { margin: 4px 0 0; font-size: 11px; color: #7c838a; }
+  .panel { width: 560px; max-width: 100%; margin-top: 26px; }
+  .panel svg { display: block; width: 100%; height: auto; }
+  .caption {
+    border: 1px solid #201d17; border-top: none; border-radius: 0 0 8px 8px;
+    background: #0a0c0d; padding: 10px 14px 12px; font-size: 11.5px; line-height: 1.5;
+  }
+  .caption .why { color: #969385; }
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>TAKUZU / COIN PROTOTYPES V6</h1>
+  <p>JEWELED MEDALLIONS - ROSE-WINDOW OPENWORK + DOMED GEM-RING BOSSES</p>
+</div>
+<div id="stage"></div>
+
+<script>
+"use strict";
+(function () {
+
+const COLORS = {
+  "plate": "#1b1710", "plate-edge": "#2c2620", "panel-edge": "#201d17",
+  "well": "#0a0c0d", "board-bg": "#14110c",
+  "socket": "#0c0a07", "socket-edge": "#05040a",
+  "ink": "#000000", "white": "#ffffff",
+  "gold": "#b99640", "cream": "#f3e7c5",
+  "steel": "#969385", "dim": "#7c838a",
+  "rim-silver": "#c3c9d1", "rim-iron": "#3a3e44",
+};
+const c = k => COLORS[k];
+
+// --- the metal engine (v5): [glint, hi, base, deep] per finish ---
+
+const METAL = {
+  silver:   ["#f4f6f8", "#dfe3e7", "#aab0b7", "#62676e"],
+  gold:     ["#f8e7ae", "#e8cd76", "#b99640", "#6d5520"],
+  copper:   ["#f4c193", "#d99a5e", "#b87333", "#6f4218"],
+  iron:     ["#8e949b", "#5a5f66", "#33363b", "#191b1e"],
+  bronze:   ["#e0b184", "#c89858", "#8c6a3f", "#4e3319"],
+  gunmetal: ["#7f868e", "#565d66", "#363b42", "#1d2024"],
+};
+const LIGHT = new Set(["silver", "gold"]);
+const glint = m => METAL[m][0], hi = m => METAL[m][1];
+const base = m => METAL[m][2], deep = m => METAL[m][3];
+const engrave = m => METAL[m][3];
+
+// --- the gem engine: [glint, body, base, depth] per stone ---
+
+const GEM = {
+  ruby:     ["#ffc4bb", "#e8455b", "#a3122e", "#4a0614"],
+  garnet:   ["#ffb59e", "#d4593a", "#8e2413", "#3f0d06"],
+  sapphire: ["#b9d2ff", "#4a74d8", "#1f3a96", "#0a1440"],
+  emerald:  ["#c2ffd9", "#3fbf77", "#127a44", "#03301a"],
+  amethyst: ["#e6c8ff", "#a05fd6", "#5f2d91", "#26093f"],
+  pink:     ["#ffd3ec", "#ef6fae", "#b52d72", "#520f31"],
+  citrine:  ["#fff0bd", "#eec453", "#a67c1c", "#4a350a"],
+  onyx:     ["#9aa0a8", "#3c4046", "#17191d", "#000000"],
+  pearl:    ["#ffffff", "#efe9e2", "#cfc5ba", "#8d8479"],
+};
+
+const attrs = o => Object.entries(o)
+  .filter(([, v]) => v != null)
+  .map(([k, v]) => ` ${k}="${v}"`).join("");
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const rect = (svg, x, y, w, h, o) => svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}"${attrs(o)}/>`);
+const circle = (svg, cx, cy, r, o) => svg.push(`<circle cx="${cx}" cy="${cy}" r="${r}"${attrs(o)}/>`);
+const ellipse = (svg, cx, cy, rx, ry, o) => svg.push(`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"${attrs(o)}/>`);
+const line = (svg, x1, y1, x2, y2, o) => svg.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${attrs(o)}/>`);
+const pathEl = (svg, d, o) => svg.push(`<path d="${d}"${attrs(o)}/>`);
+function txt(svg, x, y, str, size, color, anchor, weight) {
+  svg.push(`<text x="${x}" y="${y}" font-family="monospace" font-size="${size}"`
+    + ` fill="${color}" text-anchor="${anchor || "start"}"`
+    + ` font-weight="${weight || "normal"}">${esc(str)}</text>`);
+}
+
+const pt = (cx, cy, rr, deg) => {
+  const a = (deg - 90) * Math.PI / 180;
+  return [+(cx + rr * Math.cos(a)).toFixed(2), +(cy + rr * Math.sin(a)).toFixed(2)];
+};
+
+// shared gradient defs, one per metal / gem / shade per svg (objectBoundingBox)
+function ensureMetal(svg, m) {
+  if (!svg.metals) svg.metals = new Set();
+  if (svg.metals.has(m)) return;
+  svg.metals.add(m);
+  svg.push(`<radialGradient id="m-${m}-fill" cx="0.34" cy="0.28" r="1.05">`
+    + `<stop offset="0" stop-color="${glint(m)}"/>`
+    + `<stop offset="0.22" stop-color="${hi(m)}"/>`
+    + `<stop offset="0.62" stop-color="${base(m)}"/>`
+    + `<stop offset="1" stop-color="${deep(m)}"/>`
+    + `</radialGradient>`
+    + `<linearGradient id="m-${m}-edge" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="${glint(m)}"/>`
+    + `<stop offset="0.5" stop-color="${base(m)}"/>`
+    + `<stop offset="1" stop-color="${deep(m)}"/>`
+    + `</linearGradient>`);
+}
+const mfill = m => `url(#m-${m}-fill)`;
+const medge = m => `url(#m-${m}-edge)`;
+
+function ensureGem(svg, g) {
+  if (!svg.gems) svg.gems = new Set();
+  if (svg.gems.has(g)) return;
+  svg.gems.add(g);
+  const [gl, body, bs, dp] = GEM[g];
+  svg.push(`<radialGradient id="g-${g}" cx="0.36" cy="0.30" r="0.95">`
+    + `<stop offset="0" stop-color="${gl}"/>`
+    + `<stop offset="0.30" stop-color="${body}"/>`
+    + `<stop offset="0.75" stop-color="${bs}"/>`
+    + `<stop offset="1" stop-color="${dp}"/>`
+    + `</radialGradient>`);
+}
+// dome shade: darkens toward the edge so a face reads convex
+function ensureDome(svg) {
+  if (svg.dome) return;
+  svg.dome = true;
+  svg.push(`<radialGradient id="dome-shade" cx="0.42" cy="0.36" r="0.85">`
+    + `<stop offset="0" stop-color="#000000" stop-opacity="0"/>`
+    + `<stop offset="0.70" stop-color="#000000" stop-opacity="0"/>`
+    + `<stop offset="1" stop-color="#000000" stop-opacity="0.5"/>`
+    + `</radialGradient>`);
+}
+
+// a set stone: collet ring in the mount metal, cabochon, specular dot
+function gem(svg, cx, cy, gr, g, m, prongs) {
+  ensureGem(svg, g); ensureMetal(svg, m);
+  circle(svg, cx, cy, gr + gr * 0.30, { fill: base(m), stroke: deep(m), "stroke-width": Math.max(0.5, gr * 0.10) });
+  circle(svg, cx, cy, gr + gr * 0.14, { fill: "none", stroke: glint(m), "stroke-width": Math.max(0.4, gr * 0.09), "stroke-opacity": 0.7 });
+  if (prongs)
+    for (const a of [45, 135, 225, 315])
+      circle(svg, ...pt(cx, cy, gr + gr * 0.22, a), gr * 0.16, { fill: hi(m) });
+  circle(svg, cx, cy, gr, { fill: `url(#g-${g})`, stroke: GEM[g][3], "stroke-width": 0.5 });
+  circle(svg, cx - gr * 0.32, cy - gr * 0.36, gr * 0.20, { fill: c("white"), "fill-opacity": 0.75 });
+}
+
+// the struck blank (v5), plus a beaded rim option
+function metalBlank(svg, cx, cy, r, m, given) {
+  ensureMetal(svg, m);
+  circle(svg, cx, cy, r, { fill: mfill(m), stroke: c("ink"), "stroke-width": 0.7, "stroke-opacity": 0.8 });
+  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(m), "stroke-width": r * 0.09 });
+  circle(svg, cx, cy, r - r * 0.10, { fill: "none", stroke: deep(m), "stroke-width": 0.6, "stroke-opacity": 0.5 });
+  sheen(svg, cx, cy, r);
+  if (given) givenRing(svg, cx, cy, r, m);
+}
+function sheen(svg, cx, cy, r) {
+  ellipse(svg, cx - r * 0.30, cy - r * 0.34, r * 0.34, r * 0.18,
+    { fill: c("white"), "fill-opacity": 0.18 });
+  ellipse(svg, cx - r * 0.38, cy - r * 0.42, r * 0.10, r * 0.055,
+    { fill: c("white"), "fill-opacity": 0.55 });
+}
+function beadRim(svg, cx, cy, r, m, n) {
+  const beads = n || 26;
+  for (let i = 0; i < beads; i++)
+    circle(svg, ...pt(cx, cy, r * 0.90, (i * 360) / beads), r * 0.038, { fill: hi(m), "fill-opacity": 0.9 });
+}
+function givenRing(svg, cx, cy, r, m) {
+  const ring = LIGHT.has(m) ? c("rim-iron") : c("rim-silver");
+  circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: ring, "stroke-width": 1.6 });
+  circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.3 });
+}
+const fixedInk = m => LIGHT.has(m) ? c("rim-iron") : c("rim-silver");
+
+function socket(svg, sx, sy, cell) {
+  rect(svg, sx, sy, cell, cell, {
+    rx: cell * 0.18, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1,
+  });
+}
+
+// a pointed-oval (vesica) window between two radii on a bearing
+function vesica(svg, cx, cy, r1, r2, deg, o) {
+  const [x1, y1] = pt(cx, cy, r1, deg), [x2, y2] = pt(cx, cy, r2, deg);
+  const R = Math.hypot(x2 - x1, y2 - y1) * 0.62;
+  pathEl(svg, `M ${x1} ${y1} A ${R} ${R} 0 0 1 ${x2} ${y2} A ${R} ${R} 0 0 1 ${x1} ${y1} Z`, o);
+}
+
+// =====================================================================
+// The eight designs.  drawCoin(svg, cx, cy, r, val, given).
+// =====================================================================
+
+// 1 ROSE WINDOW -- gold+ruby vs silver+sapphire; six round lights of a
+// cathedral rose cut into the field, a stone burning in each
+function coinRose(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "gold" : "silver";
+  const g = val === 0 ? "ruby" : "sapphire";
+  metalBlank(svg, cx, cy, r, m, given);
+  const det = r >= 20;
+  if (det) beadRim(svg, cx, cy, r, m, 30);
+  const wr = r * 0.185;
+  for (let i = 0; i < 6; i++) {
+    const [wx, wy] = pt(cx, cy, r * 0.56, i * 60);
+    circle(svg, wx, wy, wr, { fill: c("socket"), stroke: deep(m), "stroke-width": Math.max(0.8, r * 0.035) });
+    if (det) circle(svg, wx, wy, wr + r * 0.045, { fill: "none", stroke: hi(m), "stroke-width": r * 0.028, "stroke-opacity": 0.8 });
+    gem(svg, wx, wy, wr * 0.62, g, m, det);
+  }
+  if (det)
+    for (let i = 0; i < 6; i++)
+      circle(svg, ...pt(cx, cy, r * 0.56, i * 60 + 30), r * 0.035, { fill: hi(m) });
+  gem(svg, cx, cy, r * 0.155, g, m, det);
+}
+
+// 2 GEM HALO -- the domed brooch boss: gunmetal vs gold body, a halo of
+// rubies and garnets around a dark stone in a castellated collet
+function coinHalo(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "gunmetal" : "gold";
+  metalBlank(svg, cx, cy, r, m, given);
+  const det = r >= 20;
+  ensureDome(svg);
+  if (det) beadRim(svg, cx, cy, r, m, 30);
+  if (det) {
+    circle(svg, cx, cy, r * 0.80, { fill: "none", stroke: engrave(m), "stroke-width": 0.7, "stroke-opacity": 0.6 });
+    circle(svg, cx, cy, r * 0.42, { fill: "none", stroke: engrave(m), "stroke-width": 0.7, "stroke-opacity": 0.6 });
+  }
+  const n = det ? 8 : 6;
+  for (let i = 0; i < n; i++) {
+    const major = i % 2 === 0;
+    gem(svg, ...pt(cx, cy, r * 0.60, (i * 360) / n),
+      r * (major ? 0.125 : 0.085), major ? "ruby" : "garnet", m, det && major);
+  }
+  // castellated collet: a fat dashed ring reads as battlements
+  const cr = r * 0.26, seg = (2 * Math.PI * cr) / 10;
+  circle(svg, cx, cy, cr, {
+    fill: base(m), stroke: hi(m), "stroke-width": r * 0.07,
+    "stroke-dasharray": `${(seg * 0.55).toFixed(2)} ${(seg * 0.45).toFixed(2)}`,
+  });
+  gem(svg, cx, cy, r * 0.165, "onyx", m, false);
+  circle(svg, cx, cy, r, { fill: "url(#dome-shade)" });
+}
+
+// 3 QUATREFOIL RELIQUARY -- silver+ruby vs gold+emerald; four gothic
+// lights at the cardinals, a five-stone cluster at the heart
+function coinQuatrefoil(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "gold";
+  const g = val === 0 ? "ruby" : "emerald";
+  metalBlank(svg, cx, cy, r, m, given);
+  const det = r >= 20;
+  if (det) beadRim(svg, cx, cy, r, m, 26);
+  for (const a of [0, 90, 180, 270]) {
+    vesica(svg, cx, cy, r * 0.30, r * 0.82, a,
+      { fill: c("socket"), stroke: deep(m), "stroke-width": Math.max(0.8, r * 0.035) });
+    gem(svg, ...pt(cx, cy, r * 0.56, a), r * 0.105, g, m, false);
+  }
+  gem(svg, cx, cy, r * 0.135, g, m, det);
+  if (det)
+    for (const a of [45, 135, 225, 315])
+      gem(svg, ...pt(cx, cy, r * 0.30, a), r * 0.055, "pearl", m, false);
+}
+
+// 4 TALISMAN SCATTER -- iron vs gold; a strewn multicolour setting over
+// engraved scrollwork, after the treasure-hoard face
+function coinTalisman(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "iron" : "gold";
+  metalBlank(svg, cx, cy, r, m, given);
+  const det = r >= 20;
+  if (det) {
+    beadRim(svg, cx, cy, r, m, 26);
+    const ink = engrave(m);
+    pathEl(svg, `M ${cx - r * 0.55} ${cy + r * 0.05} q ${r * 0.25} ${-r * 0.45} ${r * 0.55} ${-r * 0.15} q ${r * 0.3} ${r * 0.3} ${r * 0.55} ${r * 0.05}`,
+      { fill: "none", stroke: ink, "stroke-width": r * 0.035, "stroke-opacity": 0.65 });
+    pathEl(svg, `M ${cx - r * 0.45} ${cy + r * 0.45} q ${r * 0.35} ${-r * 0.2} ${r * 0.75} ${r * 0.02}`,
+      { fill: "none", stroke: ink, "stroke-width": r * 0.03, "stroke-opacity": 0.55 });
+  }
+  const stones = det
+    ? [[0, -0.20, 0.145, "sapphire"], [-0.48, 0.18, 0.10, "ruby"], [0.46, 0.24, 0.11, "emerald"],
+       [0.44, -0.42, 0.075, "pink"], [-0.46, -0.40, 0.075, "citrine"], [0.02, 0.52, 0.095, "amethyst"]]
+    : [[0, -0.20, 0.16, "sapphire"], [-0.42, 0.30, 0.12, "ruby"], [0.42, 0.30, 0.12, "emerald"]];
+  for (const [dx, dy, k, gname] of stones)
+    gem(svg, cx + dx * r, cy + dy * r, r * k, gname, m, det);
+}
+
+// 5 FILIGREE WHEEL -- silver vs bronze; six spokes pierced between,
+// a stone at every felloe and a boss at the hub
+function coinWheel(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "bronze";
+  const g = val === 0 ? "amethyst" : "citrine";
+  metalBlank(svg, cx, cy, r, m, given);
+  const det = r >= 20;
+  if (det) beadRim(svg, cx, cy, r, m, 26);
+  for (let i = 0; i < 6; i++)
+    circle(svg, ...pt(cx, cy, r * 0.47, i * 60 + 30), r * 0.155,
+      { fill: c("socket"), stroke: deep(m), "stroke-width": Math.max(0.7, r * 0.03) });
+  for (let i = 0; i < 6; i++) {
+    const [sx, sy] = pt(cx, cy, r * 0.30, i * 60);
+    const [ex, ey] = pt(cx, cy, r * 0.72, i * 60);
+    line(svg, sx, sy, ex, ey, { stroke: hi(m), "stroke-width": r * 0.055, "stroke-linecap": "round" });
+    gem(svg, ...pt(cx, cy, r * 0.72, i * 60), r * 0.085, g, m, false);
+  }
+  gem(svg, cx, cy, r * 0.15, g, m, det);
+}
+
+// 6 CROWN BAND -- gold vs gunmetal; a coronet ring of rubies and pearls
+// around a domed centre with one sapphire
+function coinCrown(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "gold" : "gunmetal";
+  metalBlank(svg, cx, cy, r, m, given);
+  const det = r >= 20;
+  ensureDome(svg);
+  if (det) {
+    circle(svg, cx, cy, r * 0.88, { fill: "none", stroke: engrave(m), "stroke-width": 0.6, "stroke-opacity": 0.55 });
+    circle(svg, cx, cy, r * 0.55, { fill: "none", stroke: engrave(m), "stroke-width": 0.6, "stroke-opacity": 0.55 });
+  }
+  const n = det ? 12 : 8;
+  for (let i = 0; i < n; i++) {
+    const major = i % 2 === 0;
+    gem(svg, ...pt(cx, cy, r * 0.72, (i * 360) / n),
+      r * (major ? 0.095 : 0.055), major ? "ruby" : "pearl", m, false);
+  }
+  circle(svg, cx, cy, r * 0.42, { fill: mfill(m), stroke: deep(m), "stroke-width": 0.8 });
+  circle(svg, cx, cy, r * 0.42, { fill: "url(#dome-shade)" });
+  gem(svg, cx, cy, r * 0.14, "sapphire", m, det);
+}
+
+// 7 GEM CROSS -- gunmetal vs gold; five stones in a cross on an engraved
+// quatrefoil, the layout of the front-left brooch
+function coinGemCross(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "gunmetal" : "gold";
+  metalBlank(svg, cx, cy, r, m, given);
+  const det = r >= 20;
+  if (det) {
+    beadRim(svg, cx, cy, r, m, 30);
+    const ink = engrave(m);
+    for (const a of [45, 135, 225, 315])
+      circle(svg, ...pt(cx, cy, r * 0.44, a), r * 0.30,
+        { fill: "none", stroke: ink, "stroke-width": r * 0.035, "stroke-opacity": 0.6 });
+  }
+  for (const a of [0, 90, 180, 270])
+    gem(svg, ...pt(cx, cy, r * 0.52, a), r * 0.115, "garnet", m, det);
+  if (det)
+    for (const a of [45, 135, 225, 315])
+      circle(svg, ...pt(cx, cy, r * 0.60, a), r * 0.035, { fill: hi(m) });
+  gem(svg, cx, cy, r * 0.15, "ruby", m, det);
+}
+
+// 8 DARK MIRROR -- silver+sapphire-halo vs gold+ruby-halo; one vast onyx
+// cabochon filling the mount, ringed by pinpoint stones
+function coinMirror(svg, cx, cy, r, val, given) {
+  const m = val === 0 ? "silver" : "gold";
+  const g = val === 0 ? "sapphire" : "ruby";
+  metalBlank(svg, cx, cy, r, m, given);
+  const det = r >= 20;
+  ensureDome(svg);
+  const n = det ? 10 : 6;
+  for (let i = 0; i < n; i++)
+    gem(svg, ...pt(cx, cy, r * 0.80, (i * 360) / n), r * 0.055, g, m, false);
+  circle(svg, cx, cy, r * 0.62 + r * 0.06, { fill: base(m), stroke: deep(m), "stroke-width": r * 0.04 });
+  circle(svg, cx, cy, r * 0.62 + r * 0.02, { fill: "none", stroke: glint(m), "stroke-width": r * 0.03, "stroke-opacity": 0.7 });
+  ensureGem(svg, "onyx");
+  circle(svg, cx, cy, r * 0.62, { fill: "url(#g-onyx)", stroke: GEM.onyx[3], "stroke-width": 0.6 });
+  circle(svg, cx, cy, r * 0.62, { fill: "url(#dome-shade)" });
+  ellipse(svg, cx - r * 0.20, cy - r * 0.24, r * 0.20, r * 0.11, { fill: c("white"), "fill-opacity": 0.35 });
+  circle(svg, cx - r * 0.26, cy - r * 0.30, r * 0.05, { fill: c("white"), "fill-opacity": 0.8 });
+}
+
+const VARIANTS = [
+  ["1  ROSE WINDOW", coinRose,
+   "Gold with rubies vs silver with sapphires. Six round lights cut through the planchet like a cathedral rose, each burning one cabochon; beaded rim, pellets between the lights, a matching stone at the heart."],
+  ["2  GEM HALO", coinHalo,
+   "The domed brooch boss from the second photo. Gunmetal vs gold body, rubies and garnets alternating around the halo, and a dark onyx centre raised in a castellated collet. The dome shade sells the convex face."],
+  ["3  QUATREFOIL RELIQUARY", coinQuatrefoil,
+   "Silver-and-ruby vs gold-and-emerald. Four pointed gothic lights at the cardinals with a stone in each, pearls bracing a five-stone cluster at the heart -- the reliquary front of the first photo."],
+  ["4  TALISMAN SCATTER", coinTalisman,
+   "Iron vs gold under a strewn multicolour setting -- sapphire, ruby, emerald, tourmaline, citrine, amethyst over engraved scrollwork. The one skin where the stones keep their hoard-like variety."],
+  ["5  FILIGREE WHEEL", coinWheel,
+   "Silver-and-amethyst vs bronze-and-citrine. Six polished spokes over pierced openwork, a stone at every spoke's end and a larger one at the hub -- wheel-window tracery as jewellery."],
+  ["6  CROWN BAND", coinCrown,
+   "Gold vs gunmetal coronet: rubies and seed pearls alternating around the band, and a domed centre carrying a single sapphire. The quietest of the set at board scale."],
+  ["7  GEM CROSS", coinGemCross,
+   "Gunmetal vs gold. Four garnets at the cardinals around a central ruby, engraved quatrefoil arcs joining them, pellets at the diagonals -- the cross-set brooch at the front of photo two."],
+  ["8  DARK MIRROR", coinMirror,
+   "Silver vs gold mount around one vast onyx cabochon -- a scrying-glass face ringed by pinpoint sapphires or rubies. Reads instantly at any scale because the silhouette is one dark dome."],
+];
+
+const ZCELL = 96, RCELL = 50, GAP = 8, RGAP = 6;
+const PANEL_W = 4 * ZCELL + 3 * GAP + 2 * 24;
+const PANEL_H = 246;
+
+function frame(svg, x, y, w, h, label) {
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  const lw = label.length * 7 + 10;
+  rect(svg, x + 18, y - 6, lw, 12, { fill: c("plate") });
+  txt(svg, x + 23, y + 3, label, 10, c("cream"), "start", "bold");
+}
+
+function variantSvg(title, drawCoin) {
+  const svg = [];
+  const W = PANEL_W + 20, H = PANEL_H + 24;
+  rect(svg, 0, 0, W, H, { rx: 8, fill: c("plate"), stroke: c("plate-edge") });
+  frame(svg, 10, 12, PANEL_W, PANEL_H, title);
+  const combos = [[0, false], [1, false], [0, true], [1, true]];
+  const labels = ["COLOUR 0", "COLOUR 1", "FIXED", "FIXED"];
+  const rowx = 10 + 24, rowy = 12 + 18;
+  combos.forEach(([val, given], i) => {
+    const sx = rowx + i * (ZCELL + GAP);
+    socket(svg, sx, rowy, ZCELL);
+    drawCoin(svg, sx + ZCELL / 2, rowy + ZCELL / 2, Math.round(ZCELL * 0.33), val, given);
+    txt(svg, sx + ZCELL / 2, rowy + ZCELL + 14, labels[i], 8,
+      given ? c("gold") : c("steel"), "middle");
+  });
+  const strip = [[0, true], [1, false], [1, true], [0, false], null, [1, false], [0, true], [1, true]];
+  const spanw = strip.length * RCELL + (strip.length - 1) * RGAP + 2 * 12;
+  const bx = 10 + Math.round((PANEL_W - spanw) / 2), by = rowy + ZCELL + 24;
+  rect(svg, bx, by, spanw, RCELL + 24, { rx: 10, fill: c("board-bg"), stroke: c("ink") });
+  strip.forEach((cellv, i) => {
+    const sx = bx + 12 + i * (RCELL + RGAP), sy = by + 12;
+    socket(svg, sx, sy, RCELL);
+    if (cellv != null)
+      drawCoin(svg, sx + RCELL / 2, sy + RCELL / 2, Math.round(RCELL * 0.33), cellv[0], cellv[1]);
+  });
+  txt(svg, 10 + PANEL_W - 22, by + RCELL + 33, "AT BOARD SCALE", 8, c("dim"), "end");
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img"`
+    + ` aria-label="${esc(title)}">${svg.join("")}</svg>`;
+}
+
+const stage = document.getElementById("stage");
+stage.innerHTML = VARIANTS.map(([title, fn, why]) =>
+  `<div class="panel">${variantSvg(title, fn)}<div class="caption">`
+  + `<div class="why">${esc(why)}</div></div></div>`).join("");
+
+})();
+</script>
+</body>
+</html>
