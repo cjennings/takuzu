@@ -418,24 +418,47 @@ size is adjustable (the s key)."
             (setq x (+ x tw))))))))
 
 (defun takuzu--draw-rotary-level (svg cx cy)
-  "Draw the LEVEL rotary selector on SVG at CX,CY, pointer at the level."
-  (let* ((r 19) (level (or takuzu--grade takuzu--difficulty))
+  "Draw the LEVEL chicken-head selector on SVG at CX,CY.
+The tapered bakelite lever is the indicator: its tip aims at the engraved
+level position, after the classic amp mode switch."
+  (let* ((level (or takuzu--grade takuzu--difficulty))
          (specs '((easy "EASY" -46) (medium "MED" 0) (hard "HARD" 46)))
          (ang (or (nth 2 (assq level specs)) 0))
          (rad (lambda (a) (* (- a 90) (/ float-pi 180)))))
-    (svg-circle svg cx cy r :fill (takuzu--c :knob) :stroke (takuzu--c :knob-edge) :stroke-width 1)
-    (svg-circle svg (round (- cx (* r 0.3))) (round (- cy (* r 0.3))) (round (* r 0.5))
-                :fill (takuzu--c :knob-shade) :fill-opacity 0.45)
-    (let* ((a (funcall rad ang))
-           (px (+ cx (* (- r 5) (cos a)))) (py (+ cy (* (- r 5) (sin a)))))
-      (svg-line svg cx cy (round px) (round py)
-                :stroke (takuzu--c :gold-hi) :stroke-width 2 :stroke-linecap "round"))
+    ;; position ticks + labels around the sweep
     (dolist (spec specs)
       (let* ((lv (nth 0 spec)) (lab (nth 1 spec)) (la (funcall rad (nth 2 spec)))
-             (lx (+ cx (* (+ r 12) (cos la)))) (ly (+ cy (* (+ r 12) (sin la))))
+             (lx (+ cx (* 31 (cos la)))) (ly (+ cy (* 31 (sin la))))
+             (t1x (+ cx (* 26 (cos la)))) (t1y (+ cy (* 26 (sin la))))
+             (t2x (+ cx (* 23 (cos la)))) (t2y (+ cy (* 23 (sin la))))
              (on (eq lv level)))
+        (svg-line svg (round t1x) (round t1y) (round t2x) (round t2y)
+                  :stroke (takuzu--c :steel) :stroke-width 1.2)
         (takuzu--txt svg (round lx) (round (+ ly 3)) lab 7
-                     (if on (takuzu--c :gold-hi) (takuzu--c :steel)) "middle" (if on "bold" nil))))))
+                     (if on (takuzu--c :gold-hi) (takuzu--c :steel)) "middle" (if on "bold" nil))))
+    ;; skirt, then the lever aimed by a rotate transform about the pivot
+    (svg-circle svg cx cy 10 :fill (takuzu--c :knob) :stroke (takuzu--c :knob-edge) :stroke-width 0.8)
+    (dom-append-child svg
+      (dom-node 'path
+                (list (cons 'd (format (concat "M %d %.1f L %.1f %.1f Q %.1f %.1f %.1f %.1f "
+                                               "A 5.5 5.5 0 0 1 %.1f %.1f Q %.1f %.1f %.1f %.1f Z")
+                                       cx (- cy 22.0)
+                                       (+ cx 6.5) (- cy 3.0)
+                                       (+ cx 7.0) (+ cy 6.0) (+ cx 4.0) (+ cy 8.5)
+                                       (- cx 4.0) (+ cy 8.5)
+                                       (- cx 7.0) (+ cy 6.0) (- cx 6.5) (- cy 3.0)))
+                      (cons 'transform (format "rotate(%d %d %d)" ang cx cy))
+                      (cons 'fill (takuzu--c :knob-shade))
+                      (cons 'stroke (takuzu--c :shadow))
+                      (cons 'stroke-width "0.7"))))
+    (dom-append-child svg
+      (dom-node 'line
+                (list (cons 'x1 cx) (cons 'y1 (- cy 19))
+                      (cons 'x2 cx) (cons 'y2 (+ cy 5))
+                      (cons 'transform (format "rotate(%d %d %d)" ang cx cy))
+                      (cons 'stroke (takuzu--c :knob-edge))
+                      (cons 'stroke-width "1.4")
+                      (cons 'stroke-linecap "round"))))))
 
 (defun takuzu--draw-needle-gauge (svg cx cy r pct value)
   "Draw an analog needle gauge on SVG with pivot at CX,CY radius R.

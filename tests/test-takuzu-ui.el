@@ -846,17 +846,23 @@ instruments overprint each other unless the stage grows to fit them."
       (should (eq (car svg) 'svg)))))
 
 (ert-deftest test-takuzu-ui-draw-rotary-level ()
-  "Normal: the LEVEL rotary draws at each level, with grade fallback to difficulty."
+  "Normal: the LEVEL chicken-head lever aims at each level's angle.
+The lever is the indicator, so its rotate transform must carry the
+selected level's angle; grade falls back to difficulty when unset."
   (with-temp-buffer
-    (dolist (lv '(easy medium hard))
-      (setq takuzu--grade lv takuzu--difficulty lv)
+    (dolist (spec '((easy . -46) (medium . 0) (hard . 46)))
+      (setq takuzu--grade (car spec) takuzu--difficulty (car spec))
       (let ((svg (svg-create 120 120)))
         (takuzu--draw-rotary-level svg 60 60)
-        (should (eq (car svg) 'svg))))
+        (let ((lever (car (dom-by-tag svg 'path))))
+          (should lever)
+          (should (equal (dom-attr lever 'transform)
+                         (format "rotate(%d 60 60)" (cdr spec)))))))
     (setq takuzu--grade nil takuzu--difficulty 'medium)
     (let ((svg (svg-create 120 120)))
       (takuzu--draw-rotary-level svg 60 60)
-      (should (eq (car svg) 'svg)))))
+      (should (equal (dom-attr (car (dom-by-tag svg 'path)) 'transform)
+                     "rotate(0 60 60)")))))
 
 (ert-deftest test-takuzu-ui-draw-needle-gauge ()
   "Boundary: the needle gauge draws at empty, mid, and full sweep."
