@@ -86,7 +86,7 @@ light falls off the metal.")
 (defconst takuzu--bpad 14 "Board inner padding.")
 (defconst takuzu--ppad 24 "Faceplate padding.")
 (defconst takuzu--stage-gap 16 "Gap between the board and the right panel.")
-(defconst takuzu--panel-w 88 "Right panel width.")
+(defconst takuzu--panel-w 100 "Right panel width.")
 (defconst takuzu--panel-min-h 406
   "Minimum height of the instrument panel.
 Below this the five framed instruments overprint each other, so small
@@ -190,8 +190,8 @@ missed cleanup path would otherwise leak the repeating timer forever."
   (max 0.2 (min 1.0 (/ takuzu-flash-period 2.0))))
 
 (defun takuzu--fmt-time (s)
-  "Format S seconds as M:SS."
-  (format "%d:%02d" (/ s 60) (% s 60)))
+  "Format S seconds as MM:SS, two digits from the very first second."
+  (format "%02d:%02d" (/ s 60) (% s 60)))
 
 (defun takuzu--curp (r c)
   "Non-nil if the cursor is on cell R, C."
@@ -400,9 +400,9 @@ size is adjustable (the s key)."
                  :fill (takuzu--c :steel))))
 
 (defun takuzu--draw-nixie-time (svg cx y)
-  "Draw elapsed time on SVG as M:SS nixie tubes centred at CX, top at Y."
+  "Draw elapsed time on SVG as MM:SS nixie tubes centred at CX, top at Y."
   (let* ((str (takuzu--fmt-time (takuzu--elapsed)))
-         (tw 15) (th 23) (g 3) (colw 7) (total 0))
+         (tw 14) (th 23) (g 3) (colw 6) (total 0))
     (dotimes (i (length str))
       (setq total (+ total (if (eq (aref str i) ?:) colw tw) (if (> i 0) g 0))))
     (let ((x (- cx (/ total 2))))
@@ -428,7 +428,7 @@ level position, after the classic amp mode switch."
     ;; position ticks + labels around the sweep
     (dolist (spec specs)
       (let* ((lv (nth 0 spec)) (lab (nth 1 spec)) (la (funcall rad (nth 2 spec)))
-             (lx (+ cx (* 31 (cos la)))) (ly (+ cy (* 31 (sin la))))
+             (lx (+ cx (* 34 (cos la)))) (ly (+ cy (* 34 (sin la))))
              (t1x (+ cx (* 26 (cos la)))) (t1y (+ cy (* 26 (sin la))))
              (t2x (+ cx (* 23 (cos la)))) (t2y (+ cy (* 23 (sin la))))
              (on (eq lv level)))
@@ -502,7 +502,7 @@ whatever height is left spreads as even gaps between them."
     (takuzu--draw-rotary-level svg cx (+ (round fy) 48))
     (setq fy (+ fy level-h gap))
     (takuzu--draw-frame svg fx (round fy) fw left-h "LEFT")
-    (takuzu--draw-needle-gauge svg cx (+ (round fy) 38) 26
+    (takuzu--draw-needle-gauge svg cx (+ (round fy) 38) 28
                                (takuzu--fill-pct) (takuzu--empty-count))
     (setq fy (+ fy left-h gap))
     (takuzu--draw-state-lamps svg fx (round fy) fw (- (+ y h) 8 (round fy)))))

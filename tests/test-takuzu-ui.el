@@ -39,11 +39,21 @@
 ;; --- pure helpers ---
 
 (ert-deftest test-takuzu-ui-fmt-time ()
-  "Normal/Boundary: seconds format as M:SS with zero-padding."
-  (should (equal (takuzu--fmt-time 0) "0:00"))
-  (should (equal (takuzu--fmt-time 9) "0:09"))
-  (should (equal (takuzu--fmt-time 75) "1:15"))
+  "Normal/Boundary: seconds format as MM:SS from the very first second."
+  (should (equal (takuzu--fmt-time 0) "00:00"))
+  (should (equal (takuzu--fmt-time 9) "00:09"))
+  (should (equal (takuzu--fmt-time 75) "01:15"))
   (should (equal (takuzu--fmt-time 600) "10:00")))
+
+(ert-deftest test-takuzu-ui-draw-nixie-time-always-four-tubes ()
+  "Boundary: the clock draws four digit tubes plus the colon even at 0:00.
+MM:SS from the start means the tube count never changes mid-game."
+  (with-temp-buffer
+    (setq takuzu--won nil takuzu--proven nil takuzu--start-time nil)
+    (let ((svg (svg-create 200 60)))
+      (takuzu--draw-nixie-time svg 100 10)
+      ;; each tube draws a glass rect + highlight rect; 4 digits at 00:00
+      (should (= (length (dom-by-tag svg 'rect)) 8)))))
 
 (ert-deftest test-takuzu-ui-cell-size-shrinks ()
   "Boundary: cell size shrinks as the board grows."
