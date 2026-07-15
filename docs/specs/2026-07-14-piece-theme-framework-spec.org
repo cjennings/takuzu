@@ -8,6 +8,7 @@
 :PROPERTIES:
 :ID:       1fca8bff-81d8-4e5d-b7af-88af5f280e52
 :END:
+- 2026-07-15 Wed @ 09:40:53 -0500 — documented the raster-sprite-per-state escape hatch (available / when / how + worked example) and proved it: a throwaway cameo skin embedded portrait PNGs per value and rendered through the live game (Emacs 30.2 pgtk/librsvg), scaling to every board size. Spike reverted.
 - 2026-07-15 Wed @ 00:10:00 -0500 — review pass 2 folded in (3 findings, 1 blocking, all accepted). No blocking design gaps remain. Stays DRAFT: 7 decisions await Craig.
 - 2026-07-14 Tue @ 23:50:00 -0500 — review pass 1 folded in (8 findings, 4 blocking, all accepted). Stays DRAFT: 7 decisions await Craig.
 - 2026-07-14 Tue @ 23:13:23 -0500 — drafted.
@@ -21,12 +22,12 @@ The piece-rendering side is already prototyped through the live coin work. The t
 - docs/prototypes/takuzu-hifi.html — the full faceplate and the 18 shipped coin skins.
 
 * Metadata
-| Status    | draft                                  |
-|-----------+----------------------------------------|
-| Owner     | Craig Jennings                         |
-| Reviewer  | (unassigned)                           |
-| Date      | 2026-07-14                             |
-| Related   | todo.org "Coin skins as a player setting" |
+| Status   | draft                                     |
+|----------+-------------------------------------------|
+| Owner    | Craig Jennings                            |
+| Reviewer | (unassigned)                              |
+| Date     | 2026-07-14                                |
+| Related  | todo.org "Coin skins as a player setting" |
 
 * Summary
 
@@ -60,7 +61,7 @@ Third, the framework is meant to outlive takuzu. Craig is building more board ga
 - Not a second game in v1. The framework is designed for reuse and extracted cleanly, but building game #2 is out of scope here.
 - Not user-authored or separate-file plugin loading. The descriptor lives in code; external/user themes are a possible vNext, not now.
 - Not a physics or general animation engine. Animation is limited to what the existing breath/flash timer already drives (opacity/parameter tweens on redraw).
-- Not abandoning svg.el. Rendering stays SVG; photographic detail uses the established raster-sprite-per-state path where vector relief isn't enough.
+- Not abandoning svg.el. Rendering stays SVG; photographic detail uses the raster-sprite-per-state path (explained under Design) where vector relief isn't enough.
 
 ** Scope tiers
 
@@ -100,7 +101,23 @@ For a theme to transform personality, the surround has to stop asserting its own
 
 ** Board-prominent layout and the detail budget (vNext)
 
-Bigger board, bigger cells, more pixels per piece — that is what lets a piece carry cameo-level definition. The engine parametrizes a per-piece detail budget off the cell size so a drawer can add relief and fine features only when there's room, and drop to a legible silhouette when small (the LOD discipline the coins already follow). Genuinely photographic detail (a face with real modelling) uses the raster-sprite-per-state path proven earlier, embedded per state, rather than pushing vector relief past what librsvg renders cleanly.
+Bigger board, bigger cells, more pixels per piece — that is what lets a piece carry cameo-level definition. The engine parametrizes a per-piece detail budget off the cell size so a drawer can add relief and fine features only when there's room, and drop to a legible silhouette when small (the LOD discipline the coins already follow). Genuinely photographic detail (a face with real modelling) uses the raster-sprite-per-state path (described below), embedded per state, rather than pushing vector relief past what librsvg renders cleanly.
+
+** Raster-sprite-per-state: the photographic escape hatch
+
+Almost everything here is vector art: the engine hands librsvg a set of shapes (circles, gradients, outlines) and librsvg turns them into pixels fresh each time. Vector art stays sharp at any size, and a theme can recolour it, which is why the coins are drawn this way. It has a ceiling, though. Some looks (a real modelled face, a photographic texture) need more fine detail than you can practically assemble from shapes, and librsvg renders very dense vector art poorly.
+
+The escape hatch is to stop drawing shapes and paste in a finished picture instead. You prepare one small pixel image (a PNG) for each distinct way a piece can look: one for a player piece, one for a given, and so on. That is the "raster sprite": "raster" just means a grid of pixels rather than shapes, and "sprite" is a small prepared image dropped into a scene. Takuzu pieces have only a handful of states, so it is a small fixed set of images, one per state.
+
+It is always available. A piece drawer only has to return SVG, and an embedded image is valid SVG, so any drawer can hand back a picture instead of shapes with nothing to switch on. The engine composites it exactly like a vector piece: the theme's substrate sits under it and the float glow or cast shadow behind it, so a photographic piece lives in the same lit world as a drawn coin.
+
+When to choose it: reach for a raster sprite only when the look is genuinely photographic or painterly (a modelled face, a real texture, a scanned illustration), the kind of detail you would never rebuild by hand from shapes. Stay with vector, the default, for anything geometric or flat, anything that has to scale across board sizes, or anything a theme wants to recolour. A pixel image is fixed-resolution and single-theme; vector is resolution-independent and recolourable. That trade is the whole decision.
+
+How to do it: the theme's piece drawer, instead of composing shapes, reads the cell's state from the accessor, picks the image for that state, and embeds it. In svg.el that embed is one call: =svg-embed= with the PNG data placed at the cell's origin and scaled to the cell size, so nothing has to live on disk. Prepare the images once, exported at the largest board cell size so they downscale cleanly on smaller boards (or one set per cell-size bucket if upscaling ever shows).
+
+Worked example: a "cameo" theme whose pieces are carved-portrait photographs, one portrait per piece value. The author exports the two images at the 50-pixel maximum cell size. The drawer is then about three lines: read =val= and =given= from the accessor, pick the portrait for =val=, and =svg-embed= it into the cell (a given can add a gold ring over the top). The theme still declares its background and lighting, so the engine draws the substrate beneath the cameo and the glow behind it, and the portrait sits framed in the board like any other piece.
+
+This path is proven in both renderers. On 2026-07-15 a throwaway cameo skin did exactly the above (two portrait PNGs embedded per value, a gold ring on givens) and rendered through the live game on Emacs 30.2 (pgtk, librsvg), sharp at every board size and seated on the sockets under the cursor bezel. The same PNGs embedded as SVG =<image>= data URIs rendered identically in the browser (Blink), confirming the near-1:1 prototype-to-svg.el port from both sides. The spike was reverted; its job was to retire the risk, not to ship the theme.
 
 ** The extraction boundary
 
