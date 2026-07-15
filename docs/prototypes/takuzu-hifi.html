@@ -463,10 +463,7 @@ const state = {
 };
 
 // a new skin is always appended at the tail -- existing positions never change
-const COIN_SKINS = ["wood", "collegiate", "machined", "cash", "gems",
-                    "terra", "jewel", "compass", "guilloche", "runic",
-                    "scallop", "bimetal", "matrix", "split", "rosette",
-                    "filigree", "casino", "emblem"];
+const COIN_SKINS = ["wood", "collegiate", "terra", "casino"];
 
 // --- the struck-metal engine (mirror of takuzu--coin-metal-tones etc.) ---
 
@@ -665,11 +662,6 @@ function drawDiscTerra(svg, cx, cy, r, val, given) {
   }
 }
 
-function jewelOctagon(cx, cy, r) {
-  const cut = r * 0.42;
-  return [[cx - cut, cy - r], [cx + cut, cy - r], [cx + r, cy - cut], [cx + r, cy + cut],
-    [cx + cut, cy + r], [cx - cut, cy + r], [cx - r, cy + cut], [cx - r, cy - cut]];
-}
 function ensureJewelGlow(svg, id, tone) {
   if (!svg.coinGrads) svg.coinGrads = new Set();
   if (svg.coinGrads.has(id)) return;
@@ -681,95 +673,9 @@ function ensureJewelGlow(svg, id, tone) {
 }
 // A translucent octagonal sapphire/ruby jewel, lit from upper-left.  A fixed
 // jewel wears a matching brass octagonal collar.
-function drawDiscJewel(svg, cx, cy, r, val, given) {
-  const id = `takuzu-coin-jewel-${val}`;
-  const tone = val === 0 ? "sapphire" : "ruby";
-  const hi = c(`jewel-${tone}-hi`), base = c(`jewel-${tone}`), deep = c(`jewel-${tone}-deep`);
-  const outer = jewelOctagon(cx, cy, r), table = jewelOctagon(cx - r * 0.05, cy - r * 0.06, r * 0.48);
-  const glow = jewelOctagon(cx - r * 0.06, cy - r * 0.08, r * 0.68);
-  const facets = [[hi, 0.33], [base, 0.07], [deep, 0.14], [deep, 0.32],
-    [deep, 0.42], [deep, 0.22], [hi, 0.14], [hi, 0.38]];
-  ensureCoinGradient(svg, id, 0.38, 0.32, 0.85, val === 0
-    ? [[0, "jewel-sapphire-hi"], [0.45, "jewel-sapphire"], [1, "jewel-sapphire-deep"]]
-    : [[0, "jewel-ruby-hi"], [0.45, "jewel-ruby"], [1, "jewel-ruby-deep"]]);
-  ensureJewelGlow(svg, `${id}-glow`, tone);
-  polygon(svg, outer, { fill: `url(#${id})`, stroke: c("ink"), "stroke-width": 1 });
-  polygon(svg, glow, { fill: `url(#${id}-glow)` });
-  line(svg, outer[7][0], outer[7][1], outer[0][0], outer[0][1], { stroke: hi, "stroke-opacity": 0.42, "stroke-width": Math.max(0.55, r * 0.035) });
-  line(svg, outer[0][0], outer[0][1], outer[1][0], outer[1][1], { stroke: hi, "stroke-opacity": 0.30, "stroke-width": Math.max(0.55, r * 0.035) });
-  facets.forEach(([fill, opacity], i) => polygon(svg, [outer[i], outer[(i + 1) % 8], table[(i + 1) % 8], table[i]], { fill, "fill-opacity": opacity }));
-  polygon(svg, table, { fill: base, "fill-opacity": 0.22 });
-  if (r >= 18) {
-    polygon(svg, jewelOctagon(cx - r * 0.11, cy - r * 0.13, r * 0.27), { fill: hi, "fill-opacity": 0.16, stroke: hi, "stroke-opacity": 0.28, "stroke-width": Math.max(0.45, r * 0.025) });
-    ellipse(svg, cx - r * 0.42, cy - r * 0.43, r * 0.075, r * 0.05, { fill: c("white"), "fill-opacity": 0.40 });
-  }
-  if (given) {
-    polygon(svg, jewelOctagon(cx, cy, r + 1.3), { fill: "none", stroke: c("gold"), "stroke-width": 1.6 });
-  }
-}
-
 // Two different compass pieces, not two palettes (mirror of the Elisp):
 // val 0 the dark-iron ray-rose medallion, val 1 a copper bearing dial with
 // a tick ring, an N, and a two-tone needle swung north-east on a pivot.
-function drawDiscCompass(svg, cx, cy, r, val, given) {
-  const iron = val === 0;
-  const id = `takuzu-coin-body-${val}`;
-  const bodyBase = c(iron ? "coin-iron" : "coin-copper");
-  const bodyDeep = c(iron ? "coin-iron-deep" : "coin-copper-deep");
-  const ink = c(iron ? "coin-copper" : "coin-iron");
-  const glint = c(iron ? "coin-copper-hi" : "coin-iron-hi");
-  const detailed = r >= 20;
-  ensureCoinGradient(svg, id, 0.36, 0.30, 0.95, iron
-    ? [[0, "coin-iron-hi"], [0.5, "coin-iron"], [1, "coin-iron-deep"]]
-    : [[0, "coin-copper-hi"], [0.5, "coin-copper"], [1, "coin-copper-deep"]]);
-  circle(svg, cx, cy, r, { fill: `url(#${id})`, stroke: bodyDeep, "stroke-width": 1.2 });
-  if (given) {
-    circle(svg, cx, cy, r + 1.5, { fill: "none", stroke: c("rim-silver"), "stroke-width": 1.6 });
-    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("white"), "stroke-width": 0.5, "stroke-opacity": 0.35 });
-  }
-  if (iron) compassRose(svg, cx, cy, r, ink, glint, bodyBase, detailed);
-  else compassDial(svg, cx, cy, r, ink, glint, bodyBase, detailed);
-}
-function compassRose(svg, cx, cy, r, ink, glint, hub, detailed) {
-  if (detailed) {
-    const teeth = [];
-    for (let i = 0; i < 32; i++)
-      teeth.push(coinPt(cx, cy, r * (i % 2 ? 0.87 : 0.78), i * 11.25));
-    polygon(svg, teeth, { fill: "none", stroke: ink, "stroke-opacity": 0.8, "stroke-width": 0.7 });
-  }
-  const big = r * (detailed ? 0.68 : 0.74);
-  for (let i = 0; i < 8; i++) {
-    const a = i * 45;
-    polygon(svg, [coinPt(cx, cy, big, a),
-                  coinPt(cx, cy, r * 0.14, a + 22),
-                  coinPt(cx, cy, r * 0.14, a - 22)], { fill: ink });
-  }
-  for (let i = 0; i < 8; i++) {
-    const a = i * 45 + 22.5;
-    polygon(svg, [coinPt(cx, cy, big * 0.62, a),
-                  coinPt(cx, cy, r * 0.10, a + 30),
-                  coinPt(cx, cy, r * 0.10, a - 30)], { fill: glint, "fill-opacity": 0.85 });
-  }
-  circle(svg, cx, cy, r * 0.10, { fill: hub, stroke: ink, "stroke-width": r * 0.04 });
-}
-function compassDial(svg, cx, cy, r, ink, glint, hub, detailed) {
-  circle(svg, cx, cy, r * 0.88, { fill: "none", stroke: ink, "stroke-opacity": 0.85, "stroke-width": r * 0.045 });
-  const n = detailed ? 24 : 4;
-  for (let i = 0; i < n; i++) {
-    const a = i * (360 / n), cardinal = i % (n / 4) === 0;
-    const [x1, y1] = coinPt(cx, cy, r * (cardinal ? 0.70 : 0.78), a);
-    const [x2, y2] = coinPt(cx, cy, r * 0.86, a);
-    line(svg, x1, y1, x2, y2, { stroke: ink, "stroke-opacity": cardinal ? 0.9 : 0.6,
-      "stroke-width": r * (cardinal ? 0.05 : 0.025) });
-  }
-  if (detailed) txt(svg, cx, cy - r * 0.38, "N", r * 0.30, ink, "middle");
-  const tipn = coinPt(cx, cy, r * 0.62, 45), tips = coinPt(cx, cy, r * 0.62, 225);
-  const barb1 = coinPt(cx, cy, r * 0.11, 135), barb2 = coinPt(cx, cy, r * 0.11, 315);
-  polygon(svg, [tipn, barb1, barb2], { fill: glint, stroke: ink, "stroke-width": 0.5, "stroke-opacity": 0.6 });
-  polygon(svg, [tips, barb1, barb2], { fill: ink });
-  circle(svg, cx, cy, r * 0.085, { fill: hub, stroke: ink, "stroke-width": r * 0.035 });
-}
-
 // shared gradient defs, one per metal per svg build (mirror of
 // takuzu--ensure-metal): a struck-field radial fill and a top-lit edge
 function ensureMetal(svg, m) {
@@ -831,49 +737,7 @@ const GEMS_LAYOUT = ["ruby", "sapphire", null, "emerald",
                      null, "diamond", "amethyst", null,
                      "topaz", null, "ruby", "aqua",
                      null, "sapphire", null, "diamond"];
-function drawDiscGems(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "silver" : "gold";
-  metalBlank(svg, cx, cy, r, m, given);
-  const g = r * 0.28, r0 = r * 0.085;
-  for (let i = 0; i < 16; i++) {
-    const gx = cx + ((i % 4) - 1.5) * g, gy = cy + (Math.floor(i / 4) - 1.5) * g;
-    const gem = GEMS_LAYOUT[i];
-    if (gem) {
-      ensureGem(svg, gem);
-      circle(svg, gx, gy, r0 * 1.3, { fill: "none", stroke: mDeep(m), "stroke-width": r0 * 0.35 });
-      circle(svg, gx, gy, r0 * 1.3, { fill: "none", stroke: mGlint(m), "stroke-width": r0 * 0.15, "stroke-opacity": 0.6 });
-      circle(svg, gx, gy, r0, { fill: `url(#takuzu-gem-${gem})` });
-      circle(svg, gx - r0 * 0.3, gy - r0 * 0.35, r0 * 0.28, { fill: c("white"), "fill-opacity": 0.85 });
-    } else {
-      circle(svg, gx, gy, r0 * 0.9, {
-        fill: mDeep(m), "fill-opacity": 0.5, stroke: mDeep(m), "stroke-width": r0 * 0.3,
-      });
-    }
-  }
-  if (given)
-    circle(svg, cx, cy, r * 0.72, { fill: "none", stroke: mFixedInk(m), "stroke-width": 1.2, "stroke-opacity": 0.95 });
-}
-
 // GUILLOCHE -- silver vs gold, engine-turned wave rings
-function drawDiscGuilloche(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "silver" : "gold";
-  metalBlank(svg, cx, cy, r, m, given);
-  const ink = mDeep(m);
-  const rings = r >= 20 ? [0.74, 0.58, 0.42, 0.27] : [0.66, 0.40];
-  rings.forEach((k, ri) => {
-    const n = 12 + ri * 4, rr = r * k, amp = r * 0.05;
-    let d = "";
-    for (let i = 0; i <= n * 6; i++) {
-      const a = (i * 360) / (n * 6);
-      const rad = rr + amp * Math.sin((i * Math.PI * 2 * n) / (n * 6) + ri * 1.3);
-      const [x, y] = coinPt(cx, cy, rad, a);
-      d += (i === 0 ? "M" : "L") + ` ${x} ${y} `;
-    }
-    pathEl(svg, d + "Z", { fill: "none", stroke: ink, "stroke-opacity": 0.55, "stroke-width": 0.7 });
-  });
-  circle(svg, cx, cy, r * 0.07, { fill: given ? mFixedInk(m) : ink, "fill-opacity": 0.9 });
-}
-
 // RUNIC -- Anglo-Saxon futhorc carved into a wooden coin, oak vs walnut
 // (mirror of takuzu--runic-segments / takuzu--draw-disc-runic)
 const RUNIC_SEGMENTS = {
@@ -903,35 +767,6 @@ function drawRune(svg, cx, cy, u, rune, ink, hi2, rot) {
       { stroke: ink, "stroke-width": u * 0.14, "stroke-opacity": 0.95, "stroke-linecap": "round" });
   }
 }
-function drawDiscRunic(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "oak" : "walnut";
-  const ink = mDeep(m), hi2 = mGlint(m), detailed = r >= 20;
-  ensureMetal(svg, m);
-  // the turned blank: matte field and chamfered rim, no metal specular
-  circle(svg, cx, cy, r, { fill: mfill(m), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
-  circle(svg, cx, cy, r - r * 0.05, { fill: "none", stroke: ink, "stroke-width": r * 0.05, "stroke-opacity": 0.55 });
-  circle(svg, cx, cy, r - r * 0.10, { fill: "none", stroke: hi2, "stroke-width": 0.6, "stroke-opacity": 0.25 });
-  // grain: chord-wise curves bowing with the cut, plus a knot at detail
-  for (const k of [-0.42, 0.02, 0.38]) {
-    const hw = r * Math.sqrt(Math.max(0, 0.6724 - k * k));
-    pathEl(svg, `M ${(cx - hw).toFixed(1)} ${(cy + r * k).toFixed(1)} Q ${cx} ${(cy + r * k - r * 0.10).toFixed(1)} ${(cx + hw).toFixed(1)} ${(cy + r * k).toFixed(1)}`,
-      { fill: "none", stroke: ink, "stroke-width": r * 0.03, "stroke-opacity": 0.28 });
-  }
-  if (detailed)
-    circle(svg, cx + r * 0.34, cy + r * 0.22, r * 0.05,
-      { fill: "none", stroke: ink, "stroke-width": r * 0.025, "stroke-opacity": 0.35 });
-  // matte sheen -- broad and faint, wax rather than polish
-  ellipse(svg, cx - r * 0.28, cy - r * 0.32, r * 0.40, r * 0.22,
-    { fill: c("white"), "fill-opacity": 0.07 });
-  if (detailed)
-    for (let i = 0; i < 8; i++) {
-      const [px, py] = coinPt(cx, cy, r * 0.62, i * 45);
-      drawRune(svg, px, py, r * 0.30, RUNIC_BAND[i], ink, hi2, i * 45);
-    }
-  drawRune(svg, cx, cy, r * (detailed ? 0.42 : 0.62), val === 0 ? "tir" : "daeg", ink, hi2, 0);
-  if (given) metalGivenRing(svg, cx, cy, r, m);
-}
-
 // the card-spade outline centred at cx,cy with scale s (half-height):
 // two lobes swelling from the top point, curling to the centre cusp,
 // and a flared stem at the base
@@ -976,31 +811,7 @@ function drawDiscCasino(svg, cx, cy, r, val, given) {
 
 // FILIGREE -- silver vs dark pewter wheel: six spokes over pierced
 // openwork, a multicolour stone at every felloe, a diamond at the hub
-function filigreeGem(svg, gx, gy, gr, gem, m) {
-  ensureGem(svg, gem);
-  circle(svg, gx, gy, gr * 1.3, { fill: "none", stroke: mDeep(m), "stroke-width": gr * 0.35 });
-  circle(svg, gx, gy, gr * 1.3, { fill: "none", stroke: mGlint(m), "stroke-width": gr * 0.15, "stroke-opacity": 0.6 });
-  circle(svg, gx, gy, gr, { fill: `url(#takuzu-gem-${gem})` });
-  circle(svg, gx - gr * 0.3, gy - gr * 0.35, gr * 0.28, { fill: c("white"), "fill-opacity": 0.85 });
-}
 const FILIGREE_GEMS = ["ruby", "sapphire", "emerald", "amethyst", "topaz", "aqua"];
-function drawDiscFiligree(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "silver" : "pewter";
-  metalBlank(svg, cx, cy, r, m, given);
-  for (let i = 0; i < 6; i++) {
-    const [px, py] = coinPt(cx, cy, r * 0.47, i * 60 + 30);
-    circle(svg, px, py, r * 0.155,
-      { fill: c("socket"), stroke: mDeep(m), "stroke-width": Math.max(0.7, r * 0.03) });
-  }
-  for (let i = 0; i < 6; i++) {
-    const [sx, sy] = coinPt(cx, cy, r * 0.30, i * 60);
-    const [ex, ey] = coinPt(cx, cy, r * 0.72, i * 60);
-    line(svg, sx, sy, ex, ey, { stroke: mHi(m), "stroke-width": r * 0.055, "stroke-linecap": "round" });
-    filigreeGem(svg, ex, ey, r * 0.085, FILIGREE_GEMS[i], m);
-  }
-  filigreeGem(svg, cx, cy, r * 0.15, "diamond", m);
-}
-
 // WOOD -- one-palette wood pair: every coin is a flat matte one-tone
 // disc (all coal for 0, all beech for 1) with dots riding the band.
 // No gradient field, no sheen, no heart, no holes, no pins.  Both
@@ -1069,231 +880,25 @@ function drawDiscCollegiate(svg, cx, cy, r, val, given) {
 }
 
 // SCALLOP -- iron vs bronze, twelve-lobed planchet with its own lit rim
-function scallopD(cx, cy, r, arc) {
-  const lobes = 12;
-  const pts = Array.from({ length: lobes }, (_, i) =>
-    coinPt(cx, cy, r, (i * 360) / lobes + 180 / lobes));
-  let d = `M ${pts[lobes - 1][0]} ${pts[lobes - 1][1]} `;
-  for (let i = 0; i < lobes; i++)
-    d += `A ${arc} ${arc} 0 0 1 ${pts[i][0]} ${pts[i][1]} `;
-  return d + "Z";
-}
-function drawDiscScallop(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "iron" : "bronze";
-  ensureMetal(svg, m);
-  const ink = mDeep(m);
-  pathEl(svg, scallopD(cx, cy, r * 0.94, r * 0.30), {
-    fill: mfill(m), stroke: given ? mFixedInk(m) : mDeep(m), "stroke-width": given ? 1.8 : 1.1,
-  });
-  pathEl(svg, scallopD(cx, cy, r * 0.86, r * 0.27), {
-    fill: "none", stroke: medge(m), "stroke-width": r * 0.07, "stroke-opacity": 0.9,
-  });
-  metalSheen(svg, cx, cy, r * 0.9);
-  circle(svg, cx, cy, r * 0.58, { fill: "none", stroke: ink, "stroke-opacity": 0.75, "stroke-width": r * 0.04 });
-  for (let i = 0; i < 6; i++)
-    circle(svg, ...coinPt(cx, cy, r * 0.40, i * 60), r * 0.045, { fill: mHi(m) });
-  circle(svg, cx, cy, r * 0.10, { fill: ink, "fill-opacity": 0.9 });
-}
-
 // BIMETAL -- the Dupre recolour: blue ring / silver core / olive accents
 // for 0, terracotta ring / gold core / regal accents for 1
-function drawDiscBimetal(svg, cx, cy, r, val, given) {
-  const ring = val === 0 ? "blue" : "copper";
-  const core = val === 0 ? "silver" : "gold";
-  const accent = val === 0 ? "olive" : "regal";
-  ensureMetal(svg, ring); ensureMetal(svg, core);
-  circle(svg, cx, cy, r, { fill: mfill(ring), stroke: c("ink"), "stroke-width": 0.7, "stroke-opacity": 0.8 });
-  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(ring), "stroke-width": r * 0.09 });
-  circle(svg, cx, cy, r * 0.60, { fill: mfill(core), stroke: mDeep(ring), "stroke-width": 1 });
-  circle(svg, cx, cy, r * 0.60, { fill: "none", stroke: medge(core), "stroke-width": r * 0.05, "stroke-opacity": 0.8 });
-  if (r >= 20) {
-    const seg = (2 * Math.PI * r * 0.80) / 44;
-    circle(svg, cx, cy, r * 0.80, {
-      fill: "none", stroke: COIN_METAL[accent][2], "stroke-width": r * 0.045, "stroke-opacity": 0.8,
-      "stroke-dasharray": `${(seg * 0.4).toFixed(2)} ${(seg * 0.6).toFixed(2)}`,
-    });
-  }
-  metalSheen(svg, cx, cy, r);
-  circle(svg, cx, cy, r * 0.07, { fill: COIN_METAL[accent][1], stroke: c("ink"), "stroke-width": 0.5 });
-  if (given) metalGivenRing(svg, cx, cy, r, ring);
-}
-
 // CASH -- iron vs brass, square hole and cardinal characters
-function drawDiscCash(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "iron" : "gold";
-  metalBlank(svg, cx, cy, r, m, given);
-  const ink = mDeep(m), h = r * 0.32;
-  rect(svg, cx - h, cy - h, 2 * h, 2 * h, { fill: c("socket"), stroke: mDeep(m), "stroke-width": 1.4 });
-  rect(svg, cx - h - 2, cy - h - 2, 2 * h + 4, 2 * h + 4,
-    { fill: "none", stroke: given ? mFixedInk(m) : mHi(m), "stroke-width": given ? 1.6 : 1 });
-  circle(svg, cx, cy, r * 0.82, { fill: "none", stroke: ink, "stroke-opacity": 0.5, "stroke-width": 1 });
-  if (r >= 20) {
-    const fs = r * 0.28;
-    txt(svg, cx, cy - r * 0.50 + fs * 0.35, "T", fs, ink, "middle", "bold");
-    txt(svg, cx + r * 0.60, cy + fs * 0.35, "K", fs, ink, "middle", "bold");
-    txt(svg, cx, cy + r * 0.60 + fs * 0.35, "Z", fs, ink, "middle", "bold");
-    txt(svg, cx - r * 0.60, cy + fs * 0.35, "U", fs, ink, "middle", "bold");
-  }
-}
-
 // DOT MATRIX -- bronze vs silver, the game's own grid in raised pellets
-function drawDiscMatrix(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "bronze" : "silver";
-  metalBlank(svg, cx, cy, r, m, given);
-  const ink = mDeep(m), g = r * 0.28, r0 = r * 0.08;
-  const grid = [0, 1, 0, 1,  1, 0, 1, 0,  0, 1, 1, 0,  1, 0, 0, 1];
-  for (let i = 0; i < 16; i++) {
-    const gx = cx + ((i % 4) - 1.5) * g, gy = cy + (Math.floor(i / 4) - 1.5) * g;
-    if (grid[i] === 0) {
-      circle(svg, gx, gy, r0, { fill: ink, "fill-opacity": 0.9 });
-      circle(svg, gx - r0 * 0.25, gy - r0 * 0.3, r0 * 0.3, { fill: c("white"), "fill-opacity": 0.25 });
-    } else {
-      circle(svg, gx, gy, r0, { fill: "none", stroke: ink, "stroke-width": r0 * 0.55, "stroke-opacity": 0.9 });
-    }
-  }
-  if (given)
-    circle(svg, cx, cy, r * 0.70, { fill: "none", stroke: mFixedInk(m), "stroke-width": 1.2, "stroke-opacity": 0.95 });
-}
-
 // SPLIT FIELD -- gunmetal vs copper, hatched duality
-function drawDiscSplit(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "gunmetal" : "copper";
-  metalBlank(svg, cx, cy, r, m, given);
-  const ink = mDeep(m);
-  const step = r >= 20 ? r * 0.14 : r * 0.24;
-  for (let y = -r + step; y < r; y += step) {
-    const half = Math.sqrt(Math.max(0, r * r * 0.72 - y * y));
-    if (half > r * 0.08)
-      line(svg, cx - half, cy + y, cx - r * 0.06, cy + y,
-        { stroke: ink, "stroke-opacity": 0.45, "stroke-width": r * 0.025 });
-  }
-  for (let x = step; x < r; x += step) {
-    const half = Math.sqrt(Math.max(0, r * r * 0.72 - x * x));
-    if (half > r * 0.08)
-      line(svg, cx + x, cy - half, cx + x, cy + half,
-        { stroke: ink, "stroke-opacity": 0.45, "stroke-width": r * 0.025 });
-  }
-  line(svg, cx, cy - r * 0.82, cx, cy + r * 0.82,
-    { stroke: given ? mFixedInk(m) : mHi(m), "stroke-width": r * 0.07, "stroke-linecap": "round" });
-}
-
 // ROSETTE -- iron vs copper, the stonework rosette in struck metal
-function drawDiscRosette(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "iron" : "copper";
-  metalBlank(svg, cx, cy, r, m, given);
-  const ink = mDeep(m), detailed = r >= 20;
-  const R = r * (detailed ? 0.48 : 0.58), pr = R * 0.5;
-  if (detailed) {
-    const seg = (2 * Math.PI * r * 0.74) / 18;
-    circle(svg, cx, cy, r * 0.74, {
-      fill: "none", stroke: ink, "stroke-opacity": 0.7, "stroke-width": r * 0.05,
-      "stroke-dasharray": `${(seg * 0.62).toFixed(2)} ${(seg * 0.38).toFixed(2)}`,
-    });
-  }
-  circle(svg, cx, cy, R, { fill: "none", stroke: ink, "stroke-width": r * 0.045, "stroke-opacity": 0.9 });
-  for (let i = 0; i < 6; i++) {
-    const [px, py] = coinPt(cx, cy, pr, i * 60);
-    circle(svg, px, py, pr, { fill: "none", stroke: ink, "stroke-width": r * 0.04, "stroke-opacity": 0.9 });
-  }
-  circle(svg, cx, cy, r * 0.045, { fill: mHi(m) });
-  for (let i = 0; i < 6; i++)
-    circle(svg, ...coinPt(cx, cy, R * 0.82, i * 60 + 30), r * 0.028, { fill: mHi(m) });
-  if (given && !detailed) circle(svg, cx, cy, r * 0.10, { fill: mFixedInk(m) });
-}
-
 // MACHINED FACE -- nickel vs brass, lathe grooves, knurled when fixed
-function drawDiscMachined(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "nickel" : "gold";
-  metalBlank(svg, cx, cy, r, m, given);
-  const rings = r >= 20 ? [0.78, 0.68, 0.58, 0.48, 0.38, 0.28] : [0.70, 0.50, 0.30];
-  for (const k of rings) {
-    circle(svg, cx, cy, r * k, { fill: "none", stroke: mDeep(m), "stroke-opacity": 0.5, "stroke-width": 0.7 });
-    circle(svg, cx, cy, r * k - 0.9, { fill: "none", stroke: mGlint(m), "stroke-opacity": 0.35, "stroke-width": 0.5 });
-  }
-  pathEl(svg, `M ${cx - r * 0.58} ${cy - r * 0.30} A ${r * 0.64} ${r * 0.64} 0 0 1 ${cx - r * 0.06} ${cy - r * 0.62}`,
-    { fill: "none", stroke: c("white"), "stroke-opacity": 0.28, "stroke-width": r * 0.16, "stroke-linecap": "round" });
-  circle(svg, cx, cy, r * 0.10, { fill: mBase(m), stroke: mDeep(m), "stroke-width": 0.8 });
-  circle(svg, cx - r * 0.03, cy - r * 0.03, r * 0.03, { fill: c("white"), "fill-opacity": 0.6 });
-  if (given) {
-    const dash = (2 * Math.PI * (r - 1.2)) / 30;
-    circle(svg, cx, cy, r - 1.2, {
-      fill: "none", stroke: mFixedInk(m), "stroke-width": 2.2,
-      "stroke-opacity": 0.85, "stroke-dasharray": `${dash.toFixed(2)} ${dash.toFixed(2)}`,
-    });
-  }
-}
-
 // EMBLEM -- one metal, two symbols: the values are told apart by device,
 // not colour.  Colour 0 is the taijitu, colour 1 the industrial gear,
 // both struck in the same aged nickel.  Fixed grammar per symbol:
 // contrast dots on the taijitu, a domed hub boss on the gear.
-function emblemYinyang(svg, cx, cy, r, given) {
-  const dark = mDeep("iron"), rr = r * 0.72, hr = rr / 2;
-  const p = cy - rr, q = cy + rr;
-  metalBlank(svg, cx, cy, r, "nickel", false);
-  // the engraved well seat, then the light ground the dark half sits on
-  circle(svg, cx, cy, rr + 1.2, { fill: "none", stroke: dark, "stroke-width": 1, "stroke-opacity": 0.55 });
-  circle(svg, cx, cy, rr, { fill: mHi("nickel") });
-  // the dark half: big arc down the left, teardrop in at the bottom, out at the top
-  pathEl(svg, `M ${cx} ${p} A ${rr} ${rr} 0 0 0 ${cx} ${q}`
-    + ` A ${hr} ${hr} 0 0 0 ${cx} ${cy} A ${hr} ${hr} 0 0 1 ${cx} ${p} Z`,
-    { fill: dark, stroke: dark, "stroke-width": 0.6 });
-  if (given) {
-    // the classic contrast dots, one riding each teardrop's heart
-    circle(svg, cx, (cy + q) / 2, rr * 0.14, { fill: mGlint("nickel") });
-    circle(svg, cx, (cy + p) / 2, rr * 0.14, { fill: dark });
-  }
-}
 // the six-toothed gear outline -- all arcs, no corners: each 60-degree
 // pitch is a broad tooth crown riding the outer circle (flat tops on the
 // rim) flowing into a wide near-semicircular valley notch dipping to
 // 0.77r: soft square nubs on one smooth band
-function emblemGearD(cx, cy, r) {
-  const r2 = r * 0.96, valRho = r * 0.34;
-  const [x0, y0] = coinPt(cx, cy, r2, -13);
-  let d = `M ${x0.toFixed(2)} ${y0.toFixed(2)} `;
-  for (let i = 0; i < 6; i++) {
-    const a = i * 60;
-    const [tx, ty] = coinPt(cx, cy, r2, a + 13);
-    const [vx, vy] = coinPt(cx, cy, r2, a + 47);
-    d += `A ${r2.toFixed(2)} ${r2.toFixed(2)} 0 0 1 ${tx.toFixed(2)} ${ty.toFixed(2)} `
-      + `A ${valRho.toFixed(2)} ${valRho.toFixed(2)} 0 0 0 ${vx.toFixed(2)} ${vy.toFixed(2)} `;
-  }
-  return d + "Z";
-}
-function emblemGear(svg, cx, cy, r, given) {
-  const m = "nickel", ink = mDeep("iron");
-  ensureMetal(svg, m);
-  // the lobed silhouette, teeth and band one struck piece
-  pathEl(svg, emblemGearD(cx, cy, r),
-    { fill: mfill(m), stroke: ink, "stroke-width": 1 });
-  // the lit inner edge seats the band
-  circle(svg, cx, cy, r * 0.68, { fill: "none", stroke: medge(m), "stroke-width": r * 0.06 });
-  metalSheen(svg, cx, cy, r * 0.70);
-  // the wide bore: a domed boss caps the fixed gear; the user's is open
-  if (given) {
-    circle(svg, cx, cy, r * 0.40, { fill: mfill(m), stroke: ink, "stroke-width": 1 });
-    circle(svg, cx, cy, r * 0.40, { fill: "none", stroke: medge(m), "stroke-width": r * 0.05, "stroke-opacity": 0.85 });
-    circle(svg, cx - r * 0.12, cy - r * 0.13, r * 0.06, { fill: c("white"), "fill-opacity": 0.5 });
-  } else {
-    circle(svg, cx, cy, r * 0.56, { fill: c("socket"), stroke: ink, "stroke-width": 1.3 });
-  }
-}
-function drawDiscEmblem(svg, cx, cy, r, val, given) {
-  if (val === 0) emblemYinyang(svg, cx, cy, r, given);
-  else emblemGear(svg, cx, cy, r, given);
-}
-
 // Mirror of takuzu--draw-disc: dispatch on the current skin.
 const COIN_DRAWERS = {
-  filigree: drawDiscFiligree, casino: drawDiscCasino,
-  wood: drawDiscWood, jewel: drawDiscJewel, compass: drawDiscCompass,
-  guilloche: drawDiscGuilloche, runic: drawDiscRunic,
-  collegiate: drawDiscCollegiate,
-  scallop: drawDiscScallop, bimetal: drawDiscBimetal, cash: drawDiscCash,
-  matrix: drawDiscMatrix, gems: drawDiscGems, split: drawDiscSplit,
-  rosette: drawDiscRosette, machined: drawDiscMachined,
-  emblem: drawDiscEmblem,
+  wood: drawDiscWood, collegiate: drawDiscCollegiate,
+  terra: drawDiscTerra, casino: drawDiscCasino,
 };
 function drawDisc(svg, cx, cy, r, val, given) {
   (COIN_DRAWERS[state.coinSkin] || drawDiscTerra)(svg, cx, cy, r, val, given);

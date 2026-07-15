@@ -229,7 +229,6 @@ specular arc on the top-left corner."
     (let ((e (takuzu--error-vector)))
       (should e) (should (aref e 0)) (should (aref e 8)) (should-not (aref e 1)))))
 
-
 ;; --- game-action logic ---
 
 (ert-deftest test-takuzu-ui-move-clamps ()
@@ -1214,7 +1213,6 @@ events get, so the pulse timer must not cut it short."
 
 ;; --- stats wiring ---
 
-
 (ert-deftest test-takuzu-ui-check-win-records-win ()
   "Normal: completing the board records a win for the puzzle's size and grade."
   (takuzu-testutil-with-stats-file
@@ -1308,10 +1306,7 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to the drum's head; order is stable."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value)))
               (car takuzu--coin-skins)))
-  (should (equal takuzu--coin-skins
-                 '(wood collegiate machined cash gems terra jewel compass
-                   guilloche runic scallop bimetal matrix split rosette
-                   filigree casino emblem))))
+  (should (equal takuzu--coin-skins '(wood collegiate terra casino))))
 
 (ert-deftest test-takuzu-ui-casino-chips ()
   "Normal: the casino skin deals a red chip for 0 and a dark navy chip
@@ -1353,89 +1348,13 @@ centre bearing the spade; a user chip keeps its own colour's full fill
       (should-not (dom-by-tag c0 'path))
       (should-not (dom-by-tag c1 'path)))))
 
-(ert-deftest test-takuzu-ui-emblem-symbols-carry-the-value ()
-  "Normal: the emblem set distinguishes values by symbol, not colour --
-both coins are struck in the same nickel; colour 0 is the taijitu,
-colour 1 the industrial gear.  Fixed grammar per symbol: the taijitu's
-two contrast dots mark a fixed 0 (user is dotless); the gear's domed
-hub boss marks a fixed 1 (user is pierced with an open bore)."
-  (let ((takuzu-coin-skin 'emblem))
-    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
-          (f0 (svg-create 100 100)) (f1 (svg-create 100 100))
-          (dark (takuzu--metal 'iron 3))
-          (glint (takuzu--metal 'nickel 0)))
-      (takuzu--draw-disc c0 50 50 33 0 nil)
-      (takuzu--draw-disc c1 50 50 33 1 nil)
-      (takuzu--draw-disc f0 50 50 33 0 t)
-      (takuzu--draw-disc f1 50 50 33 1 t)
-      ;; one metal serves both colours
-      (dolist (svg (list c0 c1))
-        (should (dom-by-id svg "^m-nickel-fill$")))
-      ;; colour 0 is the taijitu: a dark filled path, no gear silhouette
-      (should (seq-find (lambda (n) (equal (dom-attr n 'fill) dark))
-                        (dom-by-tag c0 'path)))
-      (should-not (seq-find (lambda (n)
-                              (equal (dom-attr n 'fill) "url(#m-nickel-fill)"))
-                            (dom-by-tag c0 'path)))
-      ;; colour 1 is the gear: one metal-filled toothed silhouette path
-      ;; whose teeth are integral with the body, and no taijitu path
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'fill) "url(#m-nickel-fill)"))
-                        (dom-by-tag c1 'path)))
-      (should-not (seq-find (lambda (n) (equal (dom-attr n 'fill) dark))
-                            (dom-by-tag c1 'path)))
-      ;; fixed 0 bears the two contrast dots; user 0 is dotless
-      (should (seq-find (lambda (n) (equal (dom-attr n 'fill) dark))
-                        (dom-by-tag f0 'circle)))
-      (should (seq-find (lambda (n) (equal (dom-attr n 'fill) glint))
-                        (dom-by-tag f0 'circle)))
-      (dolist (fill (list dark glint))
-        (should-not (seq-find (lambda (n) (equal (dom-attr n 'fill) fill))
-                              (dom-by-tag c0 'circle))))
-      ;; user 1 is pierced through to the socket; fixed 1 is not
-      (let ((bore (lambda (svg)
-                    (seq-find (lambda (n)
-                                (equal (dom-attr n 'fill) (takuzu--c :socket)))
-                              (dom-by-tag svg 'circle)))))
-        (should (funcall bore c1))
-        (should-not (funcall bore f1)))
-      ;; the fixed boss: a second body-gradient circle at the gear's hub
-      (let ((filled (lambda (svg)
-                      (length (seq-filter
-                               (lambda (n)
-                                 (equal (dom-attr n 'fill)
-                                        "url(#m-nickel-fill)"))
-                               (dom-by-tag svg 'circle))))))
-        (should (> (funcall filled f1) (funcall filled c1)))))))
-
 (ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
   "Normal: r (refresh) turns the coin drum back to coinset 1."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (let ((takuzu-coin-skin 'runic))
+    (let ((takuzu-coin-skin 'casino))
       (takuzu-reset)
       (should (eq takuzu-coin-skin (car takuzu--coin-skins))))))
-
-(ert-deftest test-takuzu-ui-filigree-wheel-gems-and-metals ()
-  "Normal: the filigree wheel is silver for 0, dark pewter for 1, with six
-pierced lights, six spokes, multicolour stones at the felloes, and a
-diamond at the hub."
-  (let ((takuzu-coin-skin 'filigree))
-    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
-      (takuzu--draw-disc c0 50 50 33 0 nil)
-      (takuzu--draw-disc c1 50 50 33 1 nil)
-      (should (dom-by-id c0 "^m-silver-fill$"))
-      (should (dom-by-id c1 "^m-pewter-fill$"))
-      ;; the multicolour setting: every spoke cut defined, diamond at hub
-      (dolist (gem '(ruby sapphire emerald amethyst topaz aqua diamond))
-        (should (dom-by-id c0 (format "^takuzu-gem-%s$" gem))))
-      ;; six spokes and six pierced lights
-      (should (= (length (dom-by-tag c0 'line)) 6))
-      (should (>= (length (seq-filter
-                           (lambda (n)
-                             (equal (dom-attr n 'fill) (takuzu--c :socket)))
-                           (dom-by-tag c0 'circle)))
-                  6)))))
 
 (ert-deftest test-takuzu-ui-wood-lip-marks-fixed ()
   "Normal: every wood coin is a flat matte one-tone disc -- all coal
@@ -1502,46 +1421,13 @@ thicker and prominent on a FIXED coin."
                               (dom-by-tag svg 'circle)))
         (should (= (length (dom-by-tag svg 'ellipse)) 0))))))
 
-(ert-deftest test-takuzu-ui-runic-carves-wood ()
-  "Normal: the runic coin is oak for 0, walnut for 1, with carved rune lines."
-  (let ((takuzu-coin-skin 'runic))
-    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
-      (takuzu--draw-disc c0 50 50 33 0 nil)
-      (takuzu--draw-disc c1 50 50 33 1 nil)
-      (should (dom-by-id c0 "^m-oak-fill$"))
-      (should (dom-by-id c1 "^m-walnut-fill$"))
-      (should (> (length (dom-by-tag c0 'line)) 10)))))
-
-(ert-deftest test-takuzu-ui-runic-lod-band-drops-at-board-scale ()
-  "Boundary: the futhorc band carves at 2x; board scale keeps the centre rune."
-  (let ((takuzu-coin-skin 'runic))
-    (let ((big (svg-create 100 100)) (small (svg-create 100 100)))
-      (takuzu--draw-disc big 50 50 33 0 nil)
-      (takuzu--draw-disc small 50 50 16 0 nil)
-      (should (> (length (dom-by-tag big 'line))
-                 (length (dom-by-tag small 'line))))
-      (should (> (length (dom-by-tag small 'line)) 0)))))
-
-(ert-deftest test-takuzu-ui-runic-given-rings-in-contrast ()
-  "Normal: a fixed oak coin rings in iron; a fixed walnut coin in silver."
-  (let ((takuzu-coin-skin 'runic))
-    (let ((oak (svg-create 100 100)) (wal (svg-create 100 100)))
-      (takuzu--draw-disc oak 50 50 33 0 t)
-      (takuzu--draw-disc wal 50 50 33 1 t)
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'stroke) (takuzu--c :rim-iron)))
-                        (dom-by-tag oak 'circle)))
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'stroke) (takuzu--c :rim-silver)))
-                        (dom-by-tag wal 'circle))))))
-
 (ert-deftest test-takuzu-ui-cycle-skin-cycles ()
   "Normal: the skin command walks the whole list and wraps back around."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
     (let ((takuzu-coin-skin 'collegiate))
       (takuzu-cycle-skin)
-      (should (eq takuzu-coin-skin 'machined))
+      (should (eq takuzu-coin-skin 'terra))
       (dotimes (_ (1- (length takuzu--coin-skins)))
         (takuzu-cycle-skin))
       (should (eq takuzu-coin-skin 'collegiate)))))
@@ -1556,9 +1442,9 @@ thicker and prominent on a FIXED coin."
       (takuzu-cycle-skin-back)
       (should (eq takuzu-coin-skin 'wood))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'emblem))
+      (should (eq takuzu-coin-skin 'casino))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'casino)))))
+      (should (eq takuzu-coin-skin 'terra)))))
 
 (ert-deftest test-takuzu-ui-every-skin-has-a-drawer ()
   "Normal: every skin in the cycle list resolves to a draw function.
@@ -1586,17 +1472,6 @@ and at board scale, without error and with visible shapes."
             (takuzu--draw-disc svg 50 50 r 0 given)
             (takuzu--draw-disc svg 50 50 r 1 given)
             (should (> (length (dom-children svg)) before))))))))
-
-(ert-deftest test-takuzu-ui-metal-defs-shared-per-metal ()
-  "Boundary: a board of bimetal coins defines each metal's two defs once.
-The Dupre bimetal uses four metals (blue+silver, terracotta+gold), so four
-coins define exactly four fills and four edges -- shared, not per-coin."
-  (let ((takuzu-coin-skin 'bimetal)
-        (svg (svg-create 200 100)))
-    (dotimes (i 4)
-      (takuzu--draw-disc svg (+ 30 (* i 40)) 50 16 (mod i 2) nil))
-    (should (= (length (dom-by-tag svg 'radialGradient)) 4))
-    (should (= (length (dom-by-tag svg 'linearGradient)) 4))))
 
 (ert-deftest test-takuzu-ui-collegiate-wears-college-colours ()
   "Normal: the collegiate pair in the schools' official colours -- each
@@ -1708,98 +1583,20 @@ the same wide rim, floored in pixels so it survives every board size."
       (dolist (svg (list c0 c1 f0 f1))
         (should (= (length (dom-by-tag svg 'ellipse)) 0))))))
 
-(ert-deftest test-takuzu-ui-bimetal-wears-dupre-colours ()
-  "Normal: the bimetal coin strikes the Dupre palette -- a blue ring with a
-silver core and olive accents for 0, a terracotta ring with a gold core and
-regal accents for 1."
-  (let ((takuzu-coin-skin 'bimetal))
-    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
-      (takuzu--draw-disc c0 50 50 33 0 nil)
-      (takuzu--draw-disc c1 50 50 33 1 nil)
-      (should (dom-by-id c0 "^m-blue-fill$"))
-      (should (dom-by-id c0 "^m-silver-fill$"))
-      (should (dom-by-id c1 "^m-copper-fill$"))
-      (should (dom-by-id c1 "^m-gold-fill$"))
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'stroke) (takuzu--metal 'olive 2)))
-                        (dom-by-tag c0 'circle)))
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'stroke) (takuzu--metal 'regal 2)))
-                        (dom-by-tag c1 'circle))))))
-
-(ert-deftest test-takuzu-ui-cash-has-square-hole ()
-  "Normal: the cash coin carries its square hole at both scales."
-  (let ((takuzu-coin-skin 'cash))
-    (dolist (r '(16 33))
-      (let ((svg (svg-create 100 100)))
-        (takuzu--draw-disc svg 50 50 r 0 nil)
-        (should (>= (length (dom-by-tag svg 'rect)) 2))))))
-
-(ert-deftest test-takuzu-ui-matrix-keeps-its-pellets ()
-  "Normal: the original dot-matrix coin still draws its pellet grid."
-  (let ((takuzu-coin-skin 'matrix)
-        (svg (svg-create 100 100)))
-    (takuzu--draw-disc svg 50 50 33 0 nil)
-    (should (dom-by-id svg "^m-bronze-fill$"))
-    (should (> (length (dom-by-tag svg 'circle)) 16))))
-
-(ert-deftest test-takuzu-ui-gems-pellets-are-jeweled ()
-  "Normal: the gems coin encrusts multicolour gems in a precious metal --
-a silver body for 0, gold for 1, with at least four gem cuts on the face."
-  (let ((takuzu-coin-skin 'gems))
-    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100)))
-      (takuzu--draw-disc c0 50 50 33 0 nil)
-      (takuzu--draw-disc c1 50 50 33 1 nil)
-      (should (dom-by-id c0 "^m-silver-fill$"))
-      (should (dom-by-id c1 "^m-gold-fill$"))
-      (dolist (gem '(ruby sapphire emerald diamond))
-        (should (dom-by-id c0 (format "^takuzu-gem-%s$" gem))))
-      ;; 16 grid positions plus the blank's circles
-      (should (> (length (dom-by-tag c0 'circle)) 16)))))
-
-(ert-deftest test-takuzu-ui-machined-given-knurls ()
-  "Normal: a fixed machined coin adds the knurled (dashed) rim."
-  (let ((takuzu-coin-skin 'machined))
-    (let ((plain (svg-create 100 100)) (fixed (svg-create 100 100)))
-      (takuzu--draw-disc plain 50 50 33 0 nil)
-      (takuzu--draw-disc fixed 50 50 33 0 t)
-      (should (seq-find (lambda (node) (dom-attr node 'stroke-dasharray))
-                        (dom-by-tag fixed 'circle)))
-      (should (> (length (dom-by-tag fixed 'circle))
-                 (length (dom-by-tag plain 'circle)))))))
-
 (ert-deftest test-takuzu-ui-draw-disc-dispatches-by-skin ()
   "Normal: each skin draws its signature shapes through the one entry point."
-  (dolist (case '((terra . ((radialGradient . 0) (polygon . 0)))
-                  (jewel . ((radialGradient . 2) (polygon . 12) (ellipse . 1)))
-                  (compass . ((radialGradient . 1) (polygon . 17)))))
+  (dolist (case '((terra . ((radialGradient . 0) (polygon . 0)))))
     (let ((takuzu-coin-skin (car case))
           (svg (svg-create 100 100)))
       (takuzu--draw-disc svg 50 50 33 0 nil)
       (dolist (want (cdr case))
         (should (= (length (dom-by-tag svg (car want))) (cdr want)))))))
 
-(ert-deftest test-takuzu-ui-jewel-given-wears-collar ()
-  "Normal: a fixed jewel adds one brass octagonal collar."
-  (let ((takuzu-coin-skin 'jewel))
-    (should (equal (takuzu--c :jewel-sapphire) "#3f82e3"))
-    (should (equal (takuzu--c :jewel-ruby) "#d83b58"))
-    (let ((plain (svg-create 100 100)) (fixed (svg-create 100 100)))
-      (takuzu--draw-disc plain 50 50 33 1 nil)
-      (takuzu--draw-disc fixed 50 50 33 1 t)
-      (should (= (- (length (dom-by-tag fixed 'polygon))
-                    (length (dom-by-tag plain 'polygon)))
-                 1))
-      (should (seq-find (lambda (node)
-                          (equal (dom-attr node 'stroke) (takuzu--c :gold)))
-                        (dom-by-tag fixed 'polygon))))))
-
 (ert-deftest test-takuzu-ui-cursor-bezel-metal-matches-skin ()
-  "Normal: the cursor ring is brass on the original terra set, iron on the
-jewel and compass sets."
+  "Normal: the cursor ring is brass on the terra set, iron on every other set."
   (dolist (case '((terra . :cursor-bezel-hi)
-                  (jewel . :cursor-iron-hi)
-                  (compass . :cursor-iron-hi)))
+                  (casino . :cursor-iron-hi)
+                  (wood . :cursor-iron-hi)))
     (let ((takuzu-coin-skin (car case))
           (svg (svg-create 100 100)))
       (takuzu--draw-cursor-bezel svg 10 10 50)
@@ -1808,56 +1605,12 @@ jewel and compass sets."
         (should (equal (dom-attr (car stops) 'stop-color)
                        (takuzu--c (cdr case))))))))
 
-(ert-deftest test-takuzu-ui-compass-vals-are-different-instruments ()
-  "Normal: colour 0 is the ray-rose medallion; colour 1 a needle dial.
-The two pieces must differ in kind, not just palette: the rose is all
-polygons with no tick lines, the dial carries tick lines, an N, and a
-two-piece needle instead of the sixteen rays."
-  (let ((takuzu-coin-skin 'compass))
-    (let ((rose (svg-create 100 100)) (dial (svg-create 100 100)))
-      (takuzu--draw-disc rose 50 50 33 0 nil)
-      (takuzu--draw-disc dial 50 50 33 1 nil)
-      (should (>= (length (dom-by-tag rose 'polygon)) 16))
-      (should (= (length (dom-by-tag rose 'line)) 0))
-      (should (> (length (dom-by-tag dial 'line)) 8))
-      (should (<= (length (dom-by-tag dial 'polygon)) 4))
-      (should (member "N" (mapcar #'dom-texts (dom-by-tag dial 'text)))))))
-
-(ert-deftest test-takuzu-ui-compass-given-wears-silver-rim ()
-  "Normal: a fixed compass medallion rings in bright silver."
-  (let ((takuzu-coin-skin 'compass))
-    (let ((fixed (svg-create 100 100)))
-      (takuzu--draw-disc fixed 50 50 33 1 t)
-      (should (seq-find (lambda (node)
-                          (equal (dom-attr node 'stroke)
-                                 (takuzu--c :rim-silver)))
-                        (dom-by-tag fixed 'circle))))))
-
-(ert-deftest test-takuzu-ui-compass-lod-drops-dentate-at-board-scale ()
-  "Boundary: the compass dentate border draws at 2x but not below r=20."
-  (let ((takuzu-coin-skin 'compass))
-    (let ((big (svg-create 100 100)) (small (svg-create 100 100)))
-      (takuzu--draw-disc big 50 50 33 0 nil)
-      (takuzu--draw-disc small 50 50 16 0 nil)
-      (should (= (length (dom-by-tag big 'polygon)) 17))
-      (should (= (length (dom-by-tag small 'polygon)) 16)))))
-
-(ert-deftest test-takuzu-ui-shared-coin-gradients-defined-once ()
-  "Boundary: two coins of both colours share body and glow gradients."
-  (let ((takuzu-coin-skin 'jewel)
-        (svg (svg-create 200 100)))
-    (takuzu--draw-disc svg 40 50 16 0 nil)
-    (takuzu--draw-disc svg 80 50 16 0 nil)
-    (takuzu--draw-disc svg 120 50 16 1 nil)
-    (takuzu--draw-disc svg 160 50 16 1 nil)
-    (should (= (length (dom-by-tag svg 'radialGradient)) 4))))
-
 (ert-deftest test-takuzu-ui-skin-selector-shows-counter ()
   "Normal: the skin selector shows the tape-counter index and never a name."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((wood . "01") (collegiate . "02") (machined . "03")
-                    (cash . "04") (filigree . "16")))
+    (dolist (case '((wood . "01") (collegiate . "02") (terra . "03")
+                    (casino . "04")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
         (should (member (cdr case) texts))
