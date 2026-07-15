@@ -1,0 +1,247 @@
+#+TITLE: Themeable Board-Piece Framework — Spec
+#+AUTHOR: Craig Jennings
+#+DATE: 2026-07-14
+#+TODO: TODO | DONE
+#+TODO: DRAFT READY DOING | IMPLEMENTED SUPERSEDED CANCELLED
+
+* DRAFT Themeable board-piece framework
+:PROPERTIES:
+:ID:       1fca8bff-81d8-4e5d-b7af-88af5f280e52
+:END:
+- 2026-07-15 Wed @ 00:10:00 -0500 — review pass 2 folded in (3 findings, 1 blocking, all accepted). No blocking design gaps remain. Stays DRAFT: 7 decisions await Craig.
+- 2026-07-14 Tue @ 23:50:00 -0500 — review pass 1 folded in (8 findings, 4 blocking, all accepted). Stays DRAFT: 7 decisions await Craig.
+- 2026-07-14 Tue @ 23:13:23 -0500 — drafted.
+
+** Prototype iterations
+
+The piece-rendering side is already prototyped through the live coin work. The theme, background/shadow, chrome, and layout directions are not yet prototyped and are called out as prototype prerequisites in their phases.
+
+- docs/prototypes/emblem-coinset-prototype.html — the gestell pilot: 8-tooth gear, emboss, detailed bore with cool glow-through, warm/cool float glows, breathing taijitu, on the game background.
+- docs/prototypes/collegiate-prototype.html, docs/prototypes/jewel-coinset-prototype.html — live-baseline studies at the real board sizes.
+- docs/prototypes/takuzu-hifi.html — the full faceplate and the 18 shipped coin skins.
+
+* Metadata
+| Status    | draft                                  |
+|-----------+----------------------------------------|
+| Owner     | Craig Jennings                         |
+| Reviewer  | (unassigned)                           |
+| Date      | 2026-07-14                             |
+| Related   | todo.org "Coin skins as a player setting" |
+
+* Summary
+
+Takuzu renders its pieces (the coins) through a small registry of skins, but a skin only knows how to paint inside its own cell. The next round of design wants pieces that own their whole visual world: a background, a lighting model (cast shadow or float glow), a cursor tint, accent colours, and animation. And the longer aim is to reuse this across future board games, so it should be a game-agnostic framework that takuzu is merely the first consumer of. This spec designs that framework: a theme descriptor the shared engine consumes, a background-and-lighting model, and the extraction boundary that lets another game borrow it.
+
+* Problem / Context
+
+The coin-skin system today is a flat registry: each row is =(skin drawer metal-0 metal-1)=, and =takuzu--draw-disc= dispatches to the drawer, which paints within the cell. Flat coins drop in cleanly — one row, one draw function. Three forces now push past that contract.
+
+First, richer pieces reach outside their cell. The gestell coin wants a glow drawn under the piece (on the board, not in the cell), a breathing animation (on the redraw timer), and it exposed a smell already in the tree: the cursor code hardcodes =(eq takuzu-coin-skin 'terra)= to choose its bezel metal. A skin that needs the board, the timer, and the cursor to know about it is not a drop-in.
+
+Second, the vision grew from skins to themes. A theme owns its background, and that unlocks the shadowing that a near-black board can't show — a mid-tone background gives a dark cast shadow room to read, where the current #0c0a07 field forces every piece to fake depth with a glow. A theme swaps the game's whole personality, which in turn means the chrome (faceplate, panels, meters) has to recede so the theme carries the character rather than fighting the console look. And the plan is a dozen or more themes, going wild — a scale at which per-theme special-cases bleeding into the board, timer, cursor, and chrome would be unmaintainable.
+
+Third, the framework is meant to outlive takuzu. Craig is building more board games; any game with pieces should borrow this engine as a headstart. That makes "game-agnostic" a first-class requirement, not an afterthought: the piece-rendering, theming, background/lighting, and board-layout machinery must carry no takuzu rules.
+
+* Goals and Non-Goals
+
+** Goals
+
+- A theme descriptor that a shared engine consumes: draw-piece, background, lighting (shadow or glow), cursor metal, accent palette, and per-piece animation.
+- A background-and-lighting model that supports genuine cast shadows (mid-tone backgrounds) and float glows (dark backgrounds), chosen per theme.
+- Remove every skin-specific hardcode from shared code (the terra cursor case is the seed), so shared consumers read the active theme generically.
+- A clean extraction boundary: the piece/theme/board engine is game-agnostic and reusable; takuzu depends on it, never the reverse.
+- A neutral chrome direction so themes define personality.
+- A board-prominent layout that raises the per-piece detail budget (a cameo with facial definition, not just a silhouette).
+- gestell built as the pilot theme that exercises the whole pipeline end to end.
+
+** Non-Goals
+
+- Not shipping a dozen themes in v1. The roster is vNext; v1 proves the pipeline with one pilot plus the migrated existing skins.
+- Not a second game in v1. The framework is designed for reuse and extracted cleanly, but building game #2 is out of scope here.
+- Not user-authored or separate-file plugin loading. The descriptor lives in code; external/user themes are a possible vNext, not now.
+- Not a physics or general animation engine. Animation is limited to what the existing breath/flash timer already drives (opacity/parameter tweens on redraw).
+- Not abandoning svg.el. Rendering stays SVG; photographic detail uses the established raster-sprite-per-state path where vector relief isn't enough.
+
+** Scope tiers
+
+- v1 (this spec): the theme descriptor; migrate the 18 skins onto it with no visible change; de-hardcode the cursor; the background + shadow/glow + breath engine at board level; the framework/game extraction boundary; gestell as the pilot theme.
+- vNext: the chrome-neutral pass; the board-prominent layout and raised detail budget; the theme roster (a dozen); cameo-class detailed pieces; a second game consuming the framework.
+- Out of scope: user-authored themes, plugin file loading, non-SVG rendering.
+
+* Design
+
+The core move is one separation and one widening. The separation splits the code into a game-agnostic engine and a takuzu-specific consumer. The widening replaces the flat skin row with a theme descriptor the engine reads.
+
+** Two altitudes: the caller and the engine
+
+For a game author (the caller), a theme is a data structure you register and a set of draw functions you supply. You declare what your pieces look like, what background they sit on, whether they cast a shadow or float in a glow, what the cursor tint is, and whether any piece breathes. You never touch the board renderer, the timer, or the cursor code — you hand the engine a descriptor and it composites everything in the right order.
+
+For the engine (the implementer), a theme descriptor is the single source of truth the board loop, the animation timer, the cursor, and the background compositor all read. The board loop, per frame, paints the theme background, then for each cell composites the lighting layer (a shadow ellipse below the piece for a light theme, or a glow for a dark one) under the piece drawer's output. The timer checks whether the active theme declares a breathing piece and, if so, redraws with the tweened parameter. The cursor reads the theme's declared metal. No consumer names a specific theme.
+
+** The theme descriptor
+
+A theme is an entry keyed by name whose value declares, at minimum: the piece drawer, the background, a lighting spec (=shadow= with a tone, or =glow= with a colour and an optional =breathe= flag, or =none=), and a cursor metal. The piece drawer keeps the current drawer signature, =(svg cx cy r val given)= — it receives the cell geometry, not just value and given, so a game author draws in cell coordinates. The background owns the whole cell substrate, including the recessed socket well the shared board paints today (=takuzu--draw-socket=). It is therefore a *per-cell substrate paint function* — signature =(svg sx sy cell)=, the cell's pixel origin and size — not a flat colour, because the substrate is 144 individually-drawn rounded wells rather than a single field. Existing skins declare a substrate that reproduces today's near-black sockets, so migration is mechanical and invisible. Per cell the engine composites substrate → assist highlight → lighting layer → piece: the *engine* (not the theme) draws the assist error-highlight from the accessor's =error-p= — today's =:fail= cup stroke — so no theme re-implements it and the pixel-identical migration cannot silently drop it. The cursor bezel seats on the active cell's substrate rim as it does today; its rim geometry assumes a socket-shaped substrate, which every v1 theme keeps (reshaping the well is a vNext-layout concern, where the bezel would follow). Existing flat skins map on with substrate = the current dark sockets, lighting = none, cursor = the default iron.
+
+An accent palette is deliberately *not* in the minimum descriptor: no shared consumer reads per-theme accents today (metals live in the drawers), so the field is deferred until a theme actually needs one — keeping the descriptor to exactly what the engine composites.
+
+** The per-cell contract (the engine↔game interface)
+
+The compositor cannot read takuzu facts directly and stay game-agnostic. Today =takuzu--draw-socket= reads the buffer-local =takuzu--board= (value, given-p) and an error flag, =takuzu--draw-board= reads =takuzu--size= and the solver-derived error vector (=takuzu--error-vector=), and =takuzu--draw-cursor-bezel= reads the cursor position — four game facts the engine would otherwise name. The engine instead consumes a game-supplied cell accessor: for a cell it returns the piece value, whether it is a given, whether the cursor is on it, and whether it is flagged (error), plus the board dimensions. The engine composites through that accessor alone and never names a takuzu symbol. The =error= fact stays game-defined (takuzu's is a rule violation; another game may have none), so the accessor is the seam that keeps solver rules out of the engine. This interface is the crux of the extraction: Phase 2 is gated on it landing, and the compositor is rewritten to read it — not a verbatim relocation of the existing functions.
+
+** Background and lighting model
+
+The background is the theme's, and it is what makes lighting a real choice rather than a workaround. A light or mid-tone background has tonal room below it, so a dark cast shadow reads and the piece looks grounded. A dark background has no room below near-black, so a light glow reads instead and the piece looks lifted. The engine supports both and the theme picks; the board compositor draws the declared lighting layer beneath each piece. This is the direct answer to the shadow that died on the #0c0a07 field: the fix was never a better shadow, it was a background that gives the shadow somewhere to live.
+
+Because the background owns the cell substrate — the socket wells included — a mid-tone theme repaints those wells to match. A shadow drawn over 144 retained near-black sockets would fight the light field and never read, so the socket has to move under theme control along with the background. The lighting layer composites above the substrate and below the piece; the engine overlays the assist error-highlight (the =:fail= stroke, from the accessor's =error-p=) itself rather than any theme, so no theme re-implements it and no migrated skin loses it.
+
+** Chrome neutrality (vNext)
+
+For a theme to transform personality, the surround has to stop asserting its own. The retro-console faceplate is opinionated; the neutral direction recedes it — quieter panels, less ornament, a chrome that frames the board without competing with the theme. This trades away some of the console's current character, which is a real cost, not a free win. It is vNext because v1 can prove the descriptor and lighting on the existing chrome without redesigning the surround.
+
+** Board-prominent layout and the detail budget (vNext)
+
+Bigger board, bigger cells, more pixels per piece — that is what lets a piece carry cameo-level definition. The engine parametrizes a per-piece detail budget off the cell size so a drawer can add relief and fine features only when there's room, and drop to a legible silhouette when small (the LOD discipline the coins already follow). Genuinely photographic detail (a face with real modelling) uses the raster-sprite-per-state path proven earlier, embedded per state, rather than pushing vector relief past what librsvg renders cleanly.
+
+** The extraction boundary
+
+The engine is the reusable product. It contains: the theme descriptor and registry, the board compositor (background → lighting → piece), the animation timer hook, the cursor tint, the SVG scaffolding and the metal/gradient/LOD helpers the drawers lean on. It contains no takuzu rules — no solver, no board model, no win logic. Takuzu supplies its rules, its board model, and its own piece drawers, and registers its themes with the engine. The test of a clean boundary: game #2 can require the engine, register its own pieces and themes, and get backgrounds, lighting, cursor, breath, and layout for free, without importing anything named takuzu.
+
+* Alternatives considered
+
+- Keep the flat skin registry, special-case gestell. Good, because it's the fastest path to one working themed coin. Bad, because the glow, breath, and cursor each hardcode a theme name into shared code, and a dozen themes multiply that into an unmaintainable mesh; it also does nothing for reuse. Neutral, because the flat registry is fine for the flat coins and can coexist under the descriptor as the degenerate case.
+- Full plugin architecture: one file per theme, dynamic discovery, user-authored themes. Good, because it's the most open-ended and would suit a large external roster. Bad, because it's far more machinery than a dozen in-code themes need, and premature before there's any demand for external themes. Neutral, because the descriptor is a step toward it — file-loading can be added later without redesign.
+- Descriptor extension in the current codebase, framework extraction deferred. Good, because it delivers themes sooner. Bad, because designing the descriptor without the game-agnostic boundary risks baking takuzu assumptions into it, exactly the thing the reuse goal forbids; retrofitting the boundary later is the expensive kind of rework. Neutral, because the descriptor shape is the same either way — only the module boundary differs.
+
+* Decisions [/]
+
+** TODO Extract a game-agnostic engine, takuzu as first consumer
+Context: the framework is meant to headstart future board games; a takuzu-coupled design fails that at the first reuse.
+Decision: We will split the code into a reusable board-piece/theme engine with no game rules and a takuzu layer that consumes it. The engine owns rendering, theming, lighting, cursor, timer, and layout; takuzu owns rules, board model, and its own piece drawers and themes.
+Consequences: Easier — game #2 borrows the engine; shared code never names a theme or a game. Harder — every shared helper must be audited for takuzu assumptions, and the extraction is upfront work before any theme ships.
+
+** TODO Per-cell contract: the engine reads a game-supplied cell accessor
+Context: the compositor today reads takuzu facts directly (=takuzu--draw-socket= reads =takuzu--board=; =takuzu--draw-board= runs the solver-derived error vector; the cursor reads the cursor position), so a literal relocation would drag takuzu symbols into the engine.
+Decision: We will define one game→engine cell accessor — given a cell it returns value, given-p, cursor-p, error-p, plus the board dimensions — and the engine composites only through it. The =error= fact stays game-defined.
+Consequences: Easier — the no-takuzu-symbols boundary check becomes real and Phase 2 has a concrete API to build to. Harder — the accessor shape is the hardest design choice in the spec and must be agreed before the extraction, not discovered during it.
+
+** TODO Theme descriptor replaces the flat skin row
+Context: pieces now declare background, lighting, cursor, accents, and animation, which a four-element list can't carry.
+Decision: We will widen the registry entry to a descriptor (plist/alist) with fields for draw-piece, background, lighting, cursor-metal, and accents. Existing skins map on with dark background, no lighting, default cursor.
+Consequences: Easier — adding a rich theme touches only its descriptor and drawers. Harder — a small indirection cost and a one-time migration of 18 skins (mechanical, test-guarded).
+
+** TODO Theme owns its background; lighting is a per-theme choice of shadow or glow
+Context: cast shadows can't read on the near-black field; the background is the lever.
+Decision: We will let each theme declare its background and choose shadow (mid-tone bg) or glow (dark bg) as its lighting; the board compositor draws the declared layer under each piece.
+Consequences: Easier — grounded or floating pieces both become achievable, per theme. Harder — the board loop now composites three layers per cell and must stay fast at 12x12.
+
+** TODO De-hardcode all theme-specific branches in shared code
+Context: the cursor already hardcodes terra; more would accrete.
+Decision: We will make shared consumers (cursor, board, timer) read the active theme's descriptor, with zero theme names in shared code.
+Consequences: Easier — new themes never edit shared code. Harder — the terra cursor case and any siblings must be migrated as part of the descriptor work.
+
+** TODO gestell is the pilot theme; gear marks given by a capped boss vs an open glowing bore
+Context: the prototype gear distinguishes user from fixed only by a 22.5-degree rotation, which is invisible in play where givens must be obvious.
+Decision: We will build gestell as the first descriptor-based theme, and give its gear a readable given cue — user = open bore with the cool light glowing through, fixed = that bore capped by a lit domed boss.
+Consequences: Easier — the pilot proves the whole pipeline and ships a usable coin. Harder — the pilot must not special-case; anything it needs becomes a descriptor capability, which is more work than a one-off but is the point.
+
+** TODO Chrome neutralization and board-prominent layout are vNext, not v1
+Context: both are real redesigns; v1 can prove the engine on the current chrome.
+Decision: We will defer the neutral chrome and the enlarged board to vNext, after the descriptor and lighting engine land.
+Consequences: Easier — v1 stays shippable and focused. Harder — gestell on the current busy chrome won't yet show the full personality-swap effect; that waits for vNext.
+
+* Implementation phases
+
+1. Descriptor refactor. Widen the registry to the theme descriptor; migrate all 18 skins with background = current dark field + sockets, lighting = none, cursor = default. De-hardcode the terra cursor (=takuzu--draw-cursor-bezel=, the =(eq takuzu-coin-skin 'terra)= branch) onto the descriptor's cursor-metal. Tree stays green and pixel-identical — see acceptance criterion 1 for the characterization net.
+2. Extraction boundary. Define the per-cell game→engine accessor, then separate the game-agnostic engine (descriptor, board compositor, SVG/metal/LOD helpers, cursor, timer hook) from takuzu rules into its own module(s) with a named API; takuzu requires it. The compositor is rewritten to read the accessor, not relocated verbatim; gated on the contract landing. No visible behaviour change.
+3. Background + lighting engine. Board compositor paints the theme background (substrate, socket included), then the declared lighting layer (shadow or glow) beneath each piece. Existing themes still declare dark + none, so no visible change.
+4. Animation hook. The existing refresh timer (=takuzu--refresh-tick=, ~0.5s at the default flash period) breathes any theme that declares a breathing piece by tweening the piece parameter on the redraw that already happens each tick; the portable artifact is the breath *curve*, not the prototype's CSS keyframes. Gated so non-breathing themes pay nothing.
+5. Prototype the gear given cue. Before the port, add a numbered pass on the emblem prototype showing both gear states at 12×12 — user = open bore with the cool light glowing through, fixed = that bore capped by a lit domed boss — so the cue is seen working, not invented at port time. (Closes the ui-prototyping gap Phase 6 would otherwise inherit; realizes the Decision "gestell is the pilot theme".)
+6. gestell pilot theme. Port the prototype: 8-tooth gear + emboss + detailed bore, the cream/dark taijitu, warm/cool float glows, the gear given cue from Phase 5, breathing taijitu — all as descriptor declarations, no special-cases. Rename the =emblem= skin value to =gestell=.
+7. (vNext) Chrome neutralization pass.
+8. (vNext) Board-prominent layout + per-piece detail budget; cameo-class detail via raster-sprite-per-state where needed.
+9. (vNext) Theme roster expansion, incrementally, each a pure descriptor add.
+
+Each phase leaves the tree working and tested before the next begins.
+
+* Acceptance criteria
+
+- The 18 existing skins render pixel-identically after the descriptor migration and the extraction. The characterization net snapshots the *full board render* (not an isolated disc) over a fixed fixture containing an empty cell, a user coin, a given coin, the cursor cell, and a flagged (error) cell, at each =takuzu--cell-size= bucket (50/44/38/34), captured by serializing the SVG DOM to a string and comparing — so the cursor de-hardcode, the compositor extraction, and the assist error-highlight are covered, not just the untouched disc drawers.
+- No shared consumer (board, timer, cursor) contains a theme name; grep for skin symbols in those functions returns nothing, and the engine files contain no takuzu symbol — the boundary check.
+- A theme declaring a mid-tone background and a shadow renders a visible cast shadow under its pieces — which requires the background to repaint the socket wells so the shadow has tonal room; a theme declaring a dark background and a glow renders the glow. Both verified by rendering at the real board sizes.
+- gestell's gear shows an obvious given cue at 12×12, verified against the Phase 5 prototype pass (both states seen working there), and gestell otherwise renders as the emblem prototype does (gear, emboss, bore glow-through, taijitu inversion, float glows).
+- gestell breathes in the live game on the refresh timer at its ~0.5s cadence; the breath freezes when the puzzle is solved (the timer self-cancels on win/proven — intended), and non-breathing themes trigger no extra redraws.
+- A throwaway second registrant (a stub "game") can register a piece drawer and a theme, supply the per-cell accessor, and get background, lighting, cursor, and breath with no takuzu import — proving the boundary.
+
+* Readiness dimensions
+
+- Data model and ownership: themes are code-authored descriptors; the active theme stays the existing =takuzu-coin-skin= defcustom. v1 adds a value (=emblem= → =gestell=); it does not rename the variable, so no saved Customize value is orphaned. If a later pass renames the variable to a theme custom, it ships a =define-obsolete-variable-alias= — the prior =lamp=→=terra= / =sovereign=→=wood= renames changed choice *values*, not the variable, and carried no alias, so they are not a variable-rename precedent. No new persistence; the setting persists as today.
+- Errors, empty states, failure: an unknown theme falls back to a default descriptor (as the drawer lookup already defaults today). A theme missing an optional field gets the field's default (no lighting, default cursor).
+- Security and privacy: N/A — local rendering, no input, no credentials.
+- Observability: N/A beyond the visible render; a mis-declared theme shows wrong visuals, caught by the characterization and render tests.
+- Performance and scale: the board composites up to 144 cells. The faceplate already fully rebuilds every refresh tick during play (=takuzu--redraw=: erase + rebuild + =insert-image=), so a breathing theme adds ~zero new redraws — it varies a parameter inside a redraw that already happens. The genuinely new per-frame cost is the lighting phase's extra per-cell SVG nodes. Bench *that* at 12×12 — a full-board rebuild with the lighting layer present vs absent — before shipping the lighting phase; non-breathing / no-lighting themes must add zero cost.
+- Reuse and lost opportunities: the engine reuses the existing SVG/metal/LOD helpers and the flash/breath timer rather than inventing new ones; the descriptor subsumes the flat registry as its degenerate case.
+- Architecture fit: integration points are the board compositor, the redraw timer, the cursor drawer, and the theme registry/custom. Weak point: the extraction must not leave a circular dependency (engine must not require takuzu); enforce by module load order and a no-takuzu-symbols check in the engine files.
+- Config surface: the active theme is one defcustom; each theme's knobs live in its descriptor.
+- Documentation plan: a developer note covering the theme descriptor contract (what a game *declares*), the per-cell accessor contract it must *implement* (return shape: value / given-p / cursor-p / error-p + board dimensions), and how a new game registers with the engine; needed at the extraction phase, not before.
+- Dev tooling: existing =make test= / =compile= / =lint= cover it; add full-board characterization tests for the 18-skin migration (SVG-string snapshots per acceptance criterion 1, across the cell-size buckets and the empty/user/given/cursor/flagged fixture) and a boundary test for the stub second registrant.
+- Rollout, compatibility, rollback: the descriptor migration is internal; the user-facing setting keeps working (with a symbol rename handled like the prior lamp→terra and sovereign→wood renames). Each phase is revertible; no persisted-data migration.
+- External APIs and deps: none beyond svg.el and Emacs timers, both already in use.
+
+* Risks, rabbit holes, and drawbacks
+
+- Extraction scope creep. Auditing every shared helper for takuzu assumptions can sprawl. Dodge: extract only what the themes actually use, verified by the stub second-registrant test; leave the rest in takuzu until a real second game pulls it.
+- Chrome neutralization is subjective and could churn. Dodge: it's vNext and gets its own prototype directions before any code.
+- Per-cell lighting-composite cost at 12x12. The breath itself adds no new redraw (the board already rebuilds every tick); the new cost is the lighting layer's extra SVG nodes across 144 cells. Dodge: bench a full-board rebuild with lighting present vs absent before shipping the lighting phase; if too costly, composite lighting only where a theme declares it and cache the static-background nodes.
+- The pilot tempting a special-case. The whole point is that gestell adds no shared-code branch; any temptation to "just hardcode it for now" is the failure mode this spec exists to prevent.
+
+* Review findings [/]
+
+** DONE Engine↔game per-cell contract was undefined :blocking:
+The extraction (Design "The extraction boundary"; Phase 2 "No behaviour change"; the no-takuzu-symbols check) rests on the compositor being game-agnostic, but it isn't: =takuzu--draw-board= (:1403) reads =takuzu--size= and the solver-derived error vector, and =takuzu--draw-socket= (:1386) reads the buffer-local =takuzu--board= for value/given plus an error flag. "No takuzu symbols in engine" and "no behaviour change" can't both hold without an interface, which was nowhere specified. Accepted: added the Design subsection "The per-cell contract" defining the game-supplied cell accessor (value/given-p/cursor-p/error-p + dimensions), added a matching TODO decision, and gated Phase 2 on the contract (compositor rewritten to read it, not relocated). Folded the one-line drawer-signature note (=(svg cx cy r val given)=) into the descriptor design.
+
+** DONE Gear given-cue is unbuilt in the prototype but Phase 5 called it a port :blocking:
+=gear()= in emblem-coinset-prototype.html draws =gearBore()= unconditionally; the only thing the given flips is an invisible 22.5° rotation. No boss/dome/cap exists in the prototype, yet Phase 5 said "port ... the gear given cue" and acceptance criterion 4 pinned it to "renders as the prototype does." That labels net-new UI design as a port — the failure ui-prototyping.md exists to prevent. Accepted: split the phases — new Phase 5 "Prototype the gear given cue" (both states at 12×12) precedes the gestell port (now Phase 6), and acceptance criterion 4 now verifies the gear cue against that prototype pass, not "as the prototype does."
+
+** DONE Descriptor had no owner for the cell substrate (socket well) :blocking:
+=takuzu--draw-socket= paints a near-black recessed cup under every cell; the spec's "background → lighting → piece" undercounted the real substrate → socket → cursor → piece layering. A mid-tone-background shadow theme (acceptance criterion 3) would keep 144 near-black sockets fighting the light field, killing the shadow, and no descriptor field controlled the socket. Accepted with modification — rather than a new "sockets" field, the background now owns the whole cell substrate (socket included): existing skins declare a background that reproduces today's sockets, a mid-tone theme repaints them, and the Design + Background/lighting sections state the composite order (substrate → lighting → piece, cursor on the active rim). Acceptance criterion 3 now names the socket-repaint requirement.
+
+** DONE Characterization net was scoped too loosely — a disc-only snapshot false-greens :blocking:
+The migration changes the dispatch (=takuzu--draw-disc= :1282), the cursor de-hardcode (=takuzu--draw-cursor-bezel= :1344), and the board-loop extraction — not the disc drawers, which move verbatim. A snapshot of one isolated disc passes even if the cursor bezel or compositor breaks. Accepted: acceptance criterion 1 and the dev-tooling dimension now specify a full-board render over a fixture (empty / user / given / cursor cell) at each =takuzu--cell-size= bucket (50/44/38/34), captured by serializing the SVG DOM to a string — so the net covers exactly the code the migration edits.
+
+** DONE Rename story conflated a value-add with a variable rename
+The spec said the setting "keeps working ... like the prior lamp→terra and sovereign→wood renames" and elsewhere "renamed to a theme custom" — two different operations, and a grep finds no =define-obsolete-variable-alias= or value migration behind the cited precedent (the prior renames changed choice values, not the variable, with no alias). Accepted with modification: the Data-model dimension now states v1 only adds the =emblem=→=gestell= *value* (variable unchanged, nothing orphaned); a later variable rename would ship an obsolete-alias; and the precedent is corrected rather than leaned on as a migration mechanism it never was.
+
+** DONE Breath cadence and lifecycle weren't reconciled with the real timer
+The prototype breathes on an independent 4.5s CSS =@keyframes= librsvg/svg.el can't use; the real refresh timer runs ~0.5s (~2 fps) and self-cancels once =(or won proven)= (=takuzu--refresh-tick= :2467), so a ported breath samples chunkily and freezes on solve. Accepted: Phase 4 and acceptance criterion 5 now state the breath rides the refresh timer, that the portable artifact is the breath *curve* not the CSS mechanism, and that the freeze-on-win is intended.
+
+** DONE Bench target was the wrong layer
+The faceplate already fully rebuilds every tick (=takuzu--redraw=: erase + rebuild + =insert-image=) for the nixie clock, so the breath adds ~zero new redraws — "bench the breath redraw" measured a cost that already exists. Accepted: the Performance dimension and the Risks entry now retarget the bench to the genuinely new cost — the per-cell lighting layer's extra SVG nodes at 12×12, benched present-vs-absent — and note the breath adds no new redraw.
+
+** DONE Accent-palette field had no named consumer
+The descriptor listed "an accent palette" but no shared consumer reads per-theme accents (metals live in the drawers) — a speculative field against the spec's own "extract only what themes use" discipline. Accepted with modification: accents are dropped from the minimum descriptor and deferred until a theme needs one, stated explicitly in the descriptor design.
+
+** DONE Background field had no type, and the socket move orphaned the assist error-highlight :blocking:
+Round 1 moved the socket substrate under "the background," but the descriptor left "background" as the one minimum field with no signature, and =takuzu--draw-socket= (:1386) strokes the cup =:fail= when =err-p= (assist highlighting) — a substrate behaviour the move orphaned. The accessor carries =error-p= to the engine, but the spec never said what the engine draws with it, and the composite order named no error layer, so a Phase-1 migrator couldn't know whether every theme's background re-implements the red stroke (a place to forget it, losing pixel-identity) or the engine draws it. Accepted: the background is now a per-cell substrate paint function with signature =(svg sx sy cell)=, the composite order is substrate → assist highlight → lighting → piece, and the *engine* (not the theme) draws the error-highlight from =error-p= so no theme re-implements it. Added the bezel-geometry rider (rim assumes a socket-shaped substrate through v1).
+
+** DONE Characterization fixture omitted a flagged cell
+Acceptance criterion 1's fixture (empty / user / given / cursor) covered the cursor de-hardcode and compositor extraction but not the error stroke — exactly the substrate behaviour finding above shows is most disturbed by the socket move, so the net would false-green on a lost highlight. Accepted: a flagged (error) cell is added to the fixture in criterion 1 and the dev-tooling dimension.
+
+** DONE Documentation plan named the descriptor contract but not the accessor contract
+The doc plan covered the theme descriptor a game *declares* but not the per-cell accessor a second game must *implement* — the interface round 1 made "the crux of the extraction." Accepted: the doc plan now names the accessor contract (return shape + dimensions) alongside the descriptor and registration.
+
+* Review and iteration history
+
+** 2026-07-14 Tue @ 23:13:23 -0500 — Craig Jennings — author
+- *What:* First draft of the themeable board-piece framework spec, covering the theme descriptor, background/lighting model, the game-agnostic extraction boundary, and gestell as pilot.
+- *Why:* The coin work outgrew the flat skin registry, and the framework is meant to headstart future board games.
+- *Artifacts:* docs/prototypes/emblem-coinset-prototype.html and the sibling prototype studies.
+
+** 2026-07-14 Tue @ 23:50:00 -0500 — Claude Code (takuzu) — reviewer + responder
+- *What:* One critical review pass (fresh adversarial agent, grounded in takuzu-ui.el and the emblem prototype) produced eight findings — four blocking; all eight accepted, three with modification, none rejected. Added the per-cell-contract Design subsection and a matching TODO decision; had the background own the cell substrate/socket; split the gear-cue prototype pass out of the gestell port; tightened the characterization net to a full-board SVG-string snapshot; corrected the defcustom rename story; reconciled the breath to the real refresh timer; retargeted the performance bench to the lighting composite; deferred the accents field.
+- *Why:* The extraction boundary and the migration's invisibility claim both rested on interfaces that didn't exist on the page, and Phase 5 labelled unbuilt UI a "port." Findings recorded and dispositioned in =* Review findings=.
+- *Artifacts:* =* Review findings= (eight DONE); Decisions gained "Per-cell contract"; rubric = Not ready (seven open decisions + the blocking-findings' design gaps now folded; decisions await Craig).
+
+** 2026-07-15 Wed @ 00:10:00 -0500 — Claude Code (takuzu) — reviewer + responder
+- *What:* Round 2 against the round-1-expanded spec (fresh adversarial agent). Three findings — one blocking, two closers — all accepted, none rejected; it also verified round 1's additions resolved the accessor iteration/geometry ownership, the cursor-p-vs-bezel story, and phase-renumber integrity. Made the descriptor's background a typed per-cell substrate paint function, put the assist error-highlight under the engine (drawn from the accessor's =error-p=, not the theme), added a flagged cell to the characterization fixture, and extended the doc plan to the accessor contract.
+- *Why:* Round 1's socket-into-background move left "background" the one untyped field and silently orphaned the =:fail= cup stroke; an implementer would have had to invent Phase-1 behaviour. Findings recorded in =* Review findings=.
+- *Artifacts:* =* Review findings= (three more DONE, eleven total); rubric = Not ready only on the seven open author decisions — no blocking design gaps remain.
