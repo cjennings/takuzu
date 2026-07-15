@@ -8,6 +8,8 @@
 :PROPERTIES:
 :ID:       1fca8bff-81d8-4e5d-b7af-88af5f280e52
 :END:
+- 2026-07-15 Wed @ 17:45:00 -0500 — curated the live skin set to 4 keepers (wood, collegiate, terra, casino), removing 14 skins including the vector emblem across takuzu-ui.el, tests, and the HTML prototype. Reframed the gestell pilot as a raster PNG theme (not a port of the retired vector emblem), and folded in the pop findings: dark pieces opt into a glow, and photoreal pieces clash so the pilot art stays in the illustrated register.
+- 2026-07-15 Wed @ 16:53:14 -0500 — recorded the raster asset pipeline and the render requirement from a wood-theme spike: mask-to-shape (source art exports opaque, not transparent), one 256px master, bake the lighting, and the mandatory define-once + =<use>= rule (measured 4.2 MB → 260 KB, flat with coin count). Added the "chrome stays vector" rationale (all-raster is a dead end: live readouts are procedural).
 - 2026-07-15 Wed @ 09:40:53 -0500 — documented the raster-sprite-per-state escape hatch (available / when / how + worked example) and proved it: a throwaway cameo skin embedded portrait PNGs per value and rendered through the live game (Emacs 30.2 pgtk/librsvg), scaling to every board size. Spike reverted.
 - 2026-07-15 Wed @ 00:10:00 -0500 — review pass 2 folded in (3 findings, 1 blocking, all accepted). No blocking design gaps remain. Stays DRAFT: 7 decisions await Craig.
 - 2026-07-14 Tue @ 23:50:00 -0500 — review pass 1 folded in (8 findings, 4 blocking, all accepted). Stays DRAFT: 7 decisions await Craig.
@@ -17,9 +19,9 @@
 
 The piece-rendering side is already prototyped through the live coin work. The theme, background/shadow, chrome, and layout directions are not yet prototyped and are called out as prototype prerequisites in their phases.
 
-- docs/prototypes/emblem-coinset-prototype.html — the gestell pilot: 8-tooth gear, emboss, detailed bore with cool glow-through, warm/cool float glows, breathing taijitu, on the game background.
+- docs/prototypes/emblem-coinset-prototype.html — a retired vector study of the gestell coin. The gestell pilot is now built as a raster theme from PNG sprites: the aesthetic settled on the console's illustrated register, and photoreal pieces clash (see the pop finding), so this vector prototype is kept for reference only.
 - docs/prototypes/collegiate-prototype.html, docs/prototypes/jewel-coinset-prototype.html — live-baseline studies at the real board sizes.
-- docs/prototypes/takuzu-hifi.html — the full faceplate and the 18 shipped coin skins.
+- docs/prototypes/takuzu-hifi.html — the full faceplate and the shipped coin skins (curated to four keepers 2026-07-15).
 
 * Metadata
 | Status   | draft                                     |
@@ -65,7 +67,7 @@ Third, the framework is meant to outlive takuzu. Craig is building more board ga
 
 ** Scope tiers
 
-- v1 (this spec): the theme descriptor; migrate the 18 skins onto it with no visible change; de-hardcode the cursor; the background + shadow/glow + breath engine at board level; the framework/game extraction boundary; gestell as the pilot theme.
+- v1 (this spec): the theme descriptor; migrate the keeper skins onto it with no visible change; de-hardcode the cursor; the background + shadow/glow + breath engine at board level; the framework/game extraction boundary; gestell as the pilot theme.
 - vNext: the chrome-neutral pass; the board-prominent layout and raised detail budget; the theme roster (a dozen); cameo-class detailed pieces; a second game consuming the framework.
 - Out of scope: user-authored themes, plugin file loading, non-SVG rendering.
 
@@ -99,6 +101,8 @@ Because the background owns the cell substrate — the socket wells included —
 
 For a theme to transform personality, the surround has to stop asserting its own. The retro-console faceplate is opinionated; the neutral direction recedes it — quieter panels, less ornament, a chrome that frames the board without competing with the theme. This trades away some of the console's current character, which is a real cost, not a free win. It is vNext because v1 can prove the descriptor and lighting on the existing chrome without redesigning the surround.
 
+Why the chrome stays vector, even for photographic themes. A 2026-07-15 raster wood test made the clash concrete: photorealistic coins look pasted-on against the loud drawn console, which is the evidence for neutralizing the chrome rather than an argument on paper. The resolution is a quiet chrome, not an all-raster UI. Coherence comes from a neutral frame plus consistent lighting, so a raster theme and a vector theme can both sit on the same surround. Making the chrome itself raster is a dead end: the live readouts (the nixie clock, the LEFT needle, the state lamps, the redrawing board) are procedural and cannot be photographed, and a raster chrome would need re-rendering per theme where a vector chrome recolours from a palette for free. So the chrome recedes and stays vector, and the pieces carry the personality, raster where the material demands it and vector where geometry does.
+
 ** Board-prominent layout and the detail budget (vNext)
 
 Bigger board, bigger cells, more pixels per piece — that is what lets a piece carry cameo-level definition. The engine parametrizes a per-piece detail budget off the cell size so a drawer can add relief and fine features only when there's room, and drop to a legible silhouette when small (the LOD discipline the coins already follow). Genuinely photographic detail (a face with real modelling) uses the raster-sprite-per-state path (described below), embedded per state, rather than pushing vector relief past what librsvg renders cleanly.
@@ -118,6 +122,22 @@ How to do it: the theme's piece drawer, instead of composing shapes, reads the c
 Worked example: a "cameo" theme whose pieces are carved-portrait photographs, one portrait per piece value. The author exports the two images at the 50-pixel maximum cell size. The drawer is then about three lines: read =val= and =given= from the accessor, pick the portrait for =val=, and =svg-embed= it into the cell (a given can add a gold ring over the top). The theme still declares its background and lighting, so the engine draws the substrate beneath the cameo and the glow behind it, and the portrait sits framed in the board like any other piece.
 
 This path is proven in both renderers. On 2026-07-15 a throwaway cameo skin did exactly the above (two portrait PNGs embedded per value, a gold ring on givens) and rendered through the live game on Emacs 30.2 (pgtk, librsvg), sharp at every board size and seated on the sockets under the cursor bezel. The same PNGs embedded as SVG =<image>= data URIs rendered identically in the browser (Blink), confirming the near-1:1 prototype-to-svg.el port from both sides. The spike was reverted; its job was to retire the risk, not to ship the theme.
+
+** Raster assets and the render requirement
+
+This is the practical guide for building a raster theme: how to prepare the art, and the one rendering rule that keeps it fast. Both were settled by a 2026-07-15 spike (a wood theme with beech and walnut coins) and are written down here so the real build doesn't rediscover them.
+
+Asset pipeline. Source art usually arrives as a round coin on an opaque background, even when transparency was intended. The exporters we hit flattened the alpha to solid white (and once to a baked-in checkerboard). Do not rely on the source being transparent. The standard step is to mask the coin to its shape, which is background-agnostic: source PNG (any background) → circular-mask to the disc → resize to 256x256 RGBA → embed. Real source transparency only lets you skip the mask, it buys nothing else. This shape-masking is for round coins. A non-round symbol (a star, a gear silhouette) needs masking to its own outline, or art authored with real alpha, which is a per-symbol call.
+
+Resolution. One 256x256 master per state, not a set per board size. Every board cell (50/44/38/34 px, from =takuzu--cell-size=) is smaller than the master, so librsvg and the browser both downscale it, which is always clean. The master only has to exceed the largest on-screen coin (biggest cell x window-fill scale x HiDPI), and 256 covers that. Do not drop the master to save bytes: the render requirement below makes sprite size nearly free, so there is no performance reason to ship low-resolution art.
+
+Lighting. Bake the piece's lighting into the sprite to match the board's key light from the top-left (or, for a glow theme, its glow), so the coin reads as seated rather than pasted. The wood spike's beveled rim, lit top-left, is why it sits in the board convincingly. A sprite lit from the wrong direction looks stuck on.
+
+Detail at small sizes. At 12x12 the coin is about 26 px (cell 34, coin diameter ~0.74 x cell), and fine grain washes out there. That is fine: a good raster piece is carried by tone and baked relief (the light/dark split, the bevel), not by fine texture, so it stays legible when the texture goes. Judge a raster theme at 12x12, not just at 6x6.
+
+The render requirement, mandatory: define once, reference per cell. A raster piece drawer must NOT inline the image per cell. A theme has only a few unique images (one per piece state), but a board has up to 144 cells, and a naive drawer that calls =svg-embed= per cell inlines a full copy of the PNG into every cell. librsvg then base64-decodes and rasterizes every copy on every redraw, and the faceplate rebuilds about twice a second on the refresh timer (=takuzu--refresh-tick=), so the cost is O(cells) per frame. Measured on the wood spike at 12x12: 35 coins produced a 4.2 MB faceplate SVG, and a full 144-coin board would be ~12 MB, visibly sluggish. The fix is to embed each unique sprite once in a =<defs>= (an =<image>= with an =id=) and reference it per cell with =<use xlink:href="#id" x=.. y=..>=. Measured after the change: 260 KB, flat regardless of coin count, rendering pixel-identically through librsvg. That is a ~16x drop at 35 coins, far more at a full board, and the per-frame decode cost falls to O(unique images): two decodes, not 144. The engine already has the idiom for this. =takuzu--ensure-coin-gradient= and =takuzu--ensure-jewel-glow= add a shared def to the SVG once per build (guarded by a =dom-by-id= check) and the drawers reference it. A raster drawer follows the same shape: an ensure-the-def helper plus a per-cell =<use>=. The descriptor/compositor must provide this once so every raster theme inherits it, rather than each theme reinventing it.
+
+A further lever, not yet needed. The refresh timer rebuilds the whole faceplate every ~0.5 s even when nothing changed. With define-once that is cheap enough to ignore, but if a very heavy raster theme ever strains it, redraw only on a state change (except while something is animating) instead of on every timer tick.
 
 ** The extraction boundary
 
@@ -144,7 +164,7 @@ Consequences: Easier — the no-takuzu-symbols boundary check becomes real and P
 ** TODO Theme descriptor replaces the flat skin row
 Context: pieces now declare background, lighting, cursor, accents, and animation, which a four-element list can't carry.
 Decision: We will widen the registry entry to a descriptor (plist/alist) with fields for draw-piece, background, lighting, cursor-metal, and accents. Existing skins map on with dark background, no lighting, default cursor.
-Consequences: Easier — adding a rich theme touches only its descriptor and drawers. Harder — a small indirection cost and a one-time migration of 18 skins (mechanical, test-guarded).
+Consequences: Easier — adding a rich theme touches only its descriptor and drawers. Harder — a small indirection cost and a one-time migration of the keeper skins (mechanical, test-guarded).
 
 ** TODO Theme owns its background; lighting is a per-theme choice of shadow or glow
 Context: cast shadows can't read on the near-black field; the background is the lever.
@@ -158,7 +178,7 @@ Consequences: Easier — new themes never edit shared code. Harder — the terra
 
 ** TODO gestell is the pilot theme; gear marks given by a capped boss vs an open glowing bore
 Context: the prototype gear distinguishes user from fixed only by a 22.5-degree rotation, which is invisible in play where givens must be obvious.
-Decision: We will build gestell as the first descriptor-based theme, and give its gear a readable given cue — user = open bore with the cool light glowing through, fixed = that bore capped by a lit domed boss.
+Decision: We will build gestell as the first descriptor-based theme. Note (2026-07-15): gestell is now a raster theme built from PNG sprites, so any given cue is baked into the sprite art, not drawn as a vector boss-vs-bore. The original vector cue (user = open glowing bore, fixed = capped lit boss) stands as the visual intent for the sprites; revisit whether raster givens need a cue at all, given the pop decision to drop given markers.
 Consequences: Easier — the pilot proves the whole pipeline and ships a usable coin. Harder — the pilot must not special-case; anything it needs becomes a descriptor capability, which is more work than a one-off but is the point.
 
 ** TODO Chrome neutralization and board-prominent layout are vNext, not v1
@@ -168,24 +188,23 @@ Consequences: Easier — v1 stays shippable and focused. Harder — gestell on t
 
 * Implementation phases
 
-1. Descriptor refactor. Widen the registry to the theme descriptor; migrate all 18 skins with background = current dark field + sockets, lighting = none, cursor = default. De-hardcode the terra cursor (=takuzu--draw-cursor-bezel=, the =(eq takuzu-coin-skin 'terra)= branch) onto the descriptor's cursor-metal. Tree stays green and pixel-identical — see acceptance criterion 1 for the characterization net.
+1. Descriptor refactor. Widen the registry to the theme descriptor; migrate the 4 keeper skins (wood, collegiate, terra, casino) with background = current dark field + sockets, lighting = none, cursor = default. De-hardcode the terra cursor (=takuzu--draw-cursor-bezel=, the =(eq takuzu-coin-skin 'terra)= branch) onto the descriptor's cursor-metal. Tree stays green and pixel-identical — see acceptance criterion 1 for the characterization net.
 2. Extraction boundary. Define the per-cell game→engine accessor, then separate the game-agnostic engine (descriptor, board compositor, SVG/metal/LOD helpers, cursor, timer hook) from takuzu rules into its own module(s) with a named API; takuzu requires it. The compositor is rewritten to read the accessor, not relocated verbatim; gated on the contract landing. No visible behaviour change.
 3. Background + lighting engine. Board compositor paints the theme background (substrate, socket included), then the declared lighting layer (shadow or glow) beneath each piece. Existing themes still declare dark + none, so no visible change.
 4. Animation hook. The existing refresh timer (=takuzu--refresh-tick=, ~0.5s at the default flash period) breathes any theme that declares a breathing piece by tweening the piece parameter on the redraw that already happens each tick; the portable artifact is the breath *curve*, not the prototype's CSS keyframes. Gated so non-breathing themes pay nothing.
-5. Prototype the gear given cue. Before the port, add a numbered pass on the emblem prototype showing both gear states at 12×12 — user = open bore with the cool light glowing through, fixed = that bore capped by a lit domed boss — so the cue is seen working, not invented at port time. (Closes the ui-prototyping gap Phase 6 would otherwise inherit; realizes the Decision "gestell is the pilot theme".)
-6. gestell pilot theme. Port the prototype: 8-tooth gear + emboss + detailed bore, the cream/dark taijitu, warm/cool float glows, the gear given cue from Phase 5, breathing taijitu — all as descriptor declarations, no special-cases. Rename the =emblem= skin value to =gestell=.
-7. (vNext) Chrome neutralization pass.
-8. (vNext) Board-prominent layout + per-piece detail budget; cameo-class detail via raster-sprite-per-state where needed.
-9. (vNext) Theme roster expansion, incrementally, each a pure descriptor add.
+5. gestell pilot theme (raster). Build gestell as a raster theme from PNG sprites via the proven raster pipeline (define-once + =<use>=): the taijitu and the industrial gear as embedded per-value sprites, the dark gear lifted by a glow (dark pieces opt into a glow, per the pop finding). The given cue, if any, is baked into the sprite art, not drawn. This exercises the raster pipeline end to end on the flagship theme. Keep the art in the console's illustrated register (matte, top-left lit), not photoreal, so it doesn't reintroduce the clash the pop balloon exposed. The prior vector emblem skin and its prototype are retired.
+6. (vNext) Chrome neutralization pass, now load-bearing: photoreal raster pieces clash with the drawn console (the pop balloon proved it), so a neutral chrome plus a consistent illustrated register across pieces is what lets rich pieces sit right.
+7. (vNext) Board-prominent layout + per-piece detail budget; cameo-class detail via raster-sprite-per-state where needed.
+8. (vNext) Theme roster expansion, incrementally, each a pure descriptor add.
 
 Each phase leaves the tree working and tested before the next begins.
 
 * Acceptance criteria
 
-- The 18 existing skins render pixel-identically after the descriptor migration and the extraction. The characterization net snapshots the *full board render* (not an isolated disc) over a fixed fixture containing an empty cell, a user coin, a given coin, the cursor cell, and a flagged (error) cell, at each =takuzu--cell-size= bucket (50/44/38/34), captured by serializing the SVG DOM to a string and comparing — so the cursor de-hardcode, the compositor extraction, and the assist error-highlight are covered, not just the untouched disc drawers.
+- The 4 keeper skins render pixel-identically after the descriptor migration and the extraction. The characterization net snapshots the *full board render* (not an isolated disc) over a fixed fixture containing an empty cell, a user coin, a given coin, the cursor cell, and a flagged (error) cell, at each =takuzu--cell-size= bucket (50/44/38/34), captured by serializing the SVG DOM to a string and comparing — so the cursor de-hardcode, the compositor extraction, and the assist error-highlight are covered, not just the untouched disc drawers.
 - No shared consumer (board, timer, cursor) contains a theme name; grep for skin symbols in those functions returns nothing, and the engine files contain no takuzu symbol — the boundary check.
 - A theme declaring a mid-tone background and a shadow renders a visible cast shadow under its pieces — which requires the background to repaint the socket wells so the shadow has tonal room; a theme declaring a dark background and a glow renders the glow. Both verified by rendering at the real board sizes.
-- gestell's gear shows an obvious given cue at 12×12, verified against the Phase 5 prototype pass (both states seen working there), and gestell otherwise renders as the emblem prototype does (gear, emboss, bore glow-through, taijitu inversion, float glows).
+- gestell renders its raster sprites (the taijitu and the glowing industrial gear) cleanly at every board size, in the console's illustrated register, with the dark gear lifted by a glow; any given cue is baked into the sprite art.
 - gestell breathes in the live game on the refresh timer at its ~0.5s cadence; the breath freezes when the puzzle is solved (the timer self-cancels on win/proven — intended), and non-breathing themes trigger no extra redraws.
 - A throwaway second registrant (a stub "game") can register a piece drawer and a theme, supply the per-cell accessor, and get background, lighting, cursor, and breath with no takuzu import — proving the boundary.
 
@@ -195,12 +214,12 @@ Each phase leaves the tree working and tested before the next begins.
 - Errors, empty states, failure: an unknown theme falls back to a default descriptor (as the drawer lookup already defaults today). A theme missing an optional field gets the field's default (no lighting, default cursor).
 - Security and privacy: N/A — local rendering, no input, no credentials.
 - Observability: N/A beyond the visible render; a mis-declared theme shows wrong visuals, caught by the characterization and render tests.
-- Performance and scale: the board composites up to 144 cells. The faceplate already fully rebuilds every refresh tick during play (=takuzu--redraw=: erase + rebuild + =insert-image=), so a breathing theme adds ~zero new redraws — it varies a parameter inside a redraw that already happens. The genuinely new per-frame cost is the lighting phase's extra per-cell SVG nodes. Bench *that* at 12×12 — a full-board rebuild with the lighting layer present vs absent — before shipping the lighting phase; non-breathing / no-lighting themes must add zero cost.
+- Performance and scale: the board composites up to 144 cells. The faceplate already fully rebuilds every refresh tick during play (=takuzu--redraw=: erase + rebuild + =insert-image=), so a breathing theme adds ~zero new redraws — it varies a parameter inside a redraw that already happens. The genuinely new per-frame cost is the lighting phase's extra per-cell SVG nodes. Bench *that* at 12×12 — a full-board rebuild with the lighting layer present vs absent — before shipping the lighting phase; non-breathing / no-lighting themes must add zero cost. Raster themes carry a second, larger cost that is already measured and solved: a piece image must be embedded once and referenced per cell (=<use>=), never inlined per cell (see "Raster assets and the render requirement"). Measured 2026-07-15: inlining 35 wood coins produced a 4.2 MB faceplate SVG (O(cells)); define-once dropped it to 260 KB, flat with coin count.
 - Reuse and lost opportunities: the engine reuses the existing SVG/metal/LOD helpers and the flash/breath timer rather than inventing new ones; the descriptor subsumes the flat registry as its degenerate case.
 - Architecture fit: integration points are the board compositor, the redraw timer, the cursor drawer, and the theme registry/custom. Weak point: the extraction must not leave a circular dependency (engine must not require takuzu); enforce by module load order and a no-takuzu-symbols check in the engine files.
 - Config surface: the active theme is one defcustom; each theme's knobs live in its descriptor.
 - Documentation plan: a developer note covering the theme descriptor contract (what a game *declares*), the per-cell accessor contract it must *implement* (return shape: value / given-p / cursor-p / error-p + board dimensions), and how a new game registers with the engine; needed at the extraction phase, not before.
-- Dev tooling: existing =make test= / =compile= / =lint= cover it; add full-board characterization tests for the 18-skin migration (SVG-string snapshots per acceptance criterion 1, across the cell-size buckets and the empty/user/given/cursor/flagged fixture) and a boundary test for the stub second registrant.
+- Dev tooling: existing =make test= / =compile= / =lint= cover it; add full-board characterization tests for the keeper-skin migration (SVG-string snapshots per acceptance criterion 1, across the cell-size buckets and the empty/user/given/cursor/flagged fixture) and a boundary test for the stub second registrant.
 - Rollout, compatibility, rollback: the descriptor migration is internal; the user-facing setting keeps working (with a symbol rename handled like the prior lamp→terra and sovereign→wood renames). Each phase is revertible; no persisted-data migration.
 - External APIs and deps: none beyond svg.el and Emacs timers, both already in use.
 
@@ -209,6 +228,8 @@ Each phase leaves the tree working and tested before the next begins.
 - Extraction scope creep. Auditing every shared helper for takuzu assumptions can sprawl. Dodge: extract only what the themes actually use, verified by the stub second-registrant test; leave the rest in takuzu until a real second game pulls it.
 - Chrome neutralization is subjective and could churn. Dodge: it's vNext and gets its own prototype directions before any code.
 - Per-cell lighting-composite cost at 12x12. The breath itself adds no new redraw (the board already rebuilds every tick); the new cost is the lighting layer's extra SVG nodes across 144 cells. Dodge: bench a full-board rebuild with lighting present vs absent before shipping the lighting phase; if too costly, composite lighting only where a theme declares it and cache the static-background nodes.
+
+- Raster piece embedding cost. A naive per-cell image embed is O(cells) and balloons the faceplate SVG that librsvg re-decodes every redraw tick (measured 4.2 MB at 35 wood coins, ~12 MB projected at a full 12x12). Dodge (proven, not just proposed): define each unique sprite once in =<defs>= and reference per cell with =<use>=, following the existing =takuzu--ensure-coin-gradient= idiom; measured 260 KB flat, rendering identically. The engine must build this in so every raster theme inherits it.
 - The pilot tempting a special-case. The whole point is that gestell adds no shared-code branch; any temptation to "just hardcode it for now" is the failure mode this spec exists to prevent.
 
 * Review findings [/]

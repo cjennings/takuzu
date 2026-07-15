@@ -1,0 +1,101 @@
+#+TITLE: Raster Asset Pipeline — Piece Art for Themes
+#+AUTHOR: Craig Jennings
+#+DATE: 2026-07-15
+
+Practical guide for preparing raster piece art (cameo / photographic coins) for
+the raster-sprite-per-state path. The design rationale and the render
+requirement live in the spec: =docs/specs/2026-07-14-piece-theme-framework-spec.org=,
+subsection "Raster assets and the render requirement." This file is the
+asset-maker's checklist.
+
+Proven 2026-07-15 in both renderers: Emacs svg.el/librsvg (live in-game) and the
+browser (Blink).
+
+* Source resolution
+
+- Shape: square, 1:1 (the board cell is square).
+- Size: 256 x 256 px per image.
+  - The largest board cell is 50px in logical units, but the board auto-scales
+    to fill the window (commonly 2-4x) and HiDPI doubles again, so a coin can
+    land on screen around 200-400px. Render at 256 so it DOWNSCALES for smaller
+    boards (always clean) and never has to UPSCALE (what blurs).
+  - 200 x 200 is the practical floor.
+  - Do not exceed ~512.
+  - KEEP 256 even for performance. The engine embeds each unique sprite ONCE and
+    references it per cell (define-once + =<use>=), so sprite size barely affects
+    render cost. Do NOT drop to 100px to speed things up: that lowers quality and
+    fixes nothing. Measured 2026-07-15, a naive per-cell inline of 256px wood
+    coins gave a 4.2 MB board SVG; define-once dropped it to 260 KB, flat with
+    coin count, at full resolution.
+- Format: PNG-24 with alpha (RGBA), sRGB.
+
+* How many images (one per distinct piece state)
+
+- Minimum 2: one per piece value (value 0, value 1). Mark "given" cells with an
+  overlay drawn in code (the proof used a gold ring), so you still render only 2
+  source images.
+- Up to 4 if you want givens to be their own art: value-0-player, value-1-player,
+  value-0-given, value-1-given.
+
+Suggested names: =cameo-0.png=, =cameo-1.png= (add =-given= variants if using 4).
+
+* Transparency
+
+- Reality first: the exporters used so far flatten transparency on export (to
+  solid white, once to a baked checkerboard), even when the art was made
+  transparent. So in practice you ALWAYS mask the coin to its shape and do not
+  rely on getting real alpha out of the generator. The mask is
+  background-agnostic (white, checkerboard, or transparent all give the same
+  clean round sprite), so chasing real source transparency buys nothing but
+  skipping the mask. Mask everything.
+- Prefer transparent (the alpha channel) WHEN you can get it. A transparent
+  background lets the theme's substrate and glow show around the coin, so it sits
+  in the lit world instead of as a tile. This matters most on a light or mid-tone
+  theme background, where an opaque corner reads as a square tile.
+- Do NOT color-key the background to transparent. Flat-color keying bites into
+  the shadowed parts of the image. Mask by SHAPE, not by color.
+- Shape-masking is for round coins. A non-round symbol (a star, a gear
+  silhouette) needs masking to its own outline, or art authored with real alpha:
+  a per-symbol call.
+
+* Circular-mask export (round coins)
+
+Adjust the radius to sit just inside the coin's edge (drop the corners, keep the
+bevel). For a disc that fills a 1254px frame, radius ~617 works:
+
+#+begin_src sh
+magick src.png \
+  \( -size 1254x1254 xc:none -fill white -draw "circle 627,627 627,10" \) \
+  -alpha off -compose CopyOpacity -composite \
+  -resize 256x256 out.png
+#+end_src
+
+(=circle 627,627 627,10= = centre 627,627, radius 617; =CopyOpacity= keeps the
+image only where the white circle is opaque, so the corners become transparent.)
+
+* Lighting
+
+Bake the piece's lighting into the sprite to match the board's key light from the
+top-left (or, for a glow theme, its glow), so the coin reads as seated rather than
+pasted. A sprite lit from the wrong direction looks stuck on. The wood test's
+beveled rim, lit top-left, is why it sits convincingly.
+
+* Small-size legibility
+
+At 12x12 the coin is about 26px, and fine texture (grain, fine detail) washes out
+there. That is fine: a good raster piece is carried by tone and baked relief (the
+light/dark split, the bevel), not fine texture. Judge a raster theme at 12x12, not
+just at 6x6.
+
+* The render requirement (engine side, not asset side)
+
+Repeated here because it decides whether the art performs: a raster drawer must
+embed each unique image ONCE in a =<defs>= and reference it per cell with =<use>=,
+never inline the image per cell. See the spec subsection for the measured numbers
+and the =takuzu--ensure-coin-gradient= idiom it follows.
+
+* Net
+
+Give 256x256 RGBA PNGs, one per value (2 total, or 4 if givens get their own art),
+circle-masked to transparent. Keep 256; the engine's define-once render makes the
+size nearly free.
