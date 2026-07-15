@@ -95,5 +95,26 @@ record across every directory Emacs happens to be in."
                (format "^%s:\n\\(?:\t.*\n\\)*?\t.*load-prefer-newer t" target)
                makefile)))))
 
+(ert-deftest test-takuzu-make-lint-fails-on-checkdoc-warnings ()
+  "Error: checkdoc findings must make the lint target fail.
+Merely printing style warnings leaves CI and local quality checks falsely
+green, so the target must collect `warn' calls and exit nonzero."
+  (let* ((root (locate-dominating-file default-directory "Makefile"))
+         (makefile (with-temp-buffer
+                     (insert-file-contents (expand-file-name "Makefile" root))
+                     (buffer-string))))
+    (should (string-match-p "symbol-function 'warn" makefile))
+    (should (string-match-p "kill-emacs 1" makefile))))
+
+(ert-deftest test-takuzu-make-coverage-serializes-report-writes ()
+  "Error: concurrent coverage runs must not share mutable report paths.
+Coverage clears bytecode and replaces one SimpleCov report, so its target
+needs an interprocess lock around the entire run."
+  (let* ((root (locate-dominating-file default-directory "Makefile"))
+         (makefile (with-temp-buffer
+                     (insert-file-contents (expand-file-name "Makefile" root))
+                     (buffer-string))))
+    (should (string-match-p "flock.*coverage\\.lock" makefile))))
+
 (provide 'test-takuzu)
 ;;; test-takuzu.el ends here

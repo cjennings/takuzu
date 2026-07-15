@@ -6,7 +6,7 @@ COVERAGE_DIR     ?= .coverage
 COVERAGE_FILE    ?= $(COVERAGE_DIR)/simplecov.json
 COVERAGE_SUMMARY ?= .claude/scripts/coverage-summary.el
 
-.PHONY: test compile lint clean coverage coverage-summary
+.PHONY: test compile lint clean coverage coverage-run coverage-summary
 
 # Run the full ERT suite headless.
 test:
@@ -31,7 +31,7 @@ compile:
 # checkdoc pass, plus package-lint when it is installed.
 lint:
 	$(EMACS) -Q --batch -L . \
-	  --eval "(dolist (f (file-expand-wildcards \"takuzu*.el\")) (checkdoc-file f))"
+	  --eval "(progn (require 'cl-lib) (let (warnings) (cl-letf (((symbol-function 'warn) (lambda (&rest args) (push args warnings)))) (dolist (f (file-expand-wildcards \"takuzu*.el\")) (checkdoc-file f))) (when warnings (dolist (warning (nreverse warnings)) (apply #'warn warning)) (kill-emacs 1))))"
 	$(EMACS) -Q --batch -L . \
 	  --eval '(package-initialize)' \
 	  --eval '(setq package-lint-main-file "takuzu.el")' \
@@ -44,8 +44,11 @@ lint:
 # Sources must load from .el (not .elc) for instrumentation to attach, and
 # undercover must be armed before the test files require the source.
 coverage:
-	@rm -f $(COVERAGE_FILE) *.elc tests/*.elc
 	@mkdir -p $(COVERAGE_DIR)
+	@flock $(COVERAGE_DIR)/coverage.lock $(MAKE) --no-print-directory coverage-run
+
+coverage-run:
+	@rm -f $(COVERAGE_FILE) *.elc tests/*.elc
 	@UNDERCOVER_FORCE=true $(EMACS) -Q --batch -L . -L tests \
 	  --eval '(package-initialize)' \
 	  --eval "(when (require 'undercover nil t) (undercover \"takuzu*.el\" (:report-format 'simplecov) (:report-file \"$(COVERAGE_FILE)\") (:merge-report nil)))" \

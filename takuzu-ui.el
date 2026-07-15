@@ -51,6 +51,9 @@
     :disc0 "#4d5f75" :disc1 "#8f5236" :bezel "#a8aeb5"
     :disc0-edge "#6f839c" :disc1-edge "#b8734f"
     :disc0-deep "#2c3745" :disc1-deep "#4f2c1c"
+    ;; cut jewel coins
+    :jewel-sapphire-hi "#b8d8ff" :jewel-sapphire "#3f82e3" :jewel-sapphire-deep "#0b2c72"
+    :jewel-ruby-hi "#ffc0c7" :jewel-ruby "#d83b58" :jewel-ruby-deep "#700b25"
     ;; coin-skin metals (compass medallions) and the fixed-coin rim
     :coin-iron-hi "#5a5f66" :coin-iron "#33363b" :coin-iron-deep "#1a1c20"
     :coin-copper-hi "#d99a5e" :coin-copper "#b87333" :coin-copper-deep "#6f4218"
@@ -66,7 +69,7 @@
     ;; jewels and state lamps
     :jewel-off "#241f1b" :jewel-off-edge "#0e0c0a"
     :lamp-green "#6fce33" :lamp-amber "#ffb43a" :lamp-cyan "#63e6c8"
-    ;; cursor: the machined bezel ring -- brass on the original lamp set,
+    ;; cursor: the machined bezel ring -- brass on the original terra set,
     ;; polished iron on the metal coin sets
     :cursor-bezel-hi "#e8cd76" :cursor-bezel "#b99640"
     :cursor-bezel-lo "#7a5f24" :cursor-bezel-dk "#57431a"
@@ -94,7 +97,7 @@ light falls off the metal.")
   '((0 . :cursor-iron-hi) (0.30 . :cursor-iron)
     (0.68 . :cursor-iron-lo) (1 . :cursor-iron-dk))
   "The iron bezel ring's stops, same shape as `takuzu--cursor-bezel-stops'.
-The metal coin sets (jewel, compass) seat this ring; the original lamp set
+The metal coin sets (jewel, compass) seat this ring; the original terra set
 keeps the brass one.")
 
 ;; --- layout ---
@@ -296,12 +299,12 @@ omits it)."
 ;; --- coin skins ---
 
 (defconst takuzu--coin-skin-registry
-  '((sovereign takuzu--draw-disc-sovereign coal     beech)
-    (collegiate takuzu--draw-disc-collegiate berkeley cardinal)
+  '((wood      takuzu--draw-disc-wood      coal     beech)
+    (collegiate takuzu--draw-disc-collegiate calblue  cardinal)
     (machined  takuzu--draw-disc-machined  nickel   gold)
     (cash      takuzu--draw-disc-cash      iron     gold)
     (gems      takuzu--draw-disc-gems      silver   gold)
-    (lamp      takuzu--draw-disc-lamp      nil      nil)
+    (terra     takuzu--draw-disc-terra     nil      nil)
     (jewel     takuzu--draw-disc-jewel     nil      nil)
     (compass   takuzu--draw-disc-compass   nil      nil)
     (guilloche takuzu--draw-disc-guilloche silver   gold)
@@ -312,14 +315,15 @@ omits it)."
     (split     takuzu--draw-disc-split     gunmetal copper)
     (rosette   takuzu--draw-disc-rosette   iron     copper)
     (filigree  takuzu--draw-disc-filigree  silver   pewter)
-    (casino    takuzu--draw-disc-casino    chipred  berkeley))
+    (casino    takuzu--draw-disc-casino    chipred  berkeley)
+    (emblem    takuzu--draw-disc-emblem    nickel   nickel))
   "The coin-skin catalogue: (SKIN DRAWER METAL-FOR-0 METAL-FOR-1) rows.
 This one table is the whole configuration -- the cycle order, the
 selector counter, the defcustom choices, the dispatch, and each
 struck-metal skin's pair all read from it.  Adding a coin is one row
 here plus its draw function; nothing is ever removed, only added -- and
 a new skin is always APPENDED at the tail of the table, so every
-existing design keeps its drum position forever.  The lamp/jewel/compass
+existing design keeps its drum position forever.  The terra/jewel/compass
 skins carry their own colours, so their metals are nil.")
 
 (defcustom takuzu-coin-skin (caar takuzu--coin-skin-registry)
@@ -351,7 +355,13 @@ drum to coinset 1."
     (regal    "#bea9dc" "#8255b5" "#6624a0" "#2f0c4e")
     (oxblood  "#b3676c" "#8f4046" "#6b2e33" "#331417")
     (berkeley "#5d82ab" "#2b5484" "#00284f" "#001022")
-    (cardinal "#b35c5c" "#8f3030" "#701010" "#320505")
+    (calblue  "#3f6ac9" "#1a47a3" "#002676" "#001647")
+    ;; The second ring follows the same relative darkening as Stanford's
+    ;; silver lip, so it reads as a distinct beveled step instead of a
+    ;; broad bright-gold band. The innermost shade seats it against blue.
+    (calgold  "#f2d074" "#edb93c" "#ab852e" "#855c09")
+    (cardinal "#d1686f" "#b83a4b" "#8c1515" "#820000")
+    (coolgrey "#a6a9ae" "#7d8085" "#53565a" "#2e2f31")
     (beech    "#f0dfc4" "#ddc19a" "#c4a377" "#6b5133")
     (coal     "#6e6c68" "#454340" "#252422" "#0b0b0a")
     (sunflower "#ffe3a4" "#ffd274" "#ffc145" "#94691f")
@@ -393,7 +403,8 @@ aquamarine ramps; ruby, sapphire, emerald, and diamond are jewel-vivid.")
   (takuzu--c (if (memq m takuzu--coin-light-metals) :rim-iron :rim-silver)))
 
 (defun takuzu--ensure-metal (svg m)
-  "Define metal M's shared gradients on SVG once: a struck-field radial
+  "Define SVG's shared gradients for metal M once.
+A struck-field radial
 fill (m-M-fill) and a top-lit edge gradient (m-M-edge), both in
 objectBoundingBox units so every coin scales them to itself."
   (let ((fill-id (format "m-%s-fill" m)))
@@ -415,21 +426,22 @@ objectBoundingBox units so every coin scales them to itself."
                   (dom-node 'stop (list (cons 'offset 1) (cons 'stop-color (takuzu--metal m 3)))))))))
 
 (defun takuzu--metal-sheen (svg cx cy r)
-  "Draw the broad sheen and hard specular catch on a coin at CX,CY radius R."
+  "Draw the broad sheen and hard specular catch on SVG at CX,CY radius R."
   (svg-ellipse svg (- cx (* r 0.30)) (- cy (* r 0.34)) (* r 0.34) (* r 0.18)
                :fill (takuzu--c :white) :fill-opacity 0.18)
   (svg-ellipse svg (- cx (* r 0.38)) (- cy (* r 0.42)) (* r 0.10) (* r 0.055)
                :fill (takuzu--c :white) :fill-opacity 0.55))
 
 (defun takuzu--metal-given-ring (svg cx cy r m)
-  "Ring the fixed coin at CX,CY radius R in the metal contrasting with M."
+  "Ring the fixed coin on SVG at CX,CY radius R in metal contrasting with M."
   (svg-circle svg cx cy (+ r 1.5) :fill "none"
               :stroke (takuzu--metal-fixed-ink m) :stroke-width 1.6)
   (svg-circle svg cx cy (+ r 2.6) :fill "none"
               :stroke (takuzu--c :white) :stroke-width 0.5 :stroke-opacity 0.3))
 
 (defun takuzu--metal-blank (svg cx cy r m given)
-  "Draw a struck blank of metal M at CX,CY radius R: field, lit rim, sheen.
+  "Draw a struck blank of metal M on SVG at CX,CY radius R.
+It has a field, lit rim, and sheen.
 GIVEN adds the contrast-metal ring."
   (takuzu--ensure-metal svg m)
   (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" m)
@@ -489,8 +501,8 @@ whole board.  STOPS is a list of (OFFSET . PALETTE-KEY)."
                                        (cons 'stop-color (takuzu--c (cdr stop))))))
                      stops)))))
 
-(defun takuzu--draw-disc-lamp (svg cx cy r val given)
-  "Draw the lamp-lip disc of VAL on SVG at CX,CY radius R.
+(defun takuzu--draw-disc-terra (svg cx cy r val given)
+  "Draw the terra disc of VAL on SVG at CX,CY radius R.
 Givens wear a thin dulled-silver bezel; placed discs a thin lighter lip of
 their own colour."
   (let ((fill (if (eql val 0) (takuzu--c :disc0) (takuzu--c :disc1)))
@@ -501,25 +513,66 @@ their own colour."
           (svg-circle svg cx cy r :fill fill :stroke (takuzu--c :bezel) :stroke-width 1.2))
       (svg-circle svg cx cy r :fill fill :stroke edge :stroke-width 1.2))))
 
+(defun takuzu--jewel-octagon (cx cy r)
+  "Return the eight vertices of a cut jewel centred at CX,CY with radius R."
+  (let ((cut (* r 0.42)))
+    (list (cons (- cx cut) (- cy r)) (cons (+ cx cut) (- cy r))
+          (cons (+ cx r) (- cy cut)) (cons (+ cx r) (+ cy cut))
+          (cons (+ cx cut) (+ cy r)) (cons (- cx cut) (+ cy r))
+          (cons (- cx r) (+ cy cut)) (cons (- cx r) (- cy cut)))))
+
+(defun takuzu--ensure-jewel-glow (svg id hi base deep)
+  "Append to SVG the translucent internal jewel glow gradient ID.
+Built from the HI, BASE, and DEEP stops."
+  (unless (dom-by-id svg (concat "^" id "$"))
+    (dom-append-child svg
+      (dom-node 'radialGradient (list (cons 'id id) (cons 'cx 0.30) (cons 'cy 0.25) (cons 'r 0.82))
+                (dom-node 'stop (list (cons 'offset 0) (cons 'stop-color hi) (cons 'stop-opacity 0.42)))
+                (dom-node 'stop (list (cons 'offset 0.50) (cons 'stop-color base) (cons 'stop-opacity 0.18)))
+                (dom-node 'stop (list (cons 'offset 1) (cons 'stop-color deep) (cons 'stop-opacity 0)))))))
+
 (defun takuzu--draw-disc-jewel (svg cx cy r val given)
-  "Draw the jewel-dome disc of VAL on SVG at CX,CY radius R.
-A domed pilot-lamp jewel: radial depth and a hard specular catch.
-GIVEN seats a thin brass collar around the jewel."
-  (let ((id (format "takuzu-coin-jewel-%d" val)))
+  "Draw the octagonal sapphire or ruby jewel of VAL on SVG at CX,CY radius R.
+Upper-left crown facets catch light; lower-right facets form the deep pavilion.
+Only large jewels add a hard catch and inner light well.  GIVEN adds a brass
+octagonal collar."
+  (let* ((id (format "takuzu-coin-jewel-%d" val))
+         (tone (if (eql val 0) 'sapphire 'ruby))
+         (hi (takuzu--c (intern (format ":jewel-%s-hi" tone))))
+         (base (takuzu--c (intern (format ":jewel-%s" tone))))
+         (deep (takuzu--c (intern (format ":jewel-%s-deep" tone))))
+         (outer (takuzu--jewel-octagon cx cy r))
+         (table (takuzu--jewel-octagon (- cx (* r 0.05)) (- cy (* r 0.06)) (* r 0.48)))
+         (glow (takuzu--jewel-octagon (- cx (* r 0.06)) (- cy (* r 0.08)) (* r 0.68)))
+         (facet-style (list (list hi 0.33) (list base 0.07) (list deep 0.14) (list deep 0.32)
+                            (list deep 0.42) (list deep 0.22) (list hi 0.14) (list hi 0.38))))
     (takuzu--ensure-coin-gradient
      svg id 0.38 0.32 0.85
      (if (eql val 0)
-         '((0 . :disc0-edge) (0.45 . :disc0) (1 . :disc0-deep))
-       '((0 . :disc1-edge) (0.45 . :disc1) (1 . :disc1-deep))))
-    (svg-circle svg cx cy r :fill (format "url(#%s)" id)
-                :stroke (takuzu--c :ink) :stroke-width 1)
-    (svg-ellipse svg (- cx (* r 0.34)) (- cy (* r 0.38)) (* r 0.16) (* r 0.10)
-                 :fill (takuzu--c :white) :fill-opacity 0.55)
+         '((0 . :jewel-sapphire-hi) (0.45 . :jewel-sapphire) (1 . :jewel-sapphire-deep))
+       '((0 . :jewel-ruby-hi) (0.45 . :jewel-ruby) (1 . :jewel-ruby-deep))))
+    (takuzu--ensure-jewel-glow svg (concat id "-glow") hi base deep)
+    (svg-polygon svg outer :fill (format "url(#%s)" id) :stroke (takuzu--c :ink) :stroke-width 1)
+    (svg-polygon svg glow :fill (format "url(#%s-glow)" id))
+    (svg-line svg (nth 7 outer) (nth 0 outer) :stroke hi :stroke-opacity 0.42
+              :stroke-width (max 0.55 (* r 0.035)))
+    (svg-line svg (nth 0 outer) (nth 1 outer) :stroke hi :stroke-opacity 0.30
+              :stroke-width (max 0.55 (* r 0.035)))
+    (cl-loop for i below 8
+             for style = (nth i facet-style)
+             do (svg-polygon svg (list (nth i outer) (nth (mod (1+ i) 8) outer)
+                                       (nth (mod (1+ i) 8) table) (nth i table))
+                             :fill (nth 0 style) :fill-opacity (nth 1 style)))
+    (svg-polygon svg table :fill base :fill-opacity 0.22)
+    (when (>= r 18)
+      (svg-polygon svg (takuzu--jewel-octagon (- cx (* r 0.11)) (- cy (* r 0.13)) (* r 0.27))
+                   :fill hi :fill-opacity 0.16 :stroke hi :stroke-opacity 0.28
+                   :stroke-width (max 0.45 (* r 0.025)))
+      (svg-ellipse svg (- cx (* r 0.42)) (- cy (* r 0.43)) (* r 0.075) (* r 0.05)
+                   :fill (takuzu--c :white) :fill-opacity 0.40))
     (when given
-      (svg-circle svg cx cy (+ r 1.6) :fill "none"
-                  :stroke (takuzu--c :gold) :stroke-width 1.6)
-      (svg-circle svg cx cy (+ r 2.6) :fill "none"
-                  :stroke (takuzu--c :gold-hi) :stroke-width 0.6 :stroke-opacity 0.6))))
+      (svg-polygon svg (takuzu--jewel-octagon cx cy (+ r 1.3)) :fill "none"
+                   :stroke (takuzu--c :gold) :stroke-width 1.6))))
 
 (defun takuzu--draw-disc-compass (svg cx cy r val given)
   "Draw the compass piece of VAL on SVG at CX,CY radius R.
@@ -609,7 +662,8 @@ half, INK south half, HUB capping the pivot."
               :stroke ink :stroke-width (* r 0.035)))
 
 (defun takuzu--draw-disc-guilloche (svg cx cy r val given)
-  "Draw the guilloche coin of VAL at CX,CY radius R on SVG: silver vs gold,
+  "Draw the guilloche coin of VAL at CX,CY radius R on SVG.
+It uses silver versus gold,
 engine-turned wave rings in a struck field.  GIVEN rings in contrast metal."
   (let* ((m (takuzu--coin-pair-metal 'guilloche val))
          (ink (takuzu--metal m 3)))
@@ -756,44 +810,72 @@ recoloured to gem variety on the two silver bodies."
         (takuzu--filigree-gem svg (car e) (cdr e) (* r 0.085) (nth i gems) m)))
     (takuzu--filigree-gem svg cx cy (* r 0.15) 'diamond m)))
 
-(defun takuzu--draw-disc-sovereign (svg cx cy r val given)
-  "Draw the sovereign wood coin of VAL at CX,CY radius R on SVG.
-A placed coin is solid one-tone wood -- all coal for 0, all beech for 1
--- with sunflower dots riding the dark band and coal dots the pale one.
-A fixed coin is the two-tone: the ring holding a small heart of the
-other wood, no centre dot.  No holes, no pins.  From the v8 colourway
+(defun takuzu--draw-disc-wood (svg cx cy r val given)
+  "Draw the wood coin of VAL at CX,CY radius R on SVG.
+Every coin is a flat matte one-tone disc -- all coal for 0, all beech
+for 1 -- with sunflower dots riding the dark band and coal dots the
+pale one.  No gradient field, no sheen, no heart, no holes, no pins.
+Both coins wear a rim of their own wood one step lighter than the
+face, so it stays light on beech and dark on coal: thin on a user
+coin, a wide bar on a FIXED coin.  Widths are floored in pixels so the
+fixed rim stays visible on every board size.  From the v8 colourway
 gallery, panel 13, iterated live."
-  (let* ((wood (takuzu--coin-pair-metal 'sovereign val))
-         (core (if (eql val 0) 'beech 'coal))
-         (dots (if (eql val 0) 'sunflower 'coal))
-         (h (* r 0.30))
-         (ink (takuzu--metal wood 3)))
-    (takuzu--ensure-metal svg wood)
-    (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" wood)
+  (let* ((wood (takuzu--coin-pair-metal 'wood val))
+         (dots (if (eql val 0) 'sunflower 'coal)))
+    (svg-circle svg cx cy r :fill (takuzu--metal wood 2)
                 :stroke (takuzu--c :ink) :stroke-width 0.8 :stroke-opacity 0.85)
-    (svg-circle svg cx cy (- r (* r 0.045)) :fill "none"
-                :stroke (format "url(#m-%s-edge)" wood) :stroke-width (* r 0.09))
-    (svg-circle svg cx cy (* r 0.84) :fill "none"
-                :stroke ink :stroke-opacity 0.30 :stroke-width 0.7)
+    (if given
+        (let ((bw (max (* r 0.19) 4.0))
+              (ew (max (* r 0.02) 1.0)))
+          ;; the rim bar: flat, same wood, one step lighter; a crisp
+          ;; glint-tone outer edge and a thin deep seat -- raised but
+          ;; shallow, no trench
+          (svg-circle svg cx cy (- r (/ bw 2)) :fill "none"
+                      :stroke (takuzu--metal wood 1) :stroke-width bw)
+          (svg-circle svg cx cy (- r (/ ew 2)) :fill "none"
+                      :stroke (takuzu--metal wood 0)
+                      :stroke-width ew :stroke-opacity 0.9)
+          (svg-circle svg cx cy (- r bw) :fill "none"
+                      :stroke (takuzu--metal wood 3)
+                      :stroke-width ew :stroke-opacity 0.8))
+      ;; the thin rim: the same flat band scaled down, with a faint
+      ;; seat line so it still reads as raised
+      (let ((bw (max (* r 0.06) 1.8)))
+        (svg-circle svg cx cy (- r (/ bw 2)) :fill "none"
+                    :stroke (takuzu--metal wood 1) :stroke-width bw)
+        (svg-circle svg cx cy (- r bw) :fill "none"
+                    :stroke (takuzu--metal wood 3)
+                    :stroke-width 0.9 :stroke-opacity 0.5)))
     (when (>= r 20)
       (let ((seg (/ (* 2 float-pi r 0.66) 36)))
         (svg-circle svg cx cy (* r 0.66) :fill "none"
                     :stroke (takuzu--metal dots 2)
                     :stroke-width (* r 0.05) :stroke-opacity 0.9
-                    :stroke-dasharray (format "%.2f %.2f" (* seg 0.4) (* seg 0.6)))))
-    (when given
-      (takuzu--ensure-metal svg core)
-      (svg-circle svg cx cy h :fill (format "url(#m-%s-fill)" core)
-                  :stroke ink :stroke-width 1)
-      (svg-circle svg cx cy h :fill "none"
-                  :stroke (format "url(#m-%s-edge)" core)
-                  :stroke-width (* r 0.04) :stroke-opacity 0.8))))
+                    :stroke-dasharray (format "%.2f %.2f" (* seg 0.4) (* seg 0.6)))))))
+
+(defun takuzu--casino-spade-d (cx cy s)
+  "The card-spade outline centred at CX,CY with scale S (half-height).
+Two lobes swelling from the top point, curling to the centre cusp, and
+a flared stem at the base -- the classic playing-card spade."
+  (let ((k (lambda (dx dy) (format "%.2f %.2f" (+ cx (* s dx)) (+ cy (* s dy))))))
+    (concat
+     "M " (funcall k 0 -0.91)
+     " C " (funcall k 0.10 -0.46) " " (funcall k 0.62 -0.21) " " (funcall k 0.62 0.19)
+     " C " (funcall k 0.62 0.53) " " (funcall k 0.24 0.59) " " (funcall k 0.10 0.35)
+     " C " (funcall k 0.08 0.64) " " (funcall k 0.20 0.81) " " (funcall k 0.32 0.91)
+     " L " (funcall k -0.32 0.91)
+     " C " (funcall k -0.20 0.81) " " (funcall k -0.08 0.64) " " (funcall k -0.10 0.35)
+     " C " (funcall k -0.24 0.59) " " (funcall k -0.62 0.53) " " (funcall k -0.62 0.19)
+     " C " (funcall k -0.62 -0.21) " " (funcall k -0.10 -0.46) " " (funcall k 0 -0.91)
+     " Z")))
 
 (defun takuzu--draw-disc-casino (svg cx cy r val given)
   "Draw the casino chip of VAL at CX,CY radius R on SVG.
 A red chip for 0, a dark navy chip for 1, eight cream edge spots riding
-the rim of both.  A user chip carries the cream inlay centre; a fixed
-chip keeps the full fill of its own colour -- no inlay, no centre dot."
+the rim of both.  A FIXED chip carries the cream inlay centre bearing a
+spade in the chip's own colour -- red spade on the red chip, blue on
+the navy; a user chip keeps the full fill of its own colour -- no
+inlay, no spade, no centre dot."
   (let* ((m (takuzu--coin-pair-metal 'casino val))
          (cream "#e9dfc8")
          (cream-deep "#9a8f74")
@@ -815,45 +897,57 @@ chip keeps the full fill of its own colour -- no inlay, no centre dot."
                     :stroke ink :stroke-opacity 0.35 :stroke-width 0.7)))
     ;; centre: cream inlay for the player, the chip's own full fill fixed
     (if given
-        (svg-circle svg cx cy (* r 0.52) :fill (takuzu--metal m 2)
-                    :stroke ink :stroke-width 0.8 :stroke-opacity 0.8)
-      (svg-circle svg cx cy (* r 0.52) :fill cream
-                  :stroke cream-deep :stroke-width 1))))
+        (progn
+          (svg-circle svg cx cy (* r 0.52) :fill cream
+                      :stroke cream-deep :stroke-width 1)
+          ;; the suit mark: a spade in the chip's own colour on the inlay
+          (takuzu--coin-path svg (takuzu--casino-spade-d cx cy (* r 0.48))
+                             'fill (takuzu--metal m 2)
+                             'stroke ink 'stroke-width 0.6))
+      (svg-circle svg cx cy (* r 0.52) :fill (takuzu--metal m 2)
+                  :stroke ink :stroke-width 0.8 :stroke-opacity 0.8))))
 
-(defun takuzu--draw-disc-collegiate (svg cx cy r val given)
+(defun takuzu--collegiate-rim (svg cx cy r rim bw)
+  "Draw RIM metal's beveled band of width BW at CX,CY radius R on SVG.
+Three concentric rings -- glint at the outer edge, base in the middle,
+deep against the face -- so the rim brightens at the edge and darkens
+toward the centre.  At small board scale the sub-pixel rings blend into
+a smooth gradient."
+  (let ((t3 (/ bw 3.0)))
+    (svg-circle svg cx cy (- r (* t3 0.5)) :fill "none"
+                :stroke (takuzu--metal rim 0) :stroke-width t3)
+    (svg-circle svg cx cy (- r (* t3 1.5)) :fill "none"
+                :stroke (takuzu--metal rim 2) :stroke-width t3)
+    (svg-circle svg cx cy (- r (* t3 2.5)) :fill "none"
+                :stroke (takuzu--metal rim 3) :stroke-width t3)
+    ;; Berkeley alone catches a short upper-left highlight on its gold edge.
+    ;; It is a rim-only reflection, never a mark on the blue face.
+    (when (eq rim 'calgold)
+      (let* ((rr (- r (* bw 0.30)))
+             (opacity (if (<= r 16) 0.50 0.70))
+             (p1 (takuzu--coin-pt cx cy rr 300))
+             (p2 (takuzu--coin-pt cx cy rr 336)))
+        (takuzu--coin-path
+         svg (format "M %.2f %.2f A %.2f %.2f 0 0 1 %.2f %.2f"
+                     (car p1) (cdr p1) rr rr (car p2) (cdr p2))
+         :fill "none" :stroke "#fff7cf" :stroke-opacity opacity
+         :stroke-width (max (* bw 0.22) 0.75) :stroke-linecap "round")))))
+
+(defun takuzu--draw-disc-collegiate (svg cx cy r val _given)
   "Draw the collegiate coin of VAL at CX,CY radius R on SVG.
-School colours, struck dark: Berkeley blue with a California-gold
-chrysanthemum for 0, Stanford cardinal with a silver-white one for 1.
-The whole face is matte -- no specular sheen -- under a wide struck
-lip.  A user coin is a flat face; a FIXED coin carries a single matte
-porcelain dot at the centre -- no ring around it, no border ring."
-  (let* ((m (takuzu--coin-pair-metal 'collegiate val))
-         (accent (if (eql val 0) 'sunflower 'silver)))
-    (takuzu--ensure-metal svg m)
-    (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" m)
+The schools' official colours, flat and matte in the wood grammar.
+Berkeley (0) is a Berkeley-Blue face with a California-Gold rim;
+Stanford (1) a Cardinal face with a Cool-Grey rim -- each school's two
+official colours, the face its primary and the rim its accent.  No
+centre dots, no chrysanthemum, no sheen.  The rim is a bevel of the
+accent -- glint at the outer edge darkening to deep at the face.  User
+and FIXED coins intentionally share the same wide rim, floored in
+pixels so it stays visible on every board size."
+  (let* ((face (takuzu--coin-pair-metal 'collegiate val))
+         (rim (if (eql val 0) 'calgold 'coolgrey)))
+    (svg-circle svg cx cy r :fill (takuzu--metal face 2)
                 :stroke (takuzu--c :ink) :stroke-width 0.8 :stroke-opacity 0.85)
-    ;; the wide struck lip, seated by a deep ring on its inner edge
-    (svg-circle svg cx cy (- r (* r 0.08)) :fill "none"
-                :stroke (format "url(#m-%s-edge)" m) :stroke-width (* r 0.16))
-    (svg-circle svg cx cy (- r (* r 0.165)) :fill "none"
-                :stroke (takuzu--metal m 3) :stroke-width 0.8
-                :stroke-opacity 0.6)
-    (when (>= r 20)
-      (dotimes (i 16)
-        (let* ((a (* i 22.5))
-               (p0 (takuzu--coin-pt cx cy (* r 0.42) a))
-               (p1 (takuzu--coin-pt cx cy (* r 0.76) (- a 7)))
-               (p2 (takuzu--coin-pt cx cy (* r 0.76) (+ a 7))))
-          (takuzu--coin-path
-           svg (format "M %.2f %.2f L %.2f %.2f A %.2f %.2f 0 0 1 %.2f %.2f Z"
-                       (car p0) (cdr p0) (car p1) (cdr p1)
-                       (* r 0.16) (* r 0.16) (car p2) (cdr p2))
-           'fill "none" 'stroke (takuzu--metal accent 2)
-           'stroke-opacity 0.75 'stroke-width 0.8))))
-    (when given
-      ;; the fixed marking: one matte porcelain dot, nothing else
-      (svg-circle svg cx cy (* r 0.28) :fill "#fffffb"
-                  :stroke (takuzu--metal m 3) :stroke-width 0.8))))
+    (takuzu--collegiate-rim svg cx cy r rim (max (* r 0.19) 4.0))))
 
 (defun takuzu--scallop-d (cx cy r arc)
   "The scalloped-outline path at CX,CY reach R with lobe arc radius ARC."
@@ -868,7 +962,8 @@ porcelain dot at the centre -- no ring around it, no border ring."
     (concat d "Z")))
 
 (defun takuzu--draw-disc-scallop (svg cx cy r val given)
-  "Draw the scalloped coin of VAL at CX,CY radius R on SVG: iron vs bronze
+  "Draw the scalloped coin of VAL at CX,CY radius R on SVG.
+It uses iron versus bronze
 on a twelve-lobed planchet with its own lit rim."
   (let* ((m (takuzu--coin-pair-metal 'scallop val))
          (ink (takuzu--metal m 3)))
@@ -920,7 +1015,8 @@ joint ring and the centre pin."
     (when given (takuzu--metal-given-ring svg cx cy r ring))))
 
 (defun takuzu--draw-disc-cash (svg cx cy r val given)
-  "Draw the cash coin of VAL at CX,CY radius R on SVG: iron vs brass with a
+  "Draw the cash coin of VAL at CX,CY radius R on SVG.
+It uses iron versus brass with a
 square hole and the cardinal characters T K Z U."
   (let* ((m (takuzu--coin-pair-metal 'cash val))
          (ink (takuzu--metal m 3))
@@ -942,7 +1038,8 @@ square hole and the cardinal characters T K Z U."
         (takuzu--txt svg (round (- cx (* r 0.60))) (round (+ cy (* fs 0.35))) "U" fs ink "middle" "bold")))))
 
 (defun takuzu--draw-disc-matrix (svg cx cy r val given)
-  "Draw the dot-matrix coin of VAL at CX,CY radius R on SVG: bronze vs
+  "Draw the dot-matrix coin of VAL at CX,CY radius R on SVG.
+It uses bronze versus
 silver, a legal 4x4 takuzu grid as domed and voided pellets."
   (let* ((m (takuzu--coin-pair-metal 'matrix val))
          (ink (takuzu--metal m 3))
@@ -969,11 +1066,13 @@ silver, a legal 4x4 takuzu grid as domed and voided pellets."
    nil diamond amethyst nil
    topaz nil ruby aqua
    nil sapphire nil diamond]
-  "The gems coin's encrusting: a gem cut per set stone, nil for an empty
-setting.  Fixed scatter so every coin of the run wears the same face.")
+  "Map each occupied slot to a gem cut.
+Nil marks an empty setting; the scatter is fixed so every coin of the
+run wears the same face.")
 
 (defun takuzu--draw-disc-gems (svg cx cy r val given)
-  "Draw the encrusted coin of VAL at CX,CY radius R on SVG: multicolour
+  "Draw the encrusted coin of VAL at CX,CY radius R on SVG.
+It has multicolour
 gems -- rubies, sapphires, emeralds, diamonds -- set in a precious metal,
 silver for 0 and gold for 1."
   (let* ((m (takuzu--coin-pair-metal 'gems val))
@@ -1005,7 +1104,8 @@ silver for 0 and gold for 1."
                   :stroke-width 1.2 :stroke-opacity 0.95))))
 
 (defun takuzu--draw-disc-split (svg cx cy r val given)
-  "Draw the split-field coin of VAL at CX,CY radius R on SVG: gunmetal vs
+  "Draw the split-field coin of VAL at CX,CY radius R on SVG.
+It uses gunmetal versus
 copper, horizontal and vertical hatching either side of a raised bar."
   (let* ((m (takuzu--coin-pair-metal 'split val))
          (ink (takuzu--metal m 3))
@@ -1030,7 +1130,8 @@ copper, horizontal and vertical hatching either side of a raised bar."
               :stroke-width (* r 0.07) :stroke-linecap "round")))
 
 (defun takuzu--draw-disc-rosette (svg cx cy r val given)
-  "Draw the rosette coin of VAL at CX,CY radius R on SVG: iron vs copper,
+  "Draw the rosette coin of VAL at CX,CY radius R on SVG.
+It uses iron versus copper,
 the six-petal stonework rosette inside a scalloped band."
   (let* ((m (takuzu--coin-pair-metal 'rosette val))
          (ink (takuzu--metal m 3))
@@ -1056,7 +1157,8 @@ the six-petal stonework rosette inside a scalloped band."
       (svg-circle svg cx cy (* r 0.10) :fill (takuzu--metal-fixed-ink m)))))
 
 (defun takuzu--draw-disc-machined (svg cx cy r val given)
-  "Draw the machined coin of VAL at CX,CY radius R on SVG: nickel vs brass,
+  "Draw the machined coin of VAL at CX,CY radius R on SVG.
+It uses nickel versus brass,
 lathe grooves under a sweeping light catch.  GIVEN knurls the rim."
   (let ((m (takuzu--coin-pair-metal 'machined val)))
     (takuzu--metal-blank svg cx cy r m given)
@@ -1082,10 +1184,101 @@ lathe grooves under a sweeping light catch.  GIVEN knurls the rim."
                     :stroke-width 2.2 :stroke-opacity 0.85
                     :stroke-dasharray (format "%.2f %.2f" dash dash))))))
 
+(defun takuzu--emblem-yinyang (svg cx cy r given)
+  "Draw the emblem set's taijitu face at CX,CY radius R on SVG.
+Aged nickel under the classic yin-yang: the dark half on the left, its
+teardrop bulging right at the bottom.  GIVEN bears the two classic
+contrast dots; a user coin drops the dots -- no ring, no other marking."
+  (let* ((dark (takuzu--metal 'iron 3))
+         (rr (* r 0.72))
+         (hr (/ rr 2.0))
+         (p (- cy rr))
+         (q (+ cy rr)))
+    (takuzu--metal-blank svg cx cy r 'nickel nil)
+    ;; the engraved well seat, then the light ground the dark half sits on
+    (svg-circle svg cx cy (+ rr 1.2) :fill "none"
+                :stroke dark :stroke-width 1 :stroke-opacity 0.55)
+    (svg-circle svg cx cy rr :fill (takuzu--metal 'nickel 1))
+    ;; the dark half: big arc down the left, teardrop in at the bottom,
+    ;; out at the top
+    (takuzu--coin-path
+     svg (format (concat "M %.2f %.2f A %.2f %.2f 0 0 0 %.2f %.2f "
+                         "A %.2f %.2f 0 0 0 %.2f %.2f "
+                         "A %.2f %.2f 0 0 1 %.2f %.2f Z")
+                 cx p rr rr cx q hr hr cx cy hr hr cx p)
+     'fill dark 'stroke dark 'stroke-width 0.6)
+    (when given
+      ;; the classic contrast dots, one riding each teardrop's heart
+      (svg-circle svg cx (/ (+ cy q) 2.0) (* rr 0.14)
+                  :fill (takuzu--metal 'nickel 0))
+      (svg-circle svg cx (/ (+ cy p) 2.0) (* rr 0.14)
+                  :fill dark))))
+
+(defun takuzu--emblem-gear-d (cx cy r)
+  "The six-toothed gear outline at CX,CY reach R -- all arcs, no corners.
+Each 60-degree pitch is a broad tooth crown riding the outer circle at
+radius 0.97 R, so the tops sit flat on the rim, flowing into a tight
+near-semicircular valley notch dipping to 0.76 R: soft square nubs on
+one smooth band."
+  (let* ((r2 (* r 0.96))
+         (val-rho (* r 0.34))
+         (p0 (takuzu--coin-pt cx cy r2 -13.0))
+         (d (format "M %.2f %.2f " (car p0) (cdr p0))))
+    (dotimes (i 6)
+      (let* ((a (* i 60.0))
+             (crown-end (takuzu--coin-pt cx cy r2 (+ a 13.0)))
+             (val-end (takuzu--coin-pt cx cy r2 (+ a 47.0))))
+        (setq d (concat d
+                        (format "A %.2f %.2f 0 0 1 %.2f %.2f "
+                                r2 r2 (car crown-end) (cdr crown-end))
+                        (format "A %.2f %.2f 0 0 0 %.2f %.2f "
+                                val-rho val-rho (car val-end) (cdr val-end))))))
+    (concat d "Z")))
+
+(defun takuzu--emblem-gear (svg cx cy r given)
+  "Draw the emblem set's industrial-gear face at CX,CY radius R on SVG.
+The same aged nickel as the taijitu face, in the abstract badge
+grammar: six soft rounded teeth on one smooth wavy band, and a wide
+bore that owns the face.  GIVEN caps the bore with a domed hub boss; a
+user gear is pierced -- open straight through to the socket."
+  (let ((m 'nickel)
+        (ink (takuzu--metal 'iron 3)))
+    (takuzu--ensure-metal svg m)
+    ;; the lobed silhouette, teeth and band one struck piece
+    (takuzu--coin-path svg (takuzu--emblem-gear-d cx cy r)
+                       'fill (format "url(#m-%s-fill)" m)
+                       'stroke ink 'stroke-width 1)
+    ;; the lit inner edge seats the band
+    (svg-circle svg cx cy (* r 0.68) :fill "none"
+                :stroke (format "url(#m-%s-edge)" m) :stroke-width (* r 0.06))
+    (takuzu--metal-sheen svg cx cy (* r 0.70))
+    ;; the wide bore: a domed boss caps the fixed gear; the user's is open
+    (if given
+        (progn
+          (svg-circle svg cx cy (* r 0.40) :fill (format "url(#m-%s-fill)" m)
+                      :stroke ink :stroke-width 1)
+          (svg-circle svg cx cy (* r 0.40) :fill "none"
+                      :stroke (format "url(#m-%s-edge)" m)
+                      :stroke-width (* r 0.05) :stroke-opacity 0.85)
+          (svg-circle svg (- cx (* r 0.12)) (- cy (* r 0.13)) (* r 0.06)
+                      :fill (takuzu--c :white) :fill-opacity 0.5))
+      (svg-circle svg cx cy (* r 0.56) :fill (takuzu--c :socket)
+                  :stroke ink :stroke-width 1.3))))
+
+(defun takuzu--draw-disc-emblem (svg cx cy r val given)
+  "Draw the emblem coin of VAL at CX,CY radius R on SVG.
+One metal, two symbols: the values are told apart by device, not
+colour.  Colour 0 is the taijitu; colour 1 the industrial gear; both
+struck in the same aged nickel.  GIVEN follows each symbol's own fixed
+grammar -- contrast dots on the taijitu, a domed hub boss on the gear."
+  (if (eql val 0)
+      (takuzu--emblem-yinyang svg cx cy r given)
+    (takuzu--emblem-gear svg cx cy r given)))
+
 (defun takuzu--coin-skin-drawer (skin)
-  "The draw function for SKIN from the registry, defaulting to the lamp disc."
+  "The draw function for SKIN from the registry, defaulting to the terra disc."
   (or (nth 1 (assq skin takuzu--coin-skin-registry))
-      #'takuzu--draw-disc-lamp))
+      #'takuzu--draw-disc-terra))
 
 (defun takuzu--draw-disc (svg cx cy r val given)
   "Draw the coin for VAL on SVG at CX,CY radius R in the current skin.
@@ -1093,7 +1286,8 @@ GIVEN draws the skin's fixed-coin marking."
   (funcall (takuzu--coin-skin-drawer takuzu-coin-skin) svg cx cy r val given))
 
 (defun takuzu--cycle-skin-by (step)
-  "Turn the coin drum by STEP positions (negative turns back) and redraw."
+  "Turn the coin drum by STEP positions and redraw.
+A negative STEP moves backward."
   (let* ((pos (or (cl-position takuzu-coin-skin takuzu--coin-skins) 0))
          (next (nth (mod (+ pos step) (length takuzu--coin-skins))
                     takuzu--coin-skins)))
@@ -1144,10 +1338,10 @@ no skin is named on the plate."
 The givens' bezel language, applied to the well: a thin turned-metal ring
 seated on the rim at SX,SY (cell size CELL), catching light from the
 top-left with a hard specular flash on that corner's arc.  The metal
-follows the coin set: brass with the original lamp coins, polished iron
+follows the coin set: brass with the original terra coins, polished iron
 with the jewel and compass sets."
   (let ((g "takuzu-cursor-bezel-g")
-        (stops (if (eq takuzu-coin-skin 'lamp)
+        (stops (if (eq takuzu-coin-skin 'terra)
                    takuzu--cursor-bezel-stops
                  takuzu--cursor-iron-stops)))
     ;; machined catch: brightest at the top-left, falling to shadowed metal
@@ -1179,7 +1373,7 @@ with the jewel and compass sets."
                                        (- sx 0.8) (+ sy 9)
                                        (+ sx 9) (- sy 0.8)))
                       (cons 'fill "none")
-                      (cons 'stroke (takuzu--c (if (eq takuzu-coin-skin 'lamp)
+                      (cons 'stroke (takuzu--c (if (eq takuzu-coin-skin 'terra)
                                                    :cursor-spark
                                                  :cursor-iron-spark)))
                       (cons 'stroke-opacity "0.9")
@@ -1204,7 +1398,7 @@ value."
   (let ((val (takuzu-board-ref takuzu--board r c)))
     (when val
       (takuzu--draw-disc svg (+ sx (/ cell 2)) (+ sy (/ cell 2))
-                         (round (* cell 0.33)) val
+                         (round (* cell 0.37)) val
                          (takuzu-board-given-p takuzu--board r c)))))
 
 (defun takuzu--draw-board (svg x y)

@@ -366,6 +366,8 @@ const COLORS = {
   "disc0": "#4d5f75", "disc1": "#8f5236", "bezel": "#a8aeb5",
   "disc0-edge": "#6f839c", "disc1-edge": "#b8734f",
   "disc0-deep": "#2c3745", "disc1-deep": "#4f2c1c",
+  "jewel-sapphire-hi": "#b8d8ff", "jewel-sapphire": "#3f82e3", "jewel-sapphire-deep": "#0b2c72",
+  "jewel-ruby-hi": "#ffc0c7", "jewel-ruby": "#d83b58", "jewel-ruby-deep": "#700b25",
   // coin-skin metals (compass medallions) and the fixed-coin rim
   "coin-iron-hi": "#5a5f66", "coin-iron": "#33363b", "coin-iron-deep": "#1a1c20",
   "coin-copper-hi": "#d99a5e", "coin-copper": "#b87333", "coin-copper-deep": "#6f4218",
@@ -457,14 +459,14 @@ const state = {
   pendingStart: false,
   difficulty: null,
   help: false,
-  coinSkin: "sovereign", // mirror of takuzu-coin-skin (coinset 1 is the default)
+  coinSkin: "wood", // mirror of takuzu-coin-skin (coinset 1 is the default)
 };
 
 // a new skin is always appended at the tail -- existing positions never change
-const COIN_SKINS = ["sovereign", "collegiate", "machined", "cash", "gems",
-                    "lamp", "jewel", "compass", "guilloche", "runic",
+const COIN_SKINS = ["wood", "collegiate", "machined", "cash", "gems",
+                    "terra", "jewel", "compass", "guilloche", "runic",
                     "scallop", "bimetal", "matrix", "split", "rosette",
-                    "filigree", "casino"];
+                    "filigree", "casino", "emblem"];
 
 // --- the struck-metal engine (mirror of takuzu--coin-metal-tones etc.) ---
 
@@ -489,8 +491,12 @@ const COIN_METAL = {
   oxblood:  ["#b3676c", "#8f4046", "#6b2e33", "#331417"],
   // the collegiate pair's school colours, struck dark
   berkeley: ["#5d82ab", "#2b5484", "#00284f", "#001022"],
-  cardinal: ["#b35c5c", "#8f3030", "#701010", "#320505"],
-  // the sovereign skin's woods and gold
+  calblue: ["#3f6ac9", "#1a47a3", "#002676", "#001647"],
+  // The middle ring takes Stanford's relative lip step; inner shade seats blue.
+  calgold: ["#f2d074", "#edb93c", "#ab852e", "#855c09"],
+  cardinal: ["#d1686f", "#b83a4b", "#8c1515", "#820000"],
+  coolgrey: ["#a6a9ae", "#7d8085", "#53565a", "#2e2f31"],
+  // the wood skin's woods and gold
   beech:     ["#f0dfc4", "#ddc19a", "#c4a377", "#6b5133"],
   coal:      ["#6e6c68", "#454340", "#252422", "#0b0b0a"],
   sunflower: ["#ffe3a4", "#ffd274", "#ffc145", "#94691f"],
@@ -648,7 +654,7 @@ function ensureCoinGradient(svg, id, gcx, gcy, gr, stops) {
 }
 
 // Givens wear a thin dulled-silver bezel; placed discs a lighter lip of their colour.
-function drawDiscLamp(svg, cx, cy, r, val, given) {
+function drawDiscTerra(svg, cx, cy, r, val, given) {
   const fill = val === 0 ? c("disc0") : c("disc1");
   const edge = val === 0 ? c("disc0-edge") : c("disc1-edge");
   if (given) {
@@ -659,19 +665,46 @@ function drawDiscLamp(svg, cx, cy, r, val, given) {
   }
 }
 
-// A domed pilot-lamp jewel: radial depth, hard specular catch; a given seats
-// a thin brass collar around the jewel.
+function jewelOctagon(cx, cy, r) {
+  const cut = r * 0.42;
+  return [[cx - cut, cy - r], [cx + cut, cy - r], [cx + r, cy - cut], [cx + r, cy + cut],
+    [cx + cut, cy + r], [cx - cut, cy + r], [cx - r, cy + cut], [cx - r, cy - cut]];
+}
+function ensureJewelGlow(svg, id, tone) {
+  if (!svg.coinGrads) svg.coinGrads = new Set();
+  if (svg.coinGrads.has(id)) return;
+  svg.coinGrads.add(id);
+  svg.push(`<radialGradient id="${id}" cx="0.3" cy="0.25" r="0.82">`
+    + `<stop offset="0" stop-color="${c(`jewel-${tone}-hi`)}" stop-opacity="0.42"/>`
+    + `<stop offset="0.5" stop-color="${c(`jewel-${tone}`)}" stop-opacity="0.18"/>`
+    + `<stop offset="1" stop-color="${c(`jewel-${tone}-deep`)}" stop-opacity="0"/></radialGradient>`);
+}
+// A translucent octagonal sapphire/ruby jewel, lit from upper-left.  A fixed
+// jewel wears a matching brass octagonal collar.
 function drawDiscJewel(svg, cx, cy, r, val, given) {
   const id = `takuzu-coin-jewel-${val}`;
+  const tone = val === 0 ? "sapphire" : "ruby";
+  const hi = c(`jewel-${tone}-hi`), base = c(`jewel-${tone}`), deep = c(`jewel-${tone}-deep`);
+  const outer = jewelOctagon(cx, cy, r), table = jewelOctagon(cx - r * 0.05, cy - r * 0.06, r * 0.48);
+  const glow = jewelOctagon(cx - r * 0.06, cy - r * 0.08, r * 0.68);
+  const facets = [[hi, 0.33], [base, 0.07], [deep, 0.14], [deep, 0.32],
+    [deep, 0.42], [deep, 0.22], [hi, 0.14], [hi, 0.38]];
   ensureCoinGradient(svg, id, 0.38, 0.32, 0.85, val === 0
-    ? [[0, "disc0-edge"], [0.45, "disc0"], [1, "disc0-deep"]]
-    : [[0, "disc1-edge"], [0.45, "disc1"], [1, "disc1-deep"]]);
-  circle(svg, cx, cy, r, { fill: `url(#${id})`, stroke: c("ink"), "stroke-width": 1 });
-  ellipse(svg, cx - r * 0.34, cy - r * 0.38, r * 0.16, r * 0.10,
-    { fill: c("white"), "fill-opacity": 0.55 });
+    ? [[0, "jewel-sapphire-hi"], [0.45, "jewel-sapphire"], [1, "jewel-sapphire-deep"]]
+    : [[0, "jewel-ruby-hi"], [0.45, "jewel-ruby"], [1, "jewel-ruby-deep"]]);
+  ensureJewelGlow(svg, `${id}-glow`, tone);
+  polygon(svg, outer, { fill: `url(#${id})`, stroke: c("ink"), "stroke-width": 1 });
+  polygon(svg, glow, { fill: `url(#${id}-glow)` });
+  line(svg, outer[7][0], outer[7][1], outer[0][0], outer[0][1], { stroke: hi, "stroke-opacity": 0.42, "stroke-width": Math.max(0.55, r * 0.035) });
+  line(svg, outer[0][0], outer[0][1], outer[1][0], outer[1][1], { stroke: hi, "stroke-opacity": 0.30, "stroke-width": Math.max(0.55, r * 0.035) });
+  facets.forEach(([fill, opacity], i) => polygon(svg, [outer[i], outer[(i + 1) % 8], table[(i + 1) % 8], table[i]], { fill, "fill-opacity": opacity }));
+  polygon(svg, table, { fill: base, "fill-opacity": 0.22 });
+  if (r >= 18) {
+    polygon(svg, jewelOctagon(cx - r * 0.11, cy - r * 0.13, r * 0.27), { fill: hi, "fill-opacity": 0.16, stroke: hi, "stroke-opacity": 0.28, "stroke-width": Math.max(0.45, r * 0.025) });
+    ellipse(svg, cx - r * 0.42, cy - r * 0.43, r * 0.075, r * 0.05, { fill: c("white"), "fill-opacity": 0.40 });
+  }
   if (given) {
-    circle(svg, cx, cy, r + 1.6, { fill: "none", stroke: c("gold"), "stroke-width": 1.6 });
-    circle(svg, cx, cy, r + 2.6, { fill: "none", stroke: c("gold-hi"), "stroke-width": 0.6, "stroke-opacity": 0.6 });
+    polygon(svg, jewelOctagon(cx, cy, r + 1.3), { fill: "none", stroke: c("gold"), "stroke-width": 1.6 });
   }
 }
 
@@ -899,8 +932,25 @@ function drawDiscRunic(svg, cx, cy, r, val, given) {
   if (given) metalGivenRing(svg, cx, cy, r, m);
 }
 
-// CASINO -- red chip vs dark navy chip, cream edge spots; user chips
-// carry the cream inlay, fixed chips keep their own colour's full fill
+// the card-spade outline centred at cx,cy with scale s (half-height):
+// two lobes swelling from the top point, curling to the centre cusp,
+// and a flared stem at the base
+function casinoSpadeD(cx, cy, s) {
+  const k = (dx, dy) => `${(cx + s * dx).toFixed(2)} ${(cy + s * dy).toFixed(2)}`;
+  return `M ${k(0, -0.91)}`
+    + ` C ${k(0.10, -0.46)} ${k(0.62, -0.21)} ${k(0.62, 0.19)}`
+    + ` C ${k(0.62, 0.53)} ${k(0.24, 0.59)} ${k(0.10, 0.35)}`
+    + ` C ${k(0.08, 0.64)} ${k(0.20, 0.81)} ${k(0.32, 0.91)}`
+    + ` L ${k(-0.32, 0.91)}`
+    + ` C ${k(-0.20, 0.81)} ${k(-0.08, 0.64)} ${k(-0.10, 0.35)}`
+    + ` C ${k(-0.24, 0.59)} ${k(-0.62, 0.53)} ${k(-0.62, 0.19)}`
+    + ` C ${k(-0.62, -0.21)} ${k(-0.10, -0.46)} ${k(0, -0.91)}`
+    + ` Z`;
+}
+
+// CASINO -- red chip vs dark navy chip, cream edge spots; FIXED chips
+// carry the cream inlay bearing a spade in the chip's own colour,
+// user chips keep their own colour's full fill
 function drawDiscCasino(svg, cx, cy, r, val, given) {
   const m = val === 0 ? "chipred" : "berkeley";
   const cream = "#e9dfc8", creamDeep = "#9a8f74", ink = mDeep(m);
@@ -915,10 +965,13 @@ function drawDiscCasino(svg, cx, cy, r, val, given) {
   if (r >= 20)
     for (const k of [0.68, 0.62])
       circle(svg, cx, cy, r * k, { fill: "none", stroke: ink, "stroke-opacity": 0.35, "stroke-width": 0.7 });
-  if (given)
-    circle(svg, cx, cy, r * 0.52, { fill: mBase(m), stroke: ink, "stroke-width": 0.8, "stroke-opacity": 0.8 });
-  else
+  if (given) {
     circle(svg, cx, cy, r * 0.52, { fill: cream, stroke: creamDeep, "stroke-width": 1 });
+    // the suit mark: a spade in the chip's own colour on the inlay
+    pathEl(svg, casinoSpadeD(cx, cy, r * 0.48),
+      { fill: mBase(m), stroke: ink, "stroke-width": 0.6 });
+  } else
+    circle(svg, cx, cy, r * 0.52, { fill: mBase(m), stroke: ink, "stroke-width": 0.8, "stroke-opacity": 0.8 });
 }
 
 // FILIGREE -- silver vs dark pewter wheel: six spokes over pierced
@@ -948,19 +1001,32 @@ function drawDiscFiligree(svg, cx, cy, r, val, given) {
   filigreeGem(svg, cx, cy, r * 0.15, "diamond", m);
 }
 
-// SOVEREIGN -- one-palette wood pair: a PLACED coin is solid one-tone wood
-// (all coal for 0, all beech for 1) with dots riding the band; a FIXED
-// coin is the two-tone, the ring holding a heart of the other wood.  No
-// holes, no pins.
-function drawDiscSovereign(svg, cx, cy, r, val, given) {
+// WOOD -- one-palette wood pair: every coin is a flat matte one-tone
+// disc (all coal for 0, all beech for 1) with dots riding the band.
+// No gradient field, no sheen, no heart, no holes, no pins.  Both
+// coins wear a rim of their own wood one step lighter than the face,
+// so it stays light on beech and dark on coal: thin on user coins, a
+// wide bar on FIXED coins, widths floored in pixels so the fixed rim
+// stays visible on every board size.
+function drawDiscWood(svg, cx, cy, r, val, given) {
   const wood = val === 0 ? "coal" : "beech";
-  const core = val === 0 ? "beech" : "coal";
   const dots = val === 0 ? "sunflower" : "coal";
-  const h = r * 0.30, ink = mDeep(wood);
-  ensureMetal(svg, wood);
-  circle(svg, cx, cy, r, { fill: mfill(wood), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
-  circle(svg, cx, cy, r - r * 0.045, { fill: "none", stroke: medge(wood), "stroke-width": r * 0.09 });
-  circle(svg, cx, cy, r * 0.84, { fill: "none", stroke: ink, "stroke-opacity": 0.30, "stroke-width": 0.7 });
+  circle(svg, cx, cy, r, { fill: mBase(wood), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
+  if (given) {
+    // the rim bar: flat, same wood, one step lighter; a crisp
+    // glint-tone outer edge and a thin deep seat -- raised but
+    // shallow, no trench
+    const bw = Math.max(r * 0.19, 4), ew = Math.max(r * 0.02, 1);
+    circle(svg, cx, cy, r - bw / 2, { fill: "none", stroke: mHi(wood), "stroke-width": bw });
+    circle(svg, cx, cy, r - ew / 2, { fill: "none", stroke: mGlint(wood), "stroke-width": ew, "stroke-opacity": 0.9 });
+    circle(svg, cx, cy, r - bw, { fill: "none", stroke: mDeep(wood), "stroke-width": ew, "stroke-opacity": 0.8 });
+  } else {
+    // the thin rim: the same flat band scaled down, with a faint seat
+    // line so it still reads as raised
+    const bw = Math.max(r * 0.06, 1.8);
+    circle(svg, cx, cy, r - bw / 2, { fill: "none", stroke: mHi(wood), "stroke-width": bw });
+    circle(svg, cx, cy, r - bw, { fill: "none", stroke: mDeep(wood), "stroke-width": 0.9, "stroke-opacity": 0.5 });
+  }
   if (r >= 20) {
     const seg = (2 * Math.PI * r * 0.66) / 36;
     circle(svg, cx, cy, r * 0.66, {
@@ -968,33 +1034,38 @@ function drawDiscSovereign(svg, cx, cy, r, val, given) {
       "stroke-dasharray": `${(seg * 0.4).toFixed(2)} ${(seg * 0.6).toFixed(2)}`,
     });
   }
-  if (given) {
-    ensureMetal(svg, core);
-    circle(svg, cx, cy, h, { fill: mfill(core), stroke: ink, "stroke-width": 1 });
-    circle(svg, cx, cy, h, { fill: "none", stroke: medge(core), "stroke-width": r * 0.04, "stroke-opacity": 0.8 });
-  }
 }
 
-// COLLEGIATE -- school colours struck dark: Berkeley blue + gold radial vs
-// Stanford cardinal + silver; user coins flat, fixed carry one matte
-// porcelain dot -- no ring around it, no border ring
+// COLLEGIATE -- the schools' official colours, flat and matte in the
+// wood grammar.  Berkeley (0) is a Berkeley-Blue face with a
+// California-Gold rim; Stanford (1) a Cardinal face with a Cool-Grey
+// rim -- each school's two official colours, face primary, rim accent.
+// No centre dots, no chrysanthemum, no sheen. User and FIXED coins share
+// the same wide rim, floored in pixels so it stays visible on every board
+// size.
+// three concentric rings -- glint outer, base mid, deep against the
+// face -- so the rim brightens at the edge and darkens toward the
+// centre; at small scale the sub-pixel rings blend into a gradient
+function collegiateRim(svg, cx, cy, r, rim, bw) {
+  const t3 = bw / 3;
+  circle(svg, cx, cy, r - t3 * 0.5, { fill: "none", stroke: mGlint(rim), "stroke-width": t3 });
+  circle(svg, cx, cy, r - t3 * 1.5, { fill: "none", stroke: mBase(rim), "stroke-width": t3 });
+  circle(svg, cx, cy, r - t3 * 2.5, { fill: "none", stroke: mDeep(rim), "stroke-width": t3 });
+  // Berkeley alone catches a short upper-left reflection on its gold rim.
+  if (rim === "calgold") {
+    const rr = r - bw * 0.30;
+    const opacity = r <= 16 ? 0.50 : 0.70;
+    const [x1, y1] = coinPt(cx, cy, rr, 300), [x2, y2] = coinPt(cx, cy, rr, 336);
+    pathEl(svg, `M ${x1} ${y1} A ${rr.toFixed(2)} ${rr.toFixed(2)} 0 0 1 ${x2} ${y2}`,
+      { fill: "none", stroke: "#fff7cf", "stroke-opacity": opacity,
+        "stroke-width": Math.max(bw * 0.22, 0.75), "stroke-linecap": "round" });
+  }
+}
 function drawDiscCollegiate(svg, cx, cy, r, val, given) {
-  const m = val === 0 ? "berkeley" : "cardinal";
-  const accent = val === 0 ? "sunflower" : "silver";
-  ensureMetal(svg, m);
-  // matte face -- no sheen -- under a wide struck lip
-  circle(svg, cx, cy, r, { fill: mfill(m), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
-  circle(svg, cx, cy, r - r * 0.08, { fill: "none", stroke: medge(m), "stroke-width": r * 0.16 });
-  circle(svg, cx, cy, r - r * 0.165, { fill: "none", stroke: mDeep(m), "stroke-width": 0.8, "stroke-opacity": 0.6 });
-  if (r >= 20)
-    for (let i = 0; i < 16; i++) {
-      const a = i * 22.5;
-      pathEl(svg, `M ${coinPt(cx, cy, r * 0.42, a).join(" ")} L ${coinPt(cx, cy, r * 0.76, a - 7).join(" ")} `
-        + `A ${r * 0.16} ${r * 0.16} 0 0 1 ${coinPt(cx, cy, r * 0.76, a + 7).join(" ")} Z`,
-        { fill: "none", stroke: COIN_METAL[accent][2], "stroke-opacity": 0.75, "stroke-width": 0.8 });
-    }
-  if (!given) return;
-  circle(svg, cx, cy, r * 0.28, { fill: "#fffffb", stroke: mDeep(m), "stroke-width": 0.8 });
+  const face = val === 0 ? "calblue" : "cardinal";
+  const rim = val === 0 ? "calgold" : "coolgrey";
+  circle(svg, cx, cy, r, { fill: mBase(face), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 });
+  collegiateRim(svg, cx, cy, r, rim, Math.max(r * 0.19, 4));
 }
 
 // SCALLOP -- iron vs bronze, twelve-lobed planchet with its own lit rim
@@ -1152,18 +1223,80 @@ function drawDiscMachined(svg, cx, cy, r, val, given) {
   }
 }
 
+// EMBLEM -- one metal, two symbols: the values are told apart by device,
+// not colour.  Colour 0 is the taijitu, colour 1 the industrial gear,
+// both struck in the same aged nickel.  Fixed grammar per symbol:
+// contrast dots on the taijitu, a domed hub boss on the gear.
+function emblemYinyang(svg, cx, cy, r, given) {
+  const dark = mDeep("iron"), rr = r * 0.72, hr = rr / 2;
+  const p = cy - rr, q = cy + rr;
+  metalBlank(svg, cx, cy, r, "nickel", false);
+  // the engraved well seat, then the light ground the dark half sits on
+  circle(svg, cx, cy, rr + 1.2, { fill: "none", stroke: dark, "stroke-width": 1, "stroke-opacity": 0.55 });
+  circle(svg, cx, cy, rr, { fill: mHi("nickel") });
+  // the dark half: big arc down the left, teardrop in at the bottom, out at the top
+  pathEl(svg, `M ${cx} ${p} A ${rr} ${rr} 0 0 0 ${cx} ${q}`
+    + ` A ${hr} ${hr} 0 0 0 ${cx} ${cy} A ${hr} ${hr} 0 0 1 ${cx} ${p} Z`,
+    { fill: dark, stroke: dark, "stroke-width": 0.6 });
+  if (given) {
+    // the classic contrast dots, one riding each teardrop's heart
+    circle(svg, cx, (cy + q) / 2, rr * 0.14, { fill: mGlint("nickel") });
+    circle(svg, cx, (cy + p) / 2, rr * 0.14, { fill: dark });
+  }
+}
+// the six-toothed gear outline -- all arcs, no corners: each 60-degree
+// pitch is a broad tooth crown riding the outer circle (flat tops on the
+// rim) flowing into a wide near-semicircular valley notch dipping to
+// 0.77r: soft square nubs on one smooth band
+function emblemGearD(cx, cy, r) {
+  const r2 = r * 0.96, valRho = r * 0.34;
+  const [x0, y0] = coinPt(cx, cy, r2, -13);
+  let d = `M ${x0.toFixed(2)} ${y0.toFixed(2)} `;
+  for (let i = 0; i < 6; i++) {
+    const a = i * 60;
+    const [tx, ty] = coinPt(cx, cy, r2, a + 13);
+    const [vx, vy] = coinPt(cx, cy, r2, a + 47);
+    d += `A ${r2.toFixed(2)} ${r2.toFixed(2)} 0 0 1 ${tx.toFixed(2)} ${ty.toFixed(2)} `
+      + `A ${valRho.toFixed(2)} ${valRho.toFixed(2)} 0 0 0 ${vx.toFixed(2)} ${vy.toFixed(2)} `;
+  }
+  return d + "Z";
+}
+function emblemGear(svg, cx, cy, r, given) {
+  const m = "nickel", ink = mDeep("iron");
+  ensureMetal(svg, m);
+  // the lobed silhouette, teeth and band one struck piece
+  pathEl(svg, emblemGearD(cx, cy, r),
+    { fill: mfill(m), stroke: ink, "stroke-width": 1 });
+  // the lit inner edge seats the band
+  circle(svg, cx, cy, r * 0.68, { fill: "none", stroke: medge(m), "stroke-width": r * 0.06 });
+  metalSheen(svg, cx, cy, r * 0.70);
+  // the wide bore: a domed boss caps the fixed gear; the user's is open
+  if (given) {
+    circle(svg, cx, cy, r * 0.40, { fill: mfill(m), stroke: ink, "stroke-width": 1 });
+    circle(svg, cx, cy, r * 0.40, { fill: "none", stroke: medge(m), "stroke-width": r * 0.05, "stroke-opacity": 0.85 });
+    circle(svg, cx - r * 0.12, cy - r * 0.13, r * 0.06, { fill: c("white"), "fill-opacity": 0.5 });
+  } else {
+    circle(svg, cx, cy, r * 0.56, { fill: c("socket"), stroke: ink, "stroke-width": 1.3 });
+  }
+}
+function drawDiscEmblem(svg, cx, cy, r, val, given) {
+  if (val === 0) emblemYinyang(svg, cx, cy, r, given);
+  else emblemGear(svg, cx, cy, r, given);
+}
+
 // Mirror of takuzu--draw-disc: dispatch on the current skin.
 const COIN_DRAWERS = {
   filigree: drawDiscFiligree, casino: drawDiscCasino,
-  sovereign: drawDiscSovereign, jewel: drawDiscJewel, compass: drawDiscCompass,
+  wood: drawDiscWood, jewel: drawDiscJewel, compass: drawDiscCompass,
   guilloche: drawDiscGuilloche, runic: drawDiscRunic,
   collegiate: drawDiscCollegiate,
   scallop: drawDiscScallop, bimetal: drawDiscBimetal, cash: drawDiscCash,
   matrix: drawDiscMatrix, gems: drawDiscGems, split: drawDiscSplit,
   rosette: drawDiscRosette, machined: drawDiscMachined,
+  emblem: drawDiscEmblem,
 };
 function drawDisc(svg, cx, cy, r, val, given) {
-  (COIN_DRAWERS[state.coinSkin] || drawDiscLamp)(svg, cx, cy, r, val, given);
+  (COIN_DRAWERS[state.coinSkin] || drawDiscTerra)(svg, cx, cy, r, val, given);
 }
 
 // Mirror of takuzu--draw-skin-selector: the COIN frame's innards, centred on
@@ -1188,11 +1321,11 @@ function drawSkinSelector(svg, cx, fy) {
 
 // The cursor: a machined bezel ring seated on the socket rim, catching light
 // from the top-left with a hard specular flash on that corner's arc.  The
-// metal follows the coin set: brass with the original lamp coins, polished
+// metal follows the coin set: brass with the original terra coins, polished
 // iron with the jewel and compass sets.
 function drawCursorBezel(svg, sx, sy, cell) {
   const g = "takuzu-cursor-bezel-g";
-  const stops = state.coinSkin === "lamp" ? CURSOR_BEZEL_STOPS : CURSOR_IRON_STOPS;
+  const stops = state.coinSkin === "terra" ? CURSOR_BEZEL_STOPS : CURSOR_IRON_STOPS;
   // machined catch: brightest at the top-left, falling to shadowed metal
   svg.push(`<linearGradient id="${g}" gradientUnits="userSpaceOnUse" `
     + `x1="${sx}" y1="${sy}" x2="${sx + cell}" y2="${sy + cell}">`
@@ -1216,7 +1349,7 @@ function drawCursorBezel(svg, sx, sy, cell) {
   // hard specular catch on the top-left corner arc
   pathEl(svg, `M ${sx - 0.8} ${sy + 9} A 9.8 9.8 0 0 1 ${sx + 9} ${sy - 0.8}`, {
     fill: "none",
-    stroke: c(state.coinSkin === "lamp" ? "cursor-spark" : "cursor-iron-spark"),
+    stroke: c(state.coinSkin === "terra" ? "cursor-spark" : "cursor-iron-spark"),
     "stroke-opacity": 0.9,
     "stroke-width": 1.4, "stroke-linecap": "round",
   });
@@ -1247,7 +1380,7 @@ function drawBoard(svg, x, y) {
       });
       if (curP(r, cc)) drawCursorBezel(svg, sx, sy, cell);
       if (val != null)
-        drawDisc(svg, sx + cell / 2, sy + cell / 2, Math.round(cell * 0.33), val, given);
+        drawDisc(svg, sx + cell / 2, sy + cell / 2, Math.round(cell * 0.37), val, given);
     }
   }
   return span;

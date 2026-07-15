@@ -953,6 +953,31 @@ to one surface cannot silently miss the other."
       (takuzu--draw-socket svg 10 10 50 1 1 nil)
       (should-not (dom-by-tag svg 'circle)))))
 
+(ert-deftest test-takuzu-ui-coin-fills-more-of-its-socket ()
+  "Normal: a coin occupies 37 percent of its socket's width as its radius.
+The larger face makes the device read more clearly while preserving a generous
+rim of the existing recess, cursor, and fixed-state markings."
+  (with-temp-buffer
+    (setq takuzu--size 4
+          takuzu--board (takuzu-make-board 4 (vector 0 nil nil nil
+                                                       nil nil nil nil
+                                                       nil nil nil nil
+                                                       nil nil nil nil)))
+    (let (radius)
+      (cl-letf (((symbol-function 'takuzu--draw-disc)
+                 (lambda (_svg _cx _cy r _val _given) (setq radius r))))
+        (takuzu--draw-socket (svg-create 100 100) 10 10 50 0 0 nil))
+      (should (= radius 18)))))
+
+(ert-deftest test-takuzu-ui-html-coin-radius-matches-emacs ()
+  "Error: the HTML mirror must use the same coin-radius multiplier as Emacs."
+  (let* ((root (locate-dominating-file default-directory "Makefile"))
+         (html (with-temp-buffer
+                 (insert-file-contents
+                  (expand-file-name "docs/prototypes/takuzu-hifi.html" root))
+                 (buffer-string))))
+    (should (string-match-p "Math.round(cell \\* 0.37)" html))))
+
 (ert-deftest test-takuzu-ui-on-generated-failure ()
   "Error: a failed background generation reports and rearms cleanly.
 The spinner stops, the generating flag clears, and the GEN FAIL lamp fires
@@ -1284,36 +1309,104 @@ with no games recorded it says so."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value)))
               (car takuzu--coin-skins)))
   (should (equal takuzu--coin-skins
-                 '(sovereign collegiate machined cash gems lamp jewel compass
+                 '(wood collegiate machined cash gems terra jewel compass
                    guilloche runic scallop bimetal matrix split rosette
-                   filigree casino))))
+                   filigree casino emblem))))
 
 (ert-deftest test-takuzu-ui-casino-chips ()
   "Normal: the casino skin deals a red chip for 0 and a dark navy chip
-for 1, cream edge spots on both.  A user chip carries the cream inlay
-centre; a fixed chip keeps its own colour's full fill -- no cream inlay
-and no centre dot."
+for 1, cream edge spots on both.  A FIXED chip carries the cream inlay
+centre bearing the spade; a user chip keeps its own colour's full fill
+-- no cream inlay, no spade, and no centre dot."
   (let ((takuzu-coin-skin 'casino))
     (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
-          (f0 (svg-create 100 100)))
+          (f0 (svg-create 100 100)) (f1 (svg-create 100 100)))
       (takuzu--draw-disc c0 50 50 33 0 nil)
       (takuzu--draw-disc c1 50 50 33 1 nil)
       (takuzu--draw-disc f0 50 50 33 0 t)
+      (takuzu--draw-disc f1 50 50 33 1 t)
       (should (dom-by-id c0 "^m-chipred-fill$"))
       (should (dom-by-id c1 "^m-berkeley-fill$"))
       ;; edge spots: a cream dashed ring on every chip
-      (dolist (svg (list c0 c1 f0))
+      (dolist (svg (list c0 c1 f0 f1))
         (should (seq-find (lambda (n)
                             (and (equal (dom-attr n 'stroke) "#e9dfc8")
                                  (dom-attr n 'stroke-dasharray)))
                           (dom-by-tag svg 'circle))))
-      ;; the cream inlay marks USER chips only; fixed stays full-colour
+      ;; the cream inlay marks FIXED chips only; user stays full-colour
       (should (seq-find (lambda (n)
                           (equal (dom-attr n 'fill) "#e9dfc8"))
-                        (dom-by-tag c0 'circle)))
+                        (dom-by-tag f0 'circle)))
       (should-not (seq-find (lambda (n)
                               (equal (dom-attr n 'fill) "#e9dfc8"))
-                            (dom-by-tag f0 'circle))))))
+                            (dom-by-tag c0 'circle)))
+      ;; the inlay carries a spade in the chip's own colour -- red chip
+      ;; red spade, navy chip blue spade; user chips carry no spade
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'fill)
+                                 (takuzu--metal 'chipred 2)))
+                        (dom-by-tag f0 'path)))
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'fill)
+                                 (takuzu--metal 'berkeley 2)))
+                        (dom-by-tag f1 'path)))
+      (should-not (dom-by-tag c0 'path))
+      (should-not (dom-by-tag c1 'path)))))
+
+(ert-deftest test-takuzu-ui-emblem-symbols-carry-the-value ()
+  "Normal: the emblem set distinguishes values by symbol, not colour --
+both coins are struck in the same nickel; colour 0 is the taijitu,
+colour 1 the industrial gear.  Fixed grammar per symbol: the taijitu's
+two contrast dots mark a fixed 0 (user is dotless); the gear's domed
+hub boss marks a fixed 1 (user is pierced with an open bore)."
+  (let ((takuzu-coin-skin 'emblem))
+    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
+          (f0 (svg-create 100 100)) (f1 (svg-create 100 100))
+          (dark (takuzu--metal 'iron 3))
+          (glint (takuzu--metal 'nickel 0)))
+      (takuzu--draw-disc c0 50 50 33 0 nil)
+      (takuzu--draw-disc c1 50 50 33 1 nil)
+      (takuzu--draw-disc f0 50 50 33 0 t)
+      (takuzu--draw-disc f1 50 50 33 1 t)
+      ;; one metal serves both colours
+      (dolist (svg (list c0 c1))
+        (should (dom-by-id svg "^m-nickel-fill$")))
+      ;; colour 0 is the taijitu: a dark filled path, no gear silhouette
+      (should (seq-find (lambda (n) (equal (dom-attr n 'fill) dark))
+                        (dom-by-tag c0 'path)))
+      (should-not (seq-find (lambda (n)
+                              (equal (dom-attr n 'fill) "url(#m-nickel-fill)"))
+                            (dom-by-tag c0 'path)))
+      ;; colour 1 is the gear: one metal-filled toothed silhouette path
+      ;; whose teeth are integral with the body, and no taijitu path
+      (should (seq-find (lambda (n)
+                          (equal (dom-attr n 'fill) "url(#m-nickel-fill)"))
+                        (dom-by-tag c1 'path)))
+      (should-not (seq-find (lambda (n) (equal (dom-attr n 'fill) dark))
+                            (dom-by-tag c1 'path)))
+      ;; fixed 0 bears the two contrast dots; user 0 is dotless
+      (should (seq-find (lambda (n) (equal (dom-attr n 'fill) dark))
+                        (dom-by-tag f0 'circle)))
+      (should (seq-find (lambda (n) (equal (dom-attr n 'fill) glint))
+                        (dom-by-tag f0 'circle)))
+      (dolist (fill (list dark glint))
+        (should-not (seq-find (lambda (n) (equal (dom-attr n 'fill) fill))
+                              (dom-by-tag c0 'circle))))
+      ;; user 1 is pierced through to the socket; fixed 1 is not
+      (let ((bore (lambda (svg)
+                    (seq-find (lambda (n)
+                                (equal (dom-attr n 'fill) (takuzu--c :socket)))
+                              (dom-by-tag svg 'circle)))))
+        (should (funcall bore c1))
+        (should-not (funcall bore f1)))
+      ;; the fixed boss: a second body-gradient circle at the gear's hub
+      (let ((filled (lambda (svg)
+                      (length (seq-filter
+                               (lambda (n)
+                                 (equal (dom-attr n 'fill)
+                                        "url(#m-nickel-fill)"))
+                               (dom-by-tag svg 'circle))))))
+        (should (> (funcall filled f1) (funcall filled c1)))))))
 
 (ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
   "Normal: r (refresh) turns the coin drum back to coinset 1."
@@ -1344,33 +1437,60 @@ diamond at the hub."
                            (dom-by-tag c0 'circle)))
                   6)))))
 
-(ert-deftest test-takuzu-ui-sovereign-solid-user-two-tone-fixed ()
-  "Normal: a placed sovereign coin is solid one-tone wood -- all coal for
-0, all beech for 1, no hole and no pin; a fixed coin is the two-tone --
-the ring holding a heart of the other wood, with no centre dot."
-  (let ((takuzu-coin-skin 'sovereign))
+(ert-deftest test-takuzu-ui-wood-lip-marks-fixed ()
+  "Normal: every wood coin is a flat matte one-tone disc -- all coal
+for 0, all beech for 1, no gradient field, no sheen, no heart.  Both
+coins wear a lip: thin but noticeable on a user coin, noticeably
+thicker and prominent on a FIXED coin."
+  (let ((takuzu-coin-skin 'wood))
     (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
           (f0 (svg-create 100 100)) (f1 (svg-create 100 100)))
       (takuzu--draw-disc c0 50 50 33 0 nil)
       (takuzu--draw-disc c1 50 50 33 1 nil)
       (takuzu--draw-disc f0 50 50 33 0 t)
       (takuzu--draw-disc f1 50 50 33 1 t)
-      ;; user coins: one wood only
-      (should (dom-by-id c0 "^m-coal-fill$"))
-      (should-not (dom-by-id c0 "^m-beech-fill$"))
-      (should (dom-by-id c1 "^m-beech-fill$"))
-      (should-not (dom-by-id c1 "^m-coal-fill$"))
-      ;; fixed coins: both woods, ring + heart
-      (should (dom-by-id f0 "^m-coal-fill$"))
-      (should (dom-by-id f0 "^m-beech-fill$"))
-      (should (dom-by-id f1 "^m-beech-fill$"))
-      (should (dom-by-id f1 "^m-coal-fill$"))
-      ;; the heart stays small -- well inside the dotted band
-      (let ((heart (seq-find (lambda (n)
-                               (equal (dom-attr n 'fill) "url(#m-beech-fill)"))
-                             (dom-by-tag f0 'circle))))
-        (should heart)
-        (should (<= (dom-attr heart 'r) (* 33 0.32))))
+      ;; flat matte: the body is a solid tone of its own wood -- no
+      ;; gradient fill anywhere on the coin
+      (dolist (pair (list (cons c0 'coal) (cons f0 'coal)
+                          (cons c1 'beech) (cons f1 'beech)))
+        (should (seq-find (lambda (n)
+                            (equal (dom-attr n 'fill)
+                                   (takuzu--metal (cdr pair) 2)))
+                          (dom-by-tag (car pair) 'circle)))
+        (should-not (seq-find (lambda (n)
+                                (let ((fill (dom-attr n 'fill)))
+                                  (and (stringp fill)
+                                       (string-prefix-p "url(#m-" fill))))
+                              (dom-by-tag (car pair) 'circle))))
+      ;; rims on every coin are flat bands of the same wood one step
+      ;; lighter -- never the struck gradient: thin on user, wide on
+      ;; fixed, and floored in pixels so the fixed rim survives 12x12
+      (let ((band-width
+             (lambda (svg wood)
+               (dom-attr (seq-find (lambda (n)
+                                     (equal (dom-attr n 'stroke)
+                                            (takuzu--metal wood 1)))
+                                   (dom-by-tag svg 'circle))
+                         'stroke-width))))
+        (dolist (svg (list c0 c1 f0 f1))
+          (should-not (seq-find (lambda (n)
+                                  (let ((s (dom-attr n 'stroke)))
+                                    (and (stringp s)
+                                         (string-prefix-p "url(#m-" s))))
+                                (dom-by-tag svg 'circle))))
+        (dolist (pair (list (cons c0 'coal) (cons c1 'beech)))
+          (let ((w (funcall band-width (car pair) (cdr pair))))
+            (should w)
+            (should (<= w (* 33 0.08)))))
+        (dolist (case (list (list f0 c0 'coal) (list f1 c1 'beech)))
+          (let ((fw (funcall band-width (nth 0 case) (nth 2 case)))
+                (uw (funcall band-width (nth 1 case) (nth 2 case))))
+            (should (>= fw (* 33 0.18)))
+            (should (>= fw (* uw 3)))))
+        ;; the pixel floor: a 12x12-scale fixed rim never drops below 4px
+        (let ((tiny (svg-create 100 100)))
+          (takuzu--draw-disc tiny 50 50 10 0 t)
+          (should (>= (funcall band-width tiny 'coal) 4))))
       ;; no hole anywhere, no pin anywhere, and matte -- no specular sheen
       (dolist (svg (list c0 c1 f0 f1))
         (should-not (seq-find (lambda (n)
@@ -1434,15 +1554,15 @@ the ring holding a heart of the other wood, with no centre dot."
     (should (eq (keymap-lookup takuzu-mode-map "W") 'takuzu-cycle-skin-back))
     (let ((takuzu-coin-skin 'collegiate))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'sovereign))
+      (should (eq takuzu-coin-skin 'wood))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'casino))
+      (should (eq takuzu-coin-skin 'emblem))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'filigree)))))
+      (should (eq takuzu-coin-skin 'casino)))))
 
 (ert-deftest test-takuzu-ui-every-skin-has-a-drawer ()
   "Normal: every skin in the cycle list resolves to a draw function.
-A skin added to the list without a drawer would silently fall back to lamp."
+A skin added to the list without a drawer would silently fall back to terra."
   (dolist (skin takuzu--coin-skins)
     (should (functionp (takuzu--coin-skin-drawer skin)))))
 
@@ -1479,50 +1599,114 @@ coins define exactly four fills and four edges -- shared, not per-coin."
     (should (= (length (dom-by-tag svg 'linearGradient)) 4))))
 
 (ert-deftest test-takuzu-ui-collegiate-wears-college-colours ()
-  "Normal: the collegiate pair in school colours -- Berkeley blue with gold
-accents for 0, Stanford cardinal with silver accents for 1.  User coins are
-flat faces; a FIXED coin carries a white-filled centre, never a black hole."
+  "Normal: the collegiate pair in the schools' official colours -- each
+its primary as the face and its accent as the rim: Berkeley Blue with a
+California-Gold rim, Cardinal with a Cool-Grey rim.  The rim is a bevel
+of its accent, glint at the outer edge darkening to deep at the face.
+No centre dots, no chrysanthemum, no sheen.  User and FIXED coins wear
+the same wide rim, floored in pixels so it survives every board size."
   (let ((takuzu-coin-skin 'collegiate))
     (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
-          (fx (svg-create 100 100)))
+          (f0 (svg-create 100 100)) (f1 (svg-create 100 100)))
       (takuzu--draw-disc c0 50 50 33 0 nil)
       (takuzu--draw-disc c1 50 50 33 1 nil)
-      (takuzu--draw-disc fx 50 50 33 0 t)
-      (should (dom-by-id c0 "^m-berkeley-fill$"))
-      (should (dom-by-id c1 "^m-cardinal-fill$"))
-      ;; the radial engraves in each school's accent
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'stroke) (takuzu--metal 'sunflower 2)))
-                        (dom-by-tag c0 'path)))
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'stroke) (takuzu--metal 'silver 2)))
-                        (dom-by-tag c1 'path)))
-      ;; user coins are flat; the fixed marking is one matte porcelain
-      ;; dot -- no black hole, no ring around the dot, no border ring
-      (dolist (svg (list c0 c1 fx))
-        (should-not (seq-find (lambda (n)
-                                (equal (dom-attr n 'fill) (takuzu--c :socket)))
-                              (dom-by-tag svg 'circle))))
-      (dolist (svg (list c0 c1))
-        (should-not (seq-find (lambda (n)
-                                (equal (dom-attr n 'fill) "#fffffb"))
-                              (dom-by-tag svg 'circle))))
-      (let ((dots (seq-filter
-                   (lambda (n)
-                     (equal (dom-attr n 'fill) "#fffffb"))
-                   (dom-by-tag fx 'circle))))
-        (should (= (length dots) 1))
-        (should (>= (dom-attr (car dots) 'r) (* 33 0.26))))
-      (should-not (seq-find (lambda (n)
-                              (equal (dom-attr n 'stroke) (takuzu--c :rim-silver)))
-                            (dom-by-tag fx 'circle)))
-      ;; matte face -- no sheen ellipses -- under a wide struck lip
-      (dolist (svg (list c0 c1 fx))
-        (should (= (length (dom-by-tag svg 'ellipse)) 0))
+      (takuzu--draw-disc f0 50 50 33 0 t)
+      (takuzu--draw-disc f1 50 50 33 1 t)
+      ;; flat matte faces in the official base tones -- no gradient fills
+      (dolist (svg (list c0 f0))
         (should (seq-find (lambda (n)
-                            (and (dom-attr n 'stroke-width)
-                                 (>= (dom-attr n 'stroke-width) (* 33 0.14))))
-                          (dom-by-tag svg 'circle)))))))
+                            (equal (dom-attr n 'fill) (takuzu--metal 'calblue 2)))
+                          (dom-by-tag svg 'circle))))
+      (dolist (svg (list c1 f1))
+        (should (seq-find (lambda (n)
+                            (equal (dom-attr n 'fill) (takuzu--metal 'cardinal 2)))
+                          (dom-by-tag svg 'circle))))
+      (dolist (svg (list c0 c1 f0 f1))
+        (should-not (seq-find (lambda (n)
+                                (let ((s (dom-attr n 'fill)))
+                                  (and (stringp s) (string-prefix-p "url(#m-" s))))
+                              (dom-by-tag svg 'circle))))
+      ;; no centre dots, no chrysanthemum, no black hole. Berkeley alone
+      ;; gets one upper-left, rim-only glint; user and fixed share it.
+      (should (= (length (dom-by-tag c0 'path)) 1))
+      (should (= (length (dom-by-tag f0 'path)) 1))
+      (should-not (dom-by-tag c1 'path))
+      (should-not (dom-by-tag f1 'path))
+      (dolist (svg (list c0 f0))
+        (let ((glint (car (dom-by-tag svg 'path))))
+          (should (equal (dom-attr glint :stroke) "#fff7cf"))
+          (should (= (dom-attr glint :stroke-opacity) 0.70))
+          (should (string-match-p " A " (dom-attr glint 'd)))
+          (should (equal (dom-attr glint :fill) "none"))))
+      ;; At the 8x8-and-smaller coin radii, the same reflection recedes.
+      (let ((small-blue (svg-create 100 100)))
+        (takuzu--draw-disc small-blue 50 50 16 0 nil)
+        (should (= (dom-attr (car (dom-by-tag small-blue 'path)) :stroke-opacity)
+                   0.50)))
+      (dolist (svg (list c0 c1 f0 f1))
+        (should-not (seq-find (lambda (n)
+                                (member (dom-attr n 'fill)
+                                        (list "#fffffb" (takuzu--c :socket))))
+                              (dom-by-tag svg 'circle))))
+      ;; Berkeley's second inward rim ring uses the same relative darkness
+      ;; as Stanford's silver lip; #855c09 sits directly against blue.
+      (should (equal (takuzu--metal 'calgold 2) "#ab852e"))
+      (should (equal (takuzu--metal 'calgold 3) "#855c09"))
+      ;; the rim is a bevel of the accent -- California Gold on Berkeley,
+      ;; Cool Grey on Stanford: glint outer, deep inner (darkening toward
+      ;; the face), never a gradient. User and fixed are literal visual
+      ;; copies, with the same wide, pixel-floored construction.
+      (let* ((ring-of
+              (lambda (svg rim tone)
+                (seq-find (lambda (n)
+                            (equal (dom-attr n 'stroke) (takuzu--metal rim tone)))
+                          (dom-by-tag svg 'circle))))
+             (rim-extent
+              (lambda (svg rim)
+                (let ((rings (seq-filter
+                              (lambda (n)
+                                (member (dom-attr n 'stroke)
+                                        (list (takuzu--metal rim 0)
+                                              (takuzu--metal rim 2)
+                                              (takuzu--metal rim 3))))
+                              (dom-by-tag svg 'circle))))
+                  (- (apply #'max (mapcar (lambda (n)
+                                            (+ (dom-attr n 'r)
+                                               (/ (dom-attr n 'stroke-width) 2.0)))
+                                          rings))
+                     (apply #'min (mapcar (lambda (n)
+                                            (- (dom-attr n 'r)
+                                               (/ (dom-attr n 'stroke-width) 2.0)))
+                                          rings)))))))
+        (dolist (svg (list c0 c1 f0 f1))
+          (should-not (seq-find (lambda (n)
+                                  (let ((s (dom-attr n 'stroke)))
+                                    (and (stringp s) (string-prefix-p "url(#m-" s))))
+                                (dom-by-tag svg 'circle))))
+        (dolist (case (list (list c0 f0 'calgold) (list c1 f1 'coolgrey)))
+          (let ((u (nth 0 case)) (f (nth 1 case)) (rim (nth 2 case)))
+            ;; the bevel: glint sits outside deep, so the rim darkens inward
+            (dolist (svg (list u f))
+              (let ((g (funcall ring-of svg rim 0))
+                    (d (funcall ring-of svg rim 3)))
+                (should g)
+                (should d)
+                (should (> (dom-attr g 'r) (dom-attr d 'r)))))
+            (let ((uw (funcall rim-extent u rim))
+                  (fw (funcall rim-extent f rim)))
+              (should (>= uw (* 33 0.18)))
+              (should (= uw fw)))))
+        ;; user and fixed coins have identical SVG geometry for each colour
+        (should (equal (dom-by-tag c0 'circle) (dom-by-tag f0 'circle)))
+        (should (equal (dom-by-tag c1 'circle) (dom-by-tag f1 'circle)))
+        (should (equal (dom-by-tag c0 'path) (dom-by-tag f0 'path)))
+        ;; the pixel floor: a 12x12-scale rim never drops below 4px
+        (let ((tiny (svg-create 100 100)))
+          (takuzu--draw-disc tiny 50 50 10 0 nil)
+          (should (>= (funcall rim-extent tiny 'calgold) 4))))
+      ;; matte -- no sheen ellipses anywhere
+      (dolist (svg (list c0 c1 f0 f1))
+        (should (= (length (dom-by-tag svg 'ellipse)) 0))))))
 
 (ert-deftest test-takuzu-ui-bimetal-wears-dupre-colours ()
   "Normal: the bimetal coin strikes the Dupre palette -- a blue ring with a
@@ -1586,8 +1770,8 @@ a silver body for 0, gold for 1, with at least four gem cuts on the face."
 
 (ert-deftest test-takuzu-ui-draw-disc-dispatches-by-skin ()
   "Normal: each skin draws its signature shapes through the one entry point."
-  (dolist (case '((lamp . ((radialGradient . 0) (polygon . 0)))
-                  (jewel . ((radialGradient . 1) (ellipse . 1)))
+  (dolist (case '((terra . ((radialGradient . 0) (polygon . 0)))
+                  (jewel . ((radialGradient . 2) (polygon . 12) (ellipse . 1)))
                   (compass . ((radialGradient . 1) (polygon . 17)))))
     (let ((takuzu-coin-skin (car case))
           (svg (svg-create 100 100)))
@@ -1596,22 +1780,24 @@ a silver body for 0, gold for 1, with at least four gem cuts on the face."
         (should (= (length (dom-by-tag svg (car want))) (cdr want)))))))
 
 (ert-deftest test-takuzu-ui-jewel-given-wears-collar ()
-  "Normal: a fixed jewel adds the two brass collar rings."
+  "Normal: a fixed jewel adds one brass octagonal collar."
   (let ((takuzu-coin-skin 'jewel))
+    (should (equal (takuzu--c :jewel-sapphire) "#3f82e3"))
+    (should (equal (takuzu--c :jewel-ruby) "#d83b58"))
     (let ((plain (svg-create 100 100)) (fixed (svg-create 100 100)))
       (takuzu--draw-disc plain 50 50 33 1 nil)
       (takuzu--draw-disc fixed 50 50 33 1 t)
-      (should (= (- (length (dom-by-tag fixed 'circle))
-                    (length (dom-by-tag plain 'circle)))
-                 2))
+      (should (= (- (length (dom-by-tag fixed 'polygon))
+                    (length (dom-by-tag plain 'polygon)))
+                 1))
       (should (seq-find (lambda (node)
                           (equal (dom-attr node 'stroke) (takuzu--c :gold)))
-                        (dom-by-tag fixed 'circle))))))
+                        (dom-by-tag fixed 'polygon))))))
 
 (ert-deftest test-takuzu-ui-cursor-bezel-metal-matches-skin ()
-  "Normal: the cursor ring is brass on the original lamp set, iron on the
+  "Normal: the cursor ring is brass on the original terra set, iron on the
 jewel and compass sets."
-  (dolist (case '((lamp . :cursor-bezel-hi)
+  (dolist (case '((terra . :cursor-bezel-hi)
                   (jewel . :cursor-iron-hi)
                   (compass . :cursor-iron-hi)))
     (let ((takuzu-coin-skin (car case))
@@ -1657,20 +1843,20 @@ two-piece needle instead of the sixteen rays."
       (should (= (length (dom-by-tag small 'polygon)) 16)))))
 
 (ert-deftest test-takuzu-ui-shared-coin-gradients-defined-once ()
-  "Boundary: two coins of both colours share one gradient def per colour."
+  "Boundary: two coins of both colours share body and glow gradients."
   (let ((takuzu-coin-skin 'jewel)
         (svg (svg-create 200 100)))
     (takuzu--draw-disc svg 40 50 16 0 nil)
     (takuzu--draw-disc svg 80 50 16 0 nil)
     (takuzu--draw-disc svg 120 50 16 1 nil)
     (takuzu--draw-disc svg 160 50 16 1 nil)
-    (should (= (length (dom-by-tag svg 'radialGradient)) 2))))
+    (should (= (length (dom-by-tag svg 'radialGradient)) 4))))
 
 (ert-deftest test-takuzu-ui-skin-selector-shows-counter ()
   "Normal: the skin selector shows the tape-counter index and never a name."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((sovereign . "01") (collegiate . "02") (machined . "03")
+    (dolist (case '((wood . "01") (collegiate . "02") (machined . "03")
                     (cash . "04") (filigree . "16")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
