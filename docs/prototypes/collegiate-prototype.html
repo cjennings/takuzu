@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Takuzu — Collegiate Coin Prototype</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+         background: #0b0a08; color: #cbd0d6; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  main { max-width: 44rem; padding: 2rem; }
+  h1 { margin: 0 0 0.45rem; font-size: 1rem; font-weight: 600; }
+  p { margin: 0 0 1.2rem; color: #969385; font-size: 0.8rem; line-height: 1.5; }
+  #rows { display: grid; gap: 1rem; }
+  .coin-row { display: grid; grid-template-columns: 5rem auto; align-items: center; gap: 0.45rem; }
+  .size-label { color: #969385; font-size: 0.7rem; line-height: 1.35; }
+  .coin-row svg { display: block; overflow: visible; }
+  .labels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+            margin-top: 0.3rem; color: #7c838a; font-size: 9px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+<h1>COLLEGIATE — live baseline</h1>
+<p>Exact current web-game collegiate drawer at each board size (4×4–12×12).
+Each row uses the game’s faceplate-fit calculation for this browser viewport, so the coins are their actual on-screen size rather than an enlarged sample.</p>
+<div id="rows" aria-label="Live-scale collegiate coin comparison"></div>
+</main>
+<script>
+"use strict";
+// A literal baseline of the current `takuzu-hifi.html` collegiate drawer.
+const COLORS = { ink: "#000000", socket: "#0c0a07", "socket-edge": "#05040a",
+  calblue: ["#3f6ac9", "#1a47a3", "#002676", "#001647"],
+  calgold: ["#f2d074", "#edb93c", "#ab852e", "#855c09"],
+  cardinal: ["#d1686f", "#b83a4b", "#8c1515", "#820000"],
+  coolgrey: ["#a6a9ae", "#7d8085", "#53565a", "#2e2f31"],
+};
+const c = key => COLORS[key];
+const mGlint = metal => COLORS[metal][0], mBase = metal => COLORS[metal][2], mDeep = metal => COLORS[metal][3];
+const el = (tag, attrs) => `<${tag} ${Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(" ")}/>`;
+const circle = (cx, cy, r, attrs) => el("circle", { cx, cy, r, ...attrs });
+const coinPt = (cx, cy, rr, deg) => {
+  const a = (deg - 90) * Math.PI / 180;
+  return [+(cx + rr * Math.cos(a)).toFixed(2), +(cy + rr * Math.sin(a)).toFixed(2)];
+};
+function collegiateRim(cx, cy, r, rim, bw) {
+  const t3 = bw / 3;
+  let result = circle(cx, cy, r - t3 * 0.5, { fill: "none", stroke: mGlint(rim), "stroke-width": t3 })
+    + circle(cx, cy, r - t3 * 1.5, { fill: "none", stroke: mBase(rim), "stroke-width": t3 })
+    + circle(cx, cy, r - t3 * 2.5, { fill: "none", stroke: mDeep(rim), "stroke-width": t3 });
+  if (rim === "calgold") {
+    const rr = r - bw * 0.30;
+    const opacity = r <= 16 ? 0.50 : 0.70;
+    const [x1, y1] = coinPt(cx, cy, rr, 300), [x2, y2] = coinPt(cx, cy, rr, 336);
+    result += el("path", { d: `M ${x1} ${y1} A ${rr.toFixed(2)} ${rr.toFixed(2)} 0 0 1 ${x2} ${y2}`, fill: "none",
+      stroke: "#fff7cf", "stroke-opacity": opacity, "stroke-width": Math.max(bw * 0.22, 0.75), "stroke-linecap": "round" });
+  }
+  return result;
+}
+function drawDiscCollegiate(cx, cy, r, val, given) {
+  const face = val === 0 ? "calblue" : "cardinal";
+  const rim = val === 0 ? "calgold" : "coolgrey";
+  return circle(cx, cy, r, { fill: mBase(face), stroke: c("ink"), "stroke-width": 0.8, "stroke-opacity": 0.85 })
+    + collegiateRim(cx, cy, r, rim, Math.max(r * 0.19, 4));
+}
+function socket(x, y, cell, val, given) {
+  const r = Math.round(cell * 0.37);
+  return el("rect", { x, y, width: cell, height: cell, rx: 9, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1 })
+    + drawDiscCollegiate(x + cell / 2, y + cell / 2, r, val, given);
+}
+// Copied from the live hifi faceplate layout.  The game scales its whole
+// console to fit the viewport, so this scale is part of a coin's visible size.
+const GAP = 6, BPAD = 14, PPAD = 24, STAGE_GAP = 16, PANEL_W = 100;
+const PANEL_MIN_H = 470, TITLE_H = 78, LEGEND_H = 64, EVENT_H = 30, FILL = 0.85;
+const cellSize = size => size <= 6 ? 50 : size <= 8 ? 44 : size <= 10 ? 38 : 34;
+const boardSpan = size => 2 * BPAD + size * cellSize(size) + (size - 1) * GAP;
+function liveScale(size) {
+  const span = boardSpan(size);
+  const width = 2 * PPAD + Math.max(span + STAGE_GAP + PANEL_W, 380);
+  const panelTop = size >= 8 ? PPAD + TITLE_H : PPAD + 6;
+  const stageBottom = Math.max(PPAD + TITLE_H + span, panelTop + PANEL_MIN_H);
+  const height = stageBottom + 12 + EVENT_H + 14 + LEGEND_H + PPAD;
+  return Math.max(0.4, FILL * Math.min(window.innerWidth / width, window.innerHeight / height));
+}
+const SIZES = [4, 6, 8, 10, 12];
+const rows = document.getElementById("rows");
+function render() {
+  rows.innerHTML = SIZES.map(size => {
+    const cell = cellSize(size), radius = Math.round(cell * 0.37), scale = liveScale(size);
+    const rowWidth = 4 * cell + 3 * GAP;
+    const coins = socket(0, 0, cell, 0, false) + socket(cell + GAP, 0, cell, 0, true)
+      + socket(2 * (cell + GAP), 0, cell, 1, false) + socket(3 * (cell + GAP), 0, cell, 1, true);
+    return `<section class="coin-row">
+      <div class="size-label">${size}×${size}<br>${cell}px · r${radius}</div>
+      <div><svg viewBox="0 0 ${rowWidth} ${cell}" width="${rowWidth * scale}" height="${cell * scale}" xmlns="http://www.w3.org/2000/svg">${coins}</svg>
+        <div class="labels" style="width:${rowWidth * scale}px"><span>blue<br>user</span><span>blue<br>fixed</span><span>red<br>user</span><span>red<br>fixed</span></div></div>
+    </section>`;
+  }).join("");
+}
+render();
+window.addEventListener("resize", render);
+</script>
+</body>
+</html>

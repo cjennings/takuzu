@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Takuzu — Jewel Coinset Prototype</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+         background: #0b0a08; color: #cbd0d6; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  main { max-width: 44rem; padding: 2rem; }
+  h1 { margin: 0 0 0.45rem; font-size: 1rem; font-weight: 600; }
+  p { margin: 0 0 1.2rem; color: #969385; font-size: 0.8rem; line-height: 1.5; }
+  #rows { display: grid; gap: 1rem; }
+  .coin-row { display: grid; grid-template-columns: 5rem auto; align-items: center; gap: 0.45rem; }
+  .size-label { color: #969385; font-size: 0.7rem; line-height: 1.35; }
+  .coin-row svg { display: block; overflow: visible; }
+  .labels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+            margin-top: 0.3rem; color: #7c838a; font-size: 9px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+<h1>JEWEL — octagonal sapphire / ruby direction</h1>
+<p>An eight-corner cut stone, lit from the upper left: bright crown facets across the upper-left,
+a saturated central table, and progressively deeper facets toward the lower-right. The geometry
+stays simple enough to read at 8×8–12×12.</p>
+<div id="rows" aria-label="Live-scale jewel coin comparison"></div>
+</main>
+<script>
+"use strict";
+// Prototype direction: large, readable gem planes rather than fine facet grids.
+// Flip to false for the preceding opaque octagonal-cut treatment.
+const JEWEL_TRANSLUCENCY = true;
+const COLORS = {
+  ink: "#000000", socket: "#0c0a07", "socket-edge": "#05040a", white: "#fffffb",
+  gold: "#b99640", "sapphire-hi": "#b8d8ff", sapphire: "#3f82e3", "sapphire-deep": "#0b2c72",
+  "ruby-hi": "#ffc0c7", ruby: "#d83b58", "ruby-deep": "#700b25",
+};
+const c = key => COLORS[key];
+const el = (tag, attrs, content = "") => `<${tag} ${Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(" ")}>${content}</${tag}>`;
+const circle = (cx, cy, r, attrs) => el("circle", { cx, cy, r, ...attrs });
+const ellipse = (cx, cy, rx, ry, attrs) => el("ellipse", { cx, cy, rx, ry, ...attrs });
+const polygon = (points, attrs) => el("polygon", { points: points.map(p => p.join(",")).join(" "), ...attrs });
+const line = (a, b, attrs) => el("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], ...attrs });
+function octagon(cx, cy, r) {
+  const cut = r * 0.42;
+  return [[cx - cut, cy - r], [cx + cut, cy - r], [cx + r, cy - cut], [cx + r, cy + cut],
+    [cx + cut, cy + r], [cx - cut, cy + r], [cx - r, cy + cut], [cx - r, cy - cut]];
+}
+function jewelGradient(id, val) {
+  const stops = val === 0
+    ? [[0, "sapphire-hi"], [0.45, "sapphire"], [1, "sapphire-deep"]]
+    : [[0, "ruby-hi"], [0.45, "ruby"], [1, "ruby-deep"]];
+  return el("radialGradient", { id, cx: 0.38, cy: 0.32, r: 0.85 },
+    stops.map(([offset, color]) => el("stop", { offset, "stop-color": c(color) })).join(""));
+}
+function jewelGlowGradient(id, tone) {
+  return el("radialGradient", { id, cx: 0.30, cy: 0.25, r: 0.82 },
+    el("stop", { offset: 0, "stop-color": c(`${tone}-hi`), "stop-opacity": 0.42 })
+    + el("stop", { offset: 0.50, "stop-color": c(tone), "stop-opacity": 0.18 })
+    + el("stop", { offset: 1, "stop-color": c(`${tone}-deep`), "stop-opacity": 0 }));
+}
+function drawDiscJewel(cx, cy, r, val, given, id) {
+  const tone = val === 0 ? "sapphire" : "ruby";
+  const hi = c(`${tone}-hi`), base = c(tone), deep = c(`${tone}-deep`);
+  const outer = octagon(cx, cy, r), table = octagon(cx - r * 0.05, cy - r * 0.06, r * 0.48);
+  const glow = octagon(cx - r * 0.06, cy - r * 0.08, r * 0.68);
+  // Clockwise crown facets: the top-left three catch light; depth accumulates
+  // through the right and bottom facets, placing the pavilion in lower-right.
+  const facetStyle = JEWEL_TRANSLUCENCY
+    ? [[hi, 0.33], [base, 0.07], [deep, 0.14], [deep, 0.32],
+       [deep, 0.42], [deep, 0.22], [hi, 0.14], [hi, 0.38]]
+    : [[hi, 0.48], [base, 0.10], [deep, 0.20], [deep, 0.52],
+       [deep, 0.64], [deep, 0.34], [hi, 0.18], [hi, 0.58]];
+  const facets = facetStyle.map(([fill, opacity], i) =>
+    polygon([outer[i], outer[(i + 1) % 8], table[(i + 1) % 8], table[i]],
+      { fill, "fill-opacity": opacity })).join("");
+  // The light well is deliberately large-coin-only: it reads as transmitted
+  // light at r18+, but would turn to visual noise on the smaller board sizes.
+  const lightWell = JEWEL_TRANSLUCENCY && r >= 18
+    ? polygon(octagon(cx - r * 0.11, cy - r * 0.13, r * 0.27),
+      { fill: hi, "fill-opacity": 0.16, stroke: hi, "stroke-opacity": 0.28,
+        "stroke-width": Math.max(0.45, r * 0.025) })
+    : "";
+  const internalLight = JEWEL_TRANSLUCENCY
+    ? jewelGlowGradient(`${id}-glow`, tone)
+      + polygon(glow, { fill: `url(#${id}-glow)` })
+      + line(outer[7], outer[0], { stroke: hi, "stroke-opacity": 0.42, "stroke-width": Math.max(0.55, r * 0.035) })
+      + line(outer[0], outer[1], { stroke: hi, "stroke-opacity": 0.30, "stroke-width": Math.max(0.55, r * 0.035) })
+    : "";
+  return jewelGradient(id, val)
+    + polygon(outer, { fill: `url(#${id})`, stroke: c("ink"), "stroke-width": 1 })
+    + internalLight
+    + facets
+    + polygon(table, { fill: base, "fill-opacity": 0.22 })
+    + lightWell
+    + (r >= 18 ? ellipse(cx - r * 0.42, cy - r * 0.43, r * 0.075, r * 0.05,
+      { fill: c("white"), "fill-opacity": 0.40 }) : "")
+    + (given ? polygon(octagon(cx, cy, r + 1.3),
+      { fill: "none", stroke: c("gold"), "stroke-width": 1.6 }) : "");
+}
+function socket(x, y, cell, val, given, id) {
+  const r = Math.round(cell * 0.37);
+  return el("rect", { x, y, width: cell, height: cell, rx: 9, fill: c("socket"), stroke: c("socket-edge"), "stroke-width": 1 })
+    + drawDiscJewel(x + cell / 2, y + cell / 2, r, val, given, id);
+}
+// Copied from the live hifi faceplate layout. The game scales its complete
+// console to fit the viewport, so this scale is part of a coin's visible size.
+const GAP = 6, BPAD = 14, PPAD = 24, STAGE_GAP = 16, PANEL_W = 100;
+const PANEL_MIN_H = 470, TITLE_H = 78, LEGEND_H = 64, EVENT_H = 30, FILL = 0.85;
+const cellSize = size => size <= 6 ? 50 : size <= 8 ? 44 : size <= 10 ? 38 : 34;
+const boardSpan = size => 2 * BPAD + size * cellSize(size) + (size - 1) * GAP;
+function liveScale(size) {
+  const span = boardSpan(size);
+  const width = 2 * PPAD + Math.max(span + STAGE_GAP + PANEL_W, 380);
+  const panelTop = size >= 8 ? PPAD + TITLE_H : PPAD + 6;
+  const stageBottom = Math.max(PPAD + TITLE_H + span, panelTop + PANEL_MIN_H);
+  const height = stageBottom + 12 + EVENT_H + 14 + LEGEND_H + PPAD;
+  return Math.max(0.4, FILL * Math.min(window.innerWidth / width, window.innerHeight / height));
+}
+const SIZES = [4, 6, 8, 10, 12];
+const rows = document.getElementById("rows");
+function render() {
+  rows.innerHTML = SIZES.map(size => {
+    const cell = cellSize(size), radius = Math.round(cell * 0.37), scale = liveScale(size);
+    const rowWidth = 4 * cell + 3 * GAP;
+    const coins = socket(0, 0, cell, 0, false, `jewel-${size}-0-user`)
+      + socket(cell + GAP, 0, cell, 0, true, `jewel-${size}-0-fixed`)
+      + socket(2 * (cell + GAP), 0, cell, 1, false, `jewel-${size}-1-user`)
+      + socket(3 * (cell + GAP), 0, cell, 1, true, `jewel-${size}-1-fixed`);
+    return `<section class="coin-row">
+      <div class="size-label">${size}×${size}<br>${cell}px · r${radius}</div>
+      <div><svg viewBox="0 0 ${rowWidth} ${cell}" width="${rowWidth * scale}" height="${cell * scale}" xmlns="http://www.w3.org/2000/svg">${coins}</svg>
+        <div class="labels" style="width:${rowWidth * scale}px"><span>blue<br>user</span><span>blue<br>fixed</span><span>red<br>user</span><span>red<br>fixed</span></div></div>
+    </section>`;
+  }).join("");
+}
+render();
+window.addEventListener("resize", render);
+</script>
+</body>
+</html>
