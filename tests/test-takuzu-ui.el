@@ -1306,7 +1306,7 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to the drum's head; order is stable."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value)))
               (car takuzu--coin-skins)))
-  (should (equal takuzu--coin-skins '(wood terra))))
+  (should (equal takuzu--coin-skins '(wood terra gestell plain))))
 
 (ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
   "Normal: r (refresh) turns the coin drum back to coinset 1."
@@ -1400,8 +1400,9 @@ thicker and prominent on a FIXED coin."
     (should (eq (keymap-lookup takuzu-mode-map "W") 'takuzu-cycle-skin-back))
     (let ((takuzu-coin-skin 'wood))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'terra))
-      (takuzu-cycle-skin-back)
+      (should (eq takuzu-coin-skin 'plain))
+      (dotimes (_ (1- (length takuzu--coin-skins)))
+        (takuzu-cycle-skin-back))
       (should (eq takuzu-coin-skin 'wood)))))
 
 (ert-deftest test-takuzu-ui-every-skin-has-a-drawer ()
@@ -1463,6 +1464,72 @@ and at board scale, without error and with visible shapes."
         (should (member "COIN" texts))
         ;; the drum shows only the index -- no skin is named on the plate
         (should-not (member (upcase (symbol-name (car case))) texts))))))
+
+;; --- raster coin skins (gestell, plain) ---
+
+(ert-deftest test-takuzu-ui-gestell-raster-faces ()
+  "Normal: gestell draws value 0 as the taijitu sprite and value 1 as the
+gear -- each embedded once as an <image> in <defs> and referenced by a
+<use>, and the two values carry visibly different sprite data."
+  (let ((takuzu-coin-skin 'gestell)
+        (v0 (svg-create 100 100)) (v1 (svg-create 100 100)))
+    (takuzu--draw-disc v0 50 50 33 0 nil)
+    (takuzu--draw-disc v1 50 50 33 1 nil)
+    (let ((img0 (car (dom-by-id v0 "^gest-0$")))
+          (use0 (car (dom-by-tag v0 'use)))
+          (img1 (car (dom-by-id v1 "^gest-1$")))
+          (use1 (car (dom-by-tag v1 'use))))
+      (should img0)
+      (should img1)
+      ;; the sprite is embedded, not referenced from disk
+      (should (string-prefix-p "data:image/png;base64,"
+                               (dom-attr img0 'xlink:href)))
+      ;; the cell references the embedded sprite by id
+      (should (equal (dom-attr use0 'xlink:href) "#gest-0"))
+      (should (equal (dom-attr use1 'xlink:href) "#gest-1"))
+      ;; value carries the face: the two sprites differ
+      (should-not (equal (dom-attr img0 'xlink:href)
+                         (dom-attr img1 'xlink:href))))))
+
+(ert-deftest test-takuzu-ui-plain-raster-faces ()
+  "Normal: plain draws value 0 as the blue coin and value 1 as the red,
+each embedded once and referenced by a <use>; the two faces differ."
+  (let ((takuzu-coin-skin 'plain)
+        (v0 (svg-create 100 100)) (v1 (svg-create 100 100)))
+    (takuzu--draw-disc v0 50 50 33 0 nil)
+    (takuzu--draw-disc v1 50 50 33 1 nil)
+    (let ((img0 (car (dom-by-id v0 "^plain-0$")))
+          (img1 (car (dom-by-id v1 "^plain-1$"))))
+      (should img0)
+      (should img1)
+      (should (equal (dom-attr (car (dom-by-tag v0 'use)) 'xlink:href) "#plain-0"))
+      (should (equal (dom-attr (car (dom-by-tag v1 'use)) 'xlink:href) "#plain-1"))
+      (should-not (equal (dom-attr img0 'xlink:href)
+                         (dom-attr img1 'xlink:href))))))
+
+(ert-deftest test-takuzu-ui-raster-embeds-sprite-once ()
+  "Boundary: a raster face repeated across many cells embeds the heavy
+<image> a single time and references it with one lightweight <use> per
+cell -- the define-once property that keeps a full board's SVG small."
+  (let ((takuzu-coin-skin 'gestell)
+        (svg (svg-create 400 400)))
+    (dotimes (i 8)
+      (takuzu--draw-disc svg (+ 20 (* i 40)) 50 16 0 nil))
+    (should (= (length (dom-by-id svg "^gest-0$")) 1))
+    (should (= (length (dom-by-tag svg 'use)) 8))))
+
+(ert-deftest test-takuzu-ui-raster-skins-ignore-given ()
+  "Normal: the raster themes carry no separate fixed-cell marking, so a
+given cell and a placed cell of the same value render identically."
+  (dolist (skin '(gestell plain))
+    (let ((takuzu-coin-skin skin)
+          (placed (svg-create 100 100)) (given (svg-create 100 100)))
+      (takuzu--draw-disc placed 50 50 33 0 nil)
+      (takuzu--draw-disc given  50 50 33 0 t)
+      (should (equal (dom-attr (car (dom-by-tag placed 'use)) 'xlink:href)
+                     (dom-attr (car (dom-by-tag given 'use)) 'xlink:href)))
+      (should (= (length (dom-children placed))
+                 (length (dom-children given)))))))
 
 (provide 'test-takuzu-ui)
 ;;; test-takuzu-ui.el ends here

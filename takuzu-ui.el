@@ -298,16 +298,26 @@ omits it)."
 
 ;; --- coin skins ---
 
+(defconst takuzu--assets-dir
+  (expand-file-name
+   "assets/"
+   (file-name-directory (or load-file-name buffer-file-name
+                            (locate-library "takuzu-ui"))))
+  "Directory holding the raster coin-sprite PNGs shipped with the package.")
+
 (defconst takuzu--coin-skin-registry
-  '((wood  takuzu--draw-disc-wood  coal beech)
-    (terra takuzu--draw-disc-terra nil  nil))
+  '((wood    takuzu--draw-disc-wood    coal beech)
+    (terra   takuzu--draw-disc-terra   nil  nil)
+    (gestell takuzu--draw-disc-gestell nil  nil)
+    (plain   takuzu--draw-disc-plain   nil  nil))
   "The coin-skin catalogue: (SKIN DRAWER METAL-FOR-0 METAL-FOR-1) rows.
 This one table is the whole configuration -- the cycle order, the
 selector counter, the defcustom choices, the dispatch, and each
 struck-metal skin's pair all read from it.  Adding a coin is one row
 here plus its draw function; a new skin is APPENDED at the tail so the
 existing designs keep their drum positions.  The terra skin carries its
-own colours, so its metals are nil.")
+own colours and the gestell/plain skins are raster art, so their metals
+are nil.")
 
 (defcustom takuzu-coin-skin (caar takuzu--coin-skin-registry)
   "The coin skin drawn on the board.
@@ -495,6 +505,56 @@ their own colour."
           (svg-circle svg cx cy (+ r 1) :fill "none" :stroke (takuzu--c :ink) :stroke-width 1)
           (svg-circle svg cx cy r :fill fill :stroke (takuzu--c :bezel) :stroke-width 1.2))
       (svg-circle svg cx cy r :fill fill :stroke edge :stroke-width 1.2))))
+
+;; --- raster coin skins ---
+
+(defun takuzu--ensure-sprite (svg id file size)
+  "Embed raster sprite FILE in SVG's defs once, as an <image> ID sized SIZE.
+FILE names a PNG under `takuzu--assets-dir'.  The sprite is base64-embedded a
+single time and referenced per cell with <use>, mirroring the define-once
+idiom of `takuzu--ensure-coin-gradient': a themed board carries one copy of
+each face however many cells show it, instead of re-inlining the bytes per
+cell."
+  (unless (dom-by-id svg (concat "^" id "$"))
+    (let* ((path (expand-file-name file takuzu--assets-dir))
+           (data (with-temp-buffer
+                   (set-buffer-multibyte nil)
+                   (insert-file-contents-literally path)
+                   (base64-encode-string (buffer-string) t)))
+           (img (dom-node 'image
+                          (list (cons 'id id)
+                                (cons 'width size) (cons 'height size)
+                                (cons 'x 0) (cons 'y 0)
+                                (cons 'xlink:href
+                                      (concat "data:image/png;base64," data))))))
+      (dom-append-child svg (dom-node 'defs nil img)))))
+
+(defun takuzu--draw-sprite (svg cx cy r id file)
+  "Draw raster sprite FILE on SVG, embedded once as ID, at CX,CY radius R.
+The image is defined at the current cell diameter and placed by the <use>."
+  (takuzu--ensure-sprite svg id file (* r 2.0))
+  (dom-append-child svg
+    (dom-node 'use (list (cons 'xlink:href (concat "#" id))
+                         (cons 'x (- cx r)) (cons 'y (- cy r))))))
+
+(defun takuzu--draw-disc-gestell (svg cx cy r val given)
+  "Draw the gestell raster coin of VAL at CX,CY radius R on SVG.
+Value 0 is the bronze taijitu, value 1 the warm gear.  The warm art carries
+itself on the socket with no added glow.  GIVEN is unused -- the raster
+themes carry no separate fixed-cell marking."
+  (ignore given)
+  (if (eql val 0)
+      (takuzu--draw-sprite svg cx cy r "gest-0" "gestell-taijitu.png")
+    (takuzu--draw-sprite svg cx cy r "gest-1" "gestell-gear.png")))
+
+(defun takuzu--draw-disc-plain (svg cx cy r val given)
+  "Draw the plain raster coin of VAL at CX,CY radius R on SVG.
+Value 0 is the blue coin, value 1 the red coin.  GIVEN is unused -- the
+raster themes carry no separate fixed-cell marking."
+  (ignore given)
+  (if (eql val 0)
+      (takuzu--draw-sprite svg cx cy r "plain-0" "plain-blue.png")
+    (takuzu--draw-sprite svg cx cy r "plain-1" "plain-red.png")))
 
 (defconst takuzu--runic-segments
   '((feoh  (0 -0.5 0 0.5) (0 -0.42 0.42 -0.16) (0 -0.08 0.42 0.18))
