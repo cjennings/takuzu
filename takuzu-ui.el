@@ -800,8 +800,8 @@ value."
   '((gestell . ((4  "gestell-board-4.jpg"  0.2125 0.1870)
                 (6  "gestell-board-6.jpg"  0.1715 0.1289)
                 (8  "gestell-board-8.jpg"  0.1469 0.1009)
-                (10 "gestell-board-10.jpg" 0.1447 0.0789)
-                (12 "gestell-board-12.jpg" 0.1300 0.0731))))
+                (10 "gestell-board-10.jpg" 0.1580 0.0760)
+                (12 "gestell-board-12.jpg" 0.1430 0.0702))))
   "Themed board plates by skin: SKIN -> ((SIZE FILE FIRST PITCH) ...).
 FILE is a plate PNG under `takuzu--assets-dir'; FIRST and PITCH are the
 well-grid geometry as fractions of the board span -- the first well centre
