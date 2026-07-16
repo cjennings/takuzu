@@ -1306,7 +1306,7 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to the drum's head; order is stable."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value)))
               (car takuzu--coin-skins)))
-  (should (equal takuzu--coin-skins '(wood terra gestell collegiate))))
+  (should (equal takuzu--coin-skins '(wood terra collegiate gestell))))
 
 (ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
   "Normal: r (refresh) turns the coin drum back to coinset 1."
@@ -1400,7 +1400,7 @@ thicker and prominent on a FIXED coin."
     (should (eq (keymap-lookup takuzu-mode-map "W") 'takuzu-cycle-skin-back))
     (let ((takuzu-coin-skin 'wood))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'collegiate))
+      (should (eq takuzu-coin-skin 'gestell))
       (dotimes (_ (1- (length takuzu--coin-skins)))
         (takuzu-cycle-skin-back))
       (should (eq takuzu-coin-skin 'wood)))))

@@ -308,8 +308,8 @@ omits it)."
 (defconst takuzu--coin-skin-registry
   '((wood    takuzu--draw-disc-wood    coal beech)
     (terra   takuzu--draw-disc-terra   nil  nil)
-    (gestell    takuzu--draw-disc-gestell    nil nil)
-    (collegiate takuzu--draw-disc-collegiate nil nil))
+    (collegiate takuzu--draw-disc-collegiate nil nil)
+    (gestell    takuzu--draw-disc-gestell    nil nil))
   "The coin-skin catalogue: (SKIN DRAWER METAL-FOR-0 METAL-FOR-1) rows.
 This one table is the whole configuration -- the cycle order, the
 selector counter, the defcustom choices, the dispatch, and each
