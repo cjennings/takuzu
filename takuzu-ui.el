@@ -791,11 +791,11 @@ value."
     span))
 
 (defconst takuzu--coin-skin-boards
-  '((gestell . ((4  "gestell-board-4.png"  0.2125 0.1870)
-                (6  "gestell-board-6.png"  0.1715 0.1289)
-                (8  "gestell-board-8.png"  0.1469 0.1009)
-                (10 "gestell-board-10.png" 0.1447 0.0789)
-                (12 "gestell-board-12.png" 0.1300 0.0731))))
+  '((gestell . ((4  "gestell-board-4.jpg"  0.2125 0.1870)
+                (6  "gestell-board-6.jpg"  0.1715 0.1289)
+                (8  "gestell-board-8.jpg"  0.1469 0.1009)
+                (10 "gestell-board-10.jpg" 0.1447 0.0789)
+                (12 "gestell-board-12.jpg" 0.1300 0.0731))))
   "Themed board plates by skin: SKIN -> ((SIZE FILE FIRST PITCH) ...).
 FILE is a plate PNG under `takuzu--assets-dir'; FIRST and PITCH are the
 well-grid geometry as fractions of the board span -- the first well centre
@@ -832,8 +832,9 @@ FIRST and PITCH are the well-grid geometry as fractions of the board span."
                 (list (cons 'x x) (cons 'y y)
                       (cons 'width span) (cons 'height span)
                       (cons 'xlink:href
-                            (concat "data:image/png;base64,"
-                                    (takuzu--board-plate-data file))))))
+                            (concat "data:image/"
+                                    (if (string-suffix-p ".jpg" file) "jpeg" "png")
+                                    ";base64," (takuzu--board-plate-data file))))))
     (dotimes (r n)
       (dotimes (c n)
         (let* ((cx (round (+ x (* (+ first (* c pitch)) span))))

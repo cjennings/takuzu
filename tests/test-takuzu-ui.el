@@ -1559,8 +1559,8 @@ a skin without draws recessed sockets and no board image."
                                  (equal (dom-attr im 'width) (takuzu--board-span 4)))
                                (dom-by-tag svg 'image))))
         (should (= (length plate) 1))
-        (should (string-prefix-p "data:image/png;base64,"
-                                 (dom-attr (car plate) 'xlink:href)))))
+        (should (string-match-p "^data:image/[a-z]+;base64,"
+                                (dom-attr (car plate) 'xlink:href)))))
     (let ((takuzu-coin-skin 'wood) (svg (svg-create 400 400)))
       (takuzu--draw-board svg 0 0)
       (should-not (dom-by-tag svg 'image))
