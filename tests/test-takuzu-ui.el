@@ -100,10 +100,10 @@ MM:SS from the start means the tube count never changes mid-game."
     (should (= (takuzu--elapsed) 42))))
 
 (ert-deftest test-takuzu-ui-refresh-interval ()
-  "Boundary: refresh interval is clamped to [0.2, 1.0]."
-  (let ((takuzu-flash-period 1.0)) (should (= (takuzu--refresh-interval) 0.5)))
-  (let ((takuzu-flash-period 0.2)) (should (= (takuzu--refresh-interval) 0.2)))
-  (let ((takuzu-flash-period 8.0)) (should (= (takuzu--refresh-interval) 1.0))))
+  "Boundary: refresh interval is clamped to [0.1, 0.15] for a smooth breath."
+  (let ((takuzu-flash-period 1.0)) (should (= (takuzu--refresh-interval) 0.15)))
+  (let ((takuzu-flash-period 8.0)) (should (= (takuzu--refresh-interval) 0.15)))
+  (let ((takuzu-flash-period 0.1)) (should (= (takuzu--refresh-interval) 0.1))))
 
 (ert-deftest test-takuzu-ui-faceplate-dims ()
   "Normal: faceplate width/height are positive and grow with board size."
@@ -1193,11 +1193,19 @@ events get, so the pulse timer must not cut it short."
         (should (= (length (delete-dups (copy-sequence fills))) 1))))))
 
 (ert-deftest test-takuzu-ui-draw-jewel ()
-  "Normal: the jewel lamp draws lit and unlit."
-  (dolist (on '(t nil))
+  "Normal/Boundary: the jewel draws spent, mid-breath, and full without error.
+The dark off-jewel is always laid down first; the lit overlay only appears
+once INTENSITY clears the near-zero threshold."
+  (dolist (intensity '(0.0 0.35 0.5 1.0))
     (let ((svg (svg-create 40 40)))
-      (takuzu--draw-jewel svg 20 20 6 "#6fce33" on)
-      (should (eq (car svg) 'svg)))))
+      (takuzu--draw-jewel svg 20 20 6 "#6fce33" intensity)
+      (should (eq (car svg) 'svg))))
+  ;; a spent lamp draws only the off-jewel; a lit one adds the glow overlay
+  (let ((dark (svg-create 40 40)) (lit (svg-create 40 40)))
+    (takuzu--draw-jewel dark 20 20 6 "#6fce33" 0.0)
+    (takuzu--draw-jewel lit 20 20 6 "#6fce33" 1.0)
+    (should (< (length (dom-by-tag dark 'circle))
+               (length (dom-by-tag lit 'circle))))))
 
 ;; --- stats wiring ---
 
@@ -1579,20 +1587,64 @@ flagged cell (assist), since there is no socket cup to stroke."
       ;; the cursor bezel emits its gradient stops
       (should (dom-by-tag svg 'stop)))))
 
-(ert-deftest test-takuzu-ui-solving-lamp-pulses-with-the-clock ()
-  "Normal: the SOLVING lamp is lit on even clock seconds and dark on odd, so
-it pulses one second on, one second off in time with the ticking clock."
+(ert-deftest test-takuzu-ui-solving-lamp-breathes ()
+  "Normal/Boundary: while solving, the SOLVING lamp breathes a smooth cosine
+between a dim floor and full glow, riding wall-clock time.  It bottoms out at
+`takuzu--breath-floor' and peaks at 1.0 -- never fully dark -- and it goes to
+zero once the game ends and SOLVED takes over."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
     (setq takuzu--armed nil takuzu--won nil takuzu--proven nil)
-    (cl-letf (((symbol-function 'takuzu--elapsed) (lambda () 4)))
-      (should (nth 2 (nth 1 (takuzu--state-lamps)))))
-    (cl-letf (((symbol-function 'takuzu--elapsed) (lambda () 7)))
-      (should-not (nth 2 (nth 1 (takuzu--state-lamps)))))
-    ;; only while solving: a won game shows SOLVED, not a pulsing SOLVING lamp
+    ;; trough at phase 0, crest at half a cycle
+    (cl-letf (((symbol-function 'float-time) (lambda (&optional _) 0.0)))
+      (should (= (takuzu--solving-intensity) takuzu--breath-floor)))
+    (cl-letf (((symbol-function 'float-time)
+               (lambda (&optional _) (/ takuzu--breath-period 2.0))))
+      (should (< (abs (- (takuzu--solving-intensity) 1.0)) 1e-6)))
+    ;; sampled across a cycle, the lamp stays within [floor, 1] -- always lit
+    (dolist (now '(0.0 0.4 0.9 1.3 2.0 2.6))
+      (cl-letf (((symbol-function 'float-time) (lambda (&optional _) now)))
+        (let ((k (nth 2 (nth 1 (takuzu--state-lamps)))))
+          (should (<= takuzu--breath-floor k 1.0)))))
+    ;; a finished game shows SOLVED; the SOLVING lamp is spent, not breathing
     (setq takuzu--won t)
-    (cl-letf (((symbol-function 'takuzu--elapsed) (lambda () 4)))
-      (should-not (nth 2 (nth 1 (takuzu--state-lamps)))))))
+    (should (= (nth 2 (nth 1 (takuzu--state-lamps))) 0.0))))
+
+(ert-deftest test-takuzu-ui-tiles-partition-the-faceplate ()
+  "Normal/Boundary: the three display tiles partition the faceplate exactly.
+Left and right tiles share the top band and abut at the seam; the bottom tile
+spans full width below them.  Their sizes sum to the single-image faceplate,
+so the split introduces no gap or overhang at any board size."
+  (with-temp-buffer
+    (dolist (n '(4 8 12))
+      (setq takuzu--size n takuzu--board (takuzu-make-board n))
+      (let ((w (takuzu--faceplate-width)) (h (takuzu--faceplate-height))
+            (split (takuzu--tile-split-y))
+            (left (takuzu--svg-left)) (right (takuzu--svg-right))
+            (bottom (takuzu--svg-bottom)))
+        (should (= (+ (dom-attr left 'width) (dom-attr right 'width)) w))
+        (should (= (dom-attr left 'height) split))
+        (should (= (dom-attr right 'height) split))
+        (should (= (dom-attr bottom 'width) w))
+        (should (= (+ split (dom-attr bottom 'height)) h))))))
+
+(ert-deftest test-takuzu-ui-left-tile-stable-while-right-breathes ()
+  "Normal: the left tile (title and board) is byte-identical between two
+breathe frames while the right tile (clock and lamps) differs.  That gap is
+the whole point of the split -- Emacs serves the costly plate-bearing left
+tile from its image cache and re-rasterises only the cheap right tile."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (setq takuzu--armed nil takuzu--won nil takuzu--proven nil)
+    (cl-flet ((dump (svg) (with-temp-buffer (svg-print svg) (buffer-string))))
+      (let (l0 l1 r0 r1)
+        (cl-letf (((symbol-function 'float-time) (lambda (&optional _) 0.4)))
+          (setq l0 (dump (takuzu--svg-left)) r0 (dump (takuzu--svg-right))))
+        (cl-letf (((symbol-function 'float-time)
+                   (lambda (&optional _) (/ takuzu--breath-period 2.0))))
+          (setq l1 (dump (takuzu--svg-left)) r1 (dump (takuzu--svg-right))))
+        (should (string= l0 l1))
+        (should-not (string= r0 r1))))))
 
 (provide 'test-takuzu-ui)
 ;;; test-takuzu-ui.el ends here

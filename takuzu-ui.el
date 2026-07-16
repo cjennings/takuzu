@@ -205,15 +205,27 @@ missed cleanup path would otherwise leak the repeating timer forever."
   "Non-nil during the lit half of the current flash cycle (`takuzu-flash-period')."
   (< (mod (float-time) takuzu-flash-period) (* 0.5 takuzu-flash-period)))
 
-(defun takuzu--second-pulse-on-p ()
-  "Non-nil for the lit half of a one-second-on, one-second-off pulse.
-Driven by the game clock via `takuzu--elapsed', so the pulse toggles exactly
-as the displayed seconds tick -- on for even seconds, dark for odd."
-  (cl-evenp (takuzu--elapsed)))
+(defconst takuzu--breath-period 2.6
+  "Seconds per SOLVING-lamp breathing cycle.")
+
+(defconst takuzu--breath-floor 0.35
+  "Dimmest the SOLVING lamp breathes to, in [0,1].
+The lamp swells back from this rather than going fully dark, so it reads as
+a slow breath rather than a blink.")
+
+(defun takuzu--solving-intensity ()
+  "Breathing brightness 0..1 for the SOLVING lamp.
+A slow cosine over `takuzu--breath-period', riding wall-clock time so the
+swell is smooth and independent of the once-a-second game clock.  It ranges
+from `takuzu--breath-floor' to 1.0 -- the lamp never fully darkens."
+  (let ((k (* 0.5 (- 1 (cos (/ (* 2 float-pi (float-time)) takuzu--breath-period))))))
+    (+ takuzu--breath-floor (* (- 1 takuzu--breath-floor) k))))
 
 (defun takuzu--refresh-interval ()
-  "Redraw interval fast enough to show flashing without over-drawing."
-  (max 0.2 (min 1.0 (/ takuzu-flash-period 2.0))))
+  "Redraw interval, fast enough for the SOLVING lamp to breathe smoothly.
+The split render keeps this cheap -- only the plate-free right tile
+re-rasterises each frame, so a fast cadence costs little."
+  (max 0.1 (min 0.15 (/ takuzu-flash-period 2.0))))
 
 (defun takuzu--fmt-time (s)
   "Format S seconds as MM:SS, two digits from the very first second.
@@ -291,6 +303,21 @@ omits it)."
                    (cons 12 (- h 12)) (cons (- w 12) (- h 12))))
     (takuzu--draw-screw svg (car p) (cdr p)))
   (unless no-title (takuzu--draw-title svg takuzu--ppad takuzu--ppad)))
+
+(defun takuzu--draw-shell-slice (svg ox oy)
+  "Draw the faceplate shell into a display tile whose top-left sits at OX,OY.
+The shell rectangle and its four corner screws are placed in full-faceplate
+coordinates shifted by -OX,-OY, so whatever falls outside this tile's own SVG
+bounds is off-canvas.  Each tile then shows exactly its slice of one
+continuous shell -- the border strokes, rounded corners, and screws land
+where the single-image faceplate drew them, and the seams between tiles fall
+on flat plate with no border, so the console reads as one piece."
+  (let ((w (takuzu--faceplate-width)) (h (takuzu--faceplate-height)))
+    (svg-rectangle svg (- ox) (- oy) w h :rx 16
+                   :fill (takuzu--c :plate) :stroke (takuzu--c :plate-edge))
+    (dolist (p (list (cons 12 12) (cons (- w 12) 12)
+                     (cons 12 (- h 12)) (cons (- w 12) (- h 12))))
+      (takuzu--draw-screw svg (- (car p) ox) (- (cdr p) oy)))))
 
 (defun takuzu--empty-count ()
   "Number of still-empty cells on the current board."
@@ -1138,15 +1165,19 @@ incandescent lamp, then fades."
                (takuzu--txt svg (round (+ cx (/ cw 2))) (round (+ cy (/ ch 2) 3))
                             lab 8.5 fg "middle" "bold")))))
 
-(defun takuzu--draw-jewel (svg cx cy r color on)
-  "Draw a jewel pilot lamp on SVG at CX,CY radius R in COLOR; dim when ON is nil."
-  (if on
-      (progn
-        (svg-circle svg cx cy (+ r 3) :fill color :fill-opacity 0.25)
-        (svg-circle svg cx cy r :fill color :stroke (takuzu--c :shadow) :stroke-width 0.6)
-        (svg-circle svg (round (- cx (* r 0.35))) (round (- cy (* r 0.35))) (round (* r 0.4))
-                    :fill (takuzu--c :white) :fill-opacity 0.6))
-    (svg-circle svg cx cy r :fill (takuzu--c :jewel-off) :stroke (takuzu--c :jewel-off-edge) :stroke-width 0.5)))
+(defun takuzu--draw-jewel (svg cx cy r color intensity)
+  "Draw a jewel pilot lamp on SVG at CX,CY radius R in COLOR, lit by INTENSITY.
+INTENSITY in [0,1] fades the lit jewel over the dark off-jewel: 0 is a spent
+lamp, 1 is full glow, and values between breathe the lamp smoothly.  The dark
+off-jewel is always the substrate, so a dim lamp still reads as seated glass."
+  (svg-circle svg cx cy r :fill (takuzu--c :jewel-off)
+              :stroke (takuzu--c :jewel-off-edge) :stroke-width 0.5)
+  (when (> intensity 0.01)
+    (svg-circle svg cx cy (+ r 3) :fill color :fill-opacity (* 0.25 intensity))
+    (svg-circle svg cx cy r :fill color :fill-opacity intensity
+                :stroke (takuzu--c :shadow) :stroke-width 0.6)
+    (svg-circle svg (round (- cx (* r 0.35))) (round (- cy (* r 0.35))) (round (* r 0.4))
+                :fill (takuzu--c :white) :fill-opacity (* 0.6 intensity))))
 
 (defun takuzu--game-state ()
   "The current game STATE symbol: ready, solving, or solved.
@@ -1157,19 +1188,19 @@ failure in its colour instead of a separate SHOWN state."
         (t 'solving)))
 
 (defun takuzu--state-lamps ()
-  "The STATE lamp rows as (LABEL COLOR ON) triples.
-READY and SOLVED are steady.  SOLVING follows the flash cycle so the lamp
-blinks while a game is in play and goes dark once it ends.  SOLVED lights
-green on a win and red when the solution was proven instead -- a reveal is
-a failed solve."
+  "The STATE lamp rows as (LABEL COLOR INTENSITY) triples.
+INTENSITY in [0,1] lights the lamp: READY and SOLVED are steady at 1.0 when
+they hold and 0.0 otherwise, while SOLVING breathes over its range and goes
+to 0.0 once play ends.  SOLVED lights green on a win and red when the
+solution was proven instead -- a reveal is a failed solve."
   (let ((state (takuzu--game-state)))
-    (list (list "READY" (takuzu--c :lamp-green) (eq state 'ready))
+    (list (list "READY" (takuzu--c :lamp-green) (if (eq state 'ready) 1.0 0.0))
           (list "SOLVING" (takuzu--c :lamp-amber)
-                (and (eq state 'solving) (takuzu--second-pulse-on-p)))
+                (if (eq state 'solving) (takuzu--solving-intensity) 0.0))
           (list "SOLVED" (if (and takuzu--proven (not takuzu--won))
                              (takuzu--c :fail)
                            (takuzu--c :lamp-green))
-                (eq state 'solved)))))
+                (if (eq state 'solved) 1.0 0.0)))))
 
 (defun takuzu--draw-state-lamps (svg x y w h)
   "Draw the framed STATE lamp group on SVG at X,Y size W,H."
@@ -1179,10 +1210,13 @@ a failed solve."
          (rowstep (/ (- bot top) (float (1- n)))) (jx (+ x 22)))
     (cl-loop for lamp in lamps for i from 0 do
              (let ((ly (round (+ top (* i rowstep)))) (lab (nth 0 lamp))
-                   (col (nth 1 lamp)) (on (nth 2 lamp)))
-               (takuzu--draw-jewel svg jx ly 6 col on)
+                   (col (nth 1 lamp)) (intensity (nth 2 lamp)))
+               (takuzu--draw-jewel svg jx ly 6 col intensity)
+               ;; the caption brightens with its lamp: steel when spent,
+               ;; cream at full glow, tracking the breath in between
                (takuzu--txt svg (+ jx 13) (+ ly 3) lab 7
-                            (if on (takuzu--c :cream) (takuzu--c :steel)) "start")))))
+                            (takuzu--lerp-color (takuzu--c :steel) (takuzu--c :cream) intensity)
+                            "start")))))
 
 (defconst takuzu--legend
   '((game . ((word "NEW" flash) (word "RESET") (word "SIZE") (word "LEVEL")
@@ -1272,6 +1306,65 @@ extra room."
     (let ((evy (+ bottom 12)))
       (takuzu--draw-event-annunciator svg ppad evy (takuzu--strip-width) takuzu--event-h)
       (takuzu--draw-legend svg ppad (+ evy takuzu--event-h 14) (- w (* 2 ppad))))
+    svg))
+
+;; The live renderer draws the faceplate as three abutting display tiles
+;; rather than the single `takuzu--svg' image above.  The tiles carve the
+;; faceplate so the costly board plate sits alone in the left tile: that tile
+;; holds no clock or lamp, so its SVG is byte-identical between refreshes and
+;; Emacs serves it from the image cache while the panel breathes.  Only the
+;; cheap, plate-free right tile re-rasterises each frame.  `takuzu--svg'
+;; stays as the whole-faceplate reference the render tests still draw against;
+;; the tiles reuse its geometry so the two never drift.
+
+(defun takuzu--tile-seam ()
+  "X of the vertical seam between the left (board) and right (panel) tiles.
+It falls in the middle of the board-to-panel gap, on flat plate, so the two
+tiles abut with no visible join."
+  (+ takuzu--ppad (takuzu--board-span takuzu--size) (/ takuzu--stage-gap 2)))
+
+(defun takuzu--tile-split-y ()
+  "Y of the horizontal seam between the top tiles and the bottom tile."
+  (takuzu--stage-bottom))
+
+(defun takuzu--svg-left ()
+  "Left display tile: the title and the board.
+Free of clock and lamp state, so its SVG is byte-stable between refreshes --
+Emacs serves it from the image cache and the board plate is not re-rasterised
+while the panel breathes."
+  (let* ((n takuzu--size) (boardw (takuzu--board-span n))
+         (leftw (takuzu--tile-seam)) (toph (takuzu--tile-split-y))
+         (stagey (+ takuzu--ppad takuzu--title-h))
+         (boardy (+ stagey (/ (- toph stagey boardw) 2)))
+         (svg (svg-create leftw toph)))
+    (takuzu--draw-shell-slice svg 0 0)
+    (takuzu--draw-title svg takuzu--ppad takuzu--ppad)
+    (takuzu--draw-board svg takuzu--ppad boardy)
+    svg))
+
+(defun takuzu--svg-right ()
+  "Right display tile: the instrument panel.
+Carries the clock and the breathing STATE lamps, so it re-rasterises each
+refresh -- cheap, because it holds no board plate."
+  (let* ((seam (takuzu--tile-seam)) (toph (takuzu--tile-split-y))
+         (rightw (- (takuzu--faceplate-width) seam))
+         (px (+ takuzu--ppad (takuzu--board-span takuzu--size) takuzu--stage-gap))
+         (ptop (takuzu--panel-top))
+         (svg (svg-create rightw toph)))
+    (takuzu--draw-shell-slice svg seam 0)
+    (takuzu--draw-panel svg (- px seam) ptop (- toph ptop))
+    svg))
+
+(defun takuzu--svg-bottom ()
+  "Bottom display tile: the event annunciator and the key legend, full width."
+  (let* ((w (takuzu--faceplate-width)) (toph (takuzu--tile-split-y))
+         (bh (- (takuzu--faceplate-height) toph))
+         (svg (svg-create w bh)))
+    (takuzu--draw-shell-slice svg 0 toph)
+    (let ((evy 12))
+      (takuzu--draw-event-annunciator svg takuzu--ppad evy (takuzu--strip-width) takuzu--event-h)
+      (takuzu--draw-legend svg takuzu--ppad (+ evy takuzu--event-h 14)
+                           (- w (* 2 takuzu--ppad))))
     svg))
 
 ;; --- text fallback (tty) ---
@@ -1552,11 +1645,24 @@ Kicks off the scale-easing timer when the displayed scale is off target."
             (takuzu--run-buffer-timer 0 takuzu--scale-interval
                                       #'takuzu--ease-scale (current-buffer))))
     (insert (make-string toplines ?\n))
-    (insert (make-string hpad ?\s))
-    (insert-image (svg-image (cond (takuzu--help (takuzu--svg-help))
-                                   (takuzu--generating (takuzu--svg-generating))
-                                   (t (takuzu--svg)))
-                             :scale scale))))
+    (cond
+     (takuzu--help
+      (insert (make-string hpad ?\s))
+      (insert-image (svg-image (takuzu--svg-help) :scale scale :ascent 100)))
+     (takuzu--generating
+      (insert (make-string hpad ?\s))
+      (insert-image (svg-image (takuzu--svg-generating) :scale scale :ascent 100)))
+     (t
+      ;; Play view: three abutting tiles so the plate-bearing left tile stays
+      ;; cache-stable while the panel breathes.  Same scale and top ascent
+      ;; keep them aligned; the plate-coloured buffer background hides any
+      ;; sub-pixel seam between separately rasterised tiles.
+      (insert (make-string hpad ?\s))
+      (insert-image (svg-image (takuzu--svg-left) :scale scale :ascent 100))
+      (insert-image (svg-image (takuzu--svg-right) :scale scale :ascent 100))
+      (insert "\n")
+      (insert (make-string hpad ?\s))
+      (insert-image (svg-image (takuzu--svg-bottom) :scale scale :ascent 100))))))
 
 (defun takuzu--redraw-textual ()
   "Insert the plain-text fallback for the current state (help/generating/board)."
@@ -1948,6 +2054,13 @@ in a buried buffer."
   "Major mode for playing Takuzu (Binairo)."
   (setq-local cursor-type nil)
   (setq-local truncate-lines t)
+  ;; The play view stacks three display tiles.  Zero line-spacing keeps the
+  ;; two image rows flush, and a plate-coloured background fills any
+  ;; sub-pixel seam between tiles with the shell's own near-black so no join
+  ;; shows.  Plate is dark enough that the rounded outer corners read the
+  ;; same as against the default background.
+  (setq-local line-spacing 0)
+  (face-remap-add-relative 'default :background (takuzu--c :plate))
   (buffer-disable-undo)
   (add-hook 'kill-buffer-hook #'takuzu--cleanup nil t)
   (add-hook 'window-configuration-change-hook #'takuzu--on-window-change nil t))
