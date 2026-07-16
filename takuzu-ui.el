@@ -773,8 +773,8 @@ value."
                          (round (* cell 0.37)) val
                          (takuzu-board-given-p takuzu--board r c)))))
 
-(defun takuzu--draw-board (svg x y)
-  "Draw the board on SVG with its top-left at X,Y."
+(defun takuzu--draw-board-sockets (svg x y)
+  "Draw the default recessed-socket board on SVG with its top-left at X,Y."
   (let* ((n takuzu--size) (cell (takuzu--cell-size n))
          (gap takuzu--gap) (bpad takuzu--bpad)
          (span (takuzu--board-span n))
@@ -789,6 +789,76 @@ value."
                              cell r c
                              (and errs (aref errs (+ (* r n) c)) t))))
     span))
+
+(defconst takuzu--coin-skin-boards
+  '((gestell . ((4  "gestell-board-4.png"  0.2125 0.1870)
+                (6  "gestell-board-6.png"  0.1715 0.1289)
+                (8  "gestell-board-8.png"  0.1469 0.1009)
+                (10 "gestell-board-10.png" 0.1447 0.0789)
+                (12 "gestell-board-12.png" 0.1300 0.0731))))
+  "Themed board plates by skin: SKIN -> ((SIZE FILE FIRST PITCH) ...).
+FILE is a plate PNG under `takuzu--assets-dir'; FIRST and PITCH are the
+well-grid geometry as fractions of the board span -- the first well centre
+and the centre-to-centre pitch, measured off the plate art.  A skin absent
+from this table draws the default socket board.")
+
+(defvar takuzu--board-plate-cache (make-hash-table :test 'equal)
+  "Memoized base64 of board-plate files, keyed by absolute path.")
+
+(defun takuzu--skin-board (skin size)
+  "Return (FILE FIRST PITCH) for SKIN's board plate at SIZE, or nil for sockets."
+  (cdr (assq size (cdr (assq skin takuzu--coin-skin-boards)))))
+
+(defun takuzu--board-plate-data (file)
+  "Base64 of board-plate FILE under `takuzu--assets-dir', memoized.
+The plate is large, so it is read and encoded once and reused across redraws."
+  (let ((path (expand-file-name file takuzu--assets-dir)))
+    (or (gethash path takuzu--board-plate-cache)
+        (puthash path
+                 (with-temp-buffer
+                   (set-buffer-multibyte nil)
+                   (insert-file-contents-literally path)
+                   (base64-encode-string (buffer-string) t))
+                 takuzu--board-plate-cache))))
+
+(defun takuzu--draw-board-plate (svg x y file first pitch)
+  "Draw the board as raster plate FILE at X,Y on SVG, pieces resting in its wells.
+FIRST and PITCH are the well-grid geometry as fractions of the board span."
+  (let* ((n takuzu--size) (span (takuzu--board-span n))
+         (errs (takuzu--error-vector))
+         (cellf (* pitch span)))
+    (dom-append-child svg
+      (dom-node 'image
+                (list (cons 'x x) (cons 'y y)
+                      (cons 'width span) (cons 'height span)
+                      (cons 'xlink:href
+                            (concat "data:image/png;base64,"
+                                    (takuzu--board-plate-data file))))))
+    (dotimes (r n)
+      (dotimes (c n)
+        (let* ((cx (round (+ x (* (+ first (* c pitch)) span))))
+               (cy (round (+ y (* (+ first (* r pitch)) span))))
+               (rr (round (* cellf 0.40)))
+               (bc (round (* cellf 0.96)))
+               (val (takuzu-board-ref takuzu--board r c)))
+          (when (and errs (aref errs (+ (* r n) c)))
+            (svg-rectangle svg (round (- cx (/ bc 2))) (round (- cy (/ bc 2))) bc bc
+                           :rx 8 :fill "none" :stroke (takuzu--c :fail) :stroke-width 2))
+          (when (takuzu--curp r c)
+            (takuzu--draw-cursor-bezel svg (round (- cx (/ bc 2))) (round (- cy (/ bc 2))) bc))
+          (when val
+            (takuzu--draw-disc svg cx cy rr val
+                               (takuzu-board-given-p takuzu--board r c))))))
+    span))
+
+(defun takuzu--draw-board (svg x y)
+  "Draw the board on SVG at X,Y.
+The active skin's themed board plate if it has one (see
+`takuzu--coin-skin-boards'), otherwise the default recessed sockets."
+  (let ((board (takuzu--skin-board takuzu-coin-skin takuzu--size)))
+    (if board
+        (takuzu--draw-board-plate svg x y (nth 0 board) (nth 1 board) (nth 2 board))
+      (takuzu--draw-board-sockets svg x y))))
 
 (defun takuzu--draw-nixie-tube (svg x y w h ch lit)
   "Draw a nixie tube on SVG at X,Y size W,H showing string CH.

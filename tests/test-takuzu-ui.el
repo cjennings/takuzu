@@ -1534,5 +1534,62 @@ given cell and a placed cell of the same value render identically."
       (should (= (length (dom-children placed))
                  (length (dom-children given)))))))
 
+;; --- themed board plates ---
+
+(ert-deftest test-takuzu-ui-skin-board-lookup ()
+  "Normal: gestell carries a board plate for every size; other skins don't."
+  (dolist (sz '(4 6 8 10 12))
+    (let ((b (takuzu--skin-board 'gestell sz)))
+      (should b)
+      (should (stringp (nth 0 b)))
+      (should (numberp (nth 1 b)))
+      (should (numberp (nth 2 b)))))
+  (dolist (skin '(wood terra collegiate))
+    (should-not (takuzu--skin-board skin 8))))
+
+(ert-deftest test-takuzu-ui-board-plate-vs-sockets-dispatch ()
+  "Normal: a skin with a board plate draws one plate image at board span;
+a skin without draws recessed sockets and no board image."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (let ((takuzu-coin-skin 'gestell) (svg (svg-create 400 400)))
+      (takuzu--draw-board svg 0 0)
+      ;; exactly one board-span image (the plate); sprite images live in defs
+      (let ((plate (seq-filter (lambda (im)
+                                 (equal (dom-attr im 'width) (takuzu--board-span 4)))
+                               (dom-by-tag svg 'image))))
+        (should (= (length plate) 1))
+        (should (string-prefix-p "data:image/png;base64,"
+                                 (dom-attr (car plate) 'xlink:href)))))
+    (let ((takuzu-coin-skin 'wood) (svg (svg-create 400 400)))
+      (takuzu--draw-board svg 0 0)
+      (should-not (dom-by-tag svg 'image))
+      (should (dom-by-tag svg 'rect)))))
+
+(ert-deftest test-takuzu-ui-board-plate-places-a-piece-per-filled-cell ()
+  "Normal: in plate mode every filled cell gets a piece drawn via <use>."
+  (test-takuzu-ui--with-buffer
+    ;; a 4x4 with all cells filled
+    (let ((cells (make-vector 16 0)))
+      (test-takuzu-ui--setup-4 cells)
+      (let ((takuzu-coin-skin 'gestell) (svg (svg-create 400 400)))
+        (takuzu--draw-board svg 0 0)
+        (should (= (length (dom-by-tag svg 'use)) 16))))))
+
+(ert-deftest test-takuzu-ui-board-plate-cursor-and-error-cues ()
+  "Normal: plate mode draws the cursor bezel on the cursor cell and rings a
+flagged cell (assist), since there is no socket cup to stroke."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4 (vector 0 0 0 nil nil nil nil nil
+                                     nil nil nil nil nil nil nil nil))
+    (setq takuzu--assist t takuzu--cursor '(0 . 3))
+    (let ((takuzu-coin-skin 'gestell) (svg (svg-create 400 400)))
+      (takuzu--draw-board svg 0 0)
+      ;; the three same-colour cells in row 0 are a rule break -> a fail-stroked ring
+      (should (seq-find (lambda (n) (equal (dom-attr n 'stroke) (takuzu--c :fail)))
+                        (dom-by-tag svg 'rect)))
+      ;; the cursor bezel emits its gradient stops
+      (should (dom-by-tag svg 'stop)))))
+
 (provide 'test-takuzu-ui)
 ;;; test-takuzu-ui.el ends here
