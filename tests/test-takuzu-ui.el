@@ -1114,18 +1114,6 @@ and assist lives in the strip under the board."
       (should (nth 2 solved))
       (should (equal (nth 1 solved) (takuzu--c :fail))))))
 
-(ert-deftest test-takuzu-ui-state-lamps-solving-flashes ()
-  "Normal: the SOLVING lamp follows the flash cycle mid-game, off once solved."
-  (with-temp-buffer
-    (setq takuzu--armed nil takuzu--won nil takuzu--proven nil)
-    (cl-letf (((symbol-function 'takuzu--flash-on-p) (lambda () t)))
-      (should (nth 2 (assoc "SOLVING" (takuzu--state-lamps)))))
-    (cl-letf (((symbol-function 'takuzu--flash-on-p) (lambda () nil)))
-      (should-not (nth 2 (assoc "SOLVING" (takuzu--state-lamps)))))
-    (setq takuzu--won t)
-    (cl-letf (((symbol-function 'takuzu--flash-on-p) (lambda () t)))
-      (should-not (nth 2 (assoc "SOLVING" (takuzu--state-lamps)))))))
-
 (ert-deftest test-takuzu-ui-legend-assist-lit ()
   "Normal: assist mode lights the ASSIST legend word in the strip under the board."
   (test-takuzu-ui--with-buffer
@@ -1590,6 +1578,21 @@ flagged cell (assist), since there is no socket cup to stroke."
                         (dom-by-tag svg 'rect)))
       ;; the cursor bezel emits its gradient stops
       (should (dom-by-tag svg 'stop)))))
+
+(ert-deftest test-takuzu-ui-solving-lamp-pulses-with-the-clock ()
+  "Normal: the SOLVING lamp is lit on even clock seconds and dark on odd, so
+it pulses one second on, one second off in time with the ticking clock."
+  (test-takuzu-ui--with-buffer
+    (test-takuzu-ui--setup-4)
+    (setq takuzu--armed nil takuzu--won nil takuzu--proven nil)
+    (cl-letf (((symbol-function 'takuzu--elapsed) (lambda () 4)))
+      (should (nth 2 (nth 1 (takuzu--state-lamps)))))
+    (cl-letf (((symbol-function 'takuzu--elapsed) (lambda () 7)))
+      (should-not (nth 2 (nth 1 (takuzu--state-lamps)))))
+    ;; only while solving: a won game shows SOLVED, not a pulsing SOLVING lamp
+    (setq takuzu--won t)
+    (cl-letf (((symbol-function 'takuzu--elapsed) (lambda () 4)))
+      (should-not (nth 2 (nth 1 (takuzu--state-lamps)))))))
 
 (provide 'test-takuzu-ui)
 ;;; test-takuzu-ui.el ends here

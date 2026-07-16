@@ -205,6 +205,12 @@ missed cleanup path would otherwise leak the repeating timer forever."
   "Non-nil during the lit half of the current flash cycle (`takuzu-flash-period')."
   (< (mod (float-time) takuzu-flash-period) (* 0.5 takuzu-flash-period)))
 
+(defun takuzu--second-pulse-on-p ()
+  "Non-nil for the lit half of a one-second-on, one-second-off pulse.
+Driven by the game clock via `takuzu--elapsed', so the pulse toggles exactly
+as the displayed seconds tick -- on for even seconds, dark for odd."
+  (cl-evenp (takuzu--elapsed)))
+
 (defun takuzu--refresh-interval ()
   "Redraw interval fast enough to show flashing without over-drawing."
   (max 0.2 (min 1.0 (/ takuzu-flash-period 2.0))))
@@ -1159,7 +1165,7 @@ a failed solve."
   (let ((state (takuzu--game-state)))
     (list (list "READY" (takuzu--c :lamp-green) (eq state 'ready))
           (list "SOLVING" (takuzu--c :lamp-amber)
-                (and (eq state 'solving) (takuzu--flash-on-p)))
+                (and (eq state 'solving) (takuzu--second-pulse-on-p)))
           (list "SOLVED" (if (and takuzu--proven (not takuzu--won))
                              (takuzu--c :fail)
                            (takuzu--c :lamp-green))
