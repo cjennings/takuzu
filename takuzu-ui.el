@@ -299,10 +299,8 @@ omits it)."
 ;; --- coin skins ---
 
 (defconst takuzu--coin-skin-registry
-  '((wood       takuzu--draw-disc-wood       coal    beech)
-    (collegiate takuzu--draw-disc-collegiate calblue cardinal)
-    (terra      takuzu--draw-disc-terra      nil     nil)
-    (casino     takuzu--draw-disc-casino     chipred berkeley))
+  '((wood  takuzu--draw-disc-wood  coal beech)
+    (terra takuzu--draw-disc-terra nil  nil))
   "The coin-skin catalogue: (SKIN DRAWER METAL-FOR-0 METAL-FOR-1) rows.
 This one table is the whole configuration -- the cycle order, the
 selector counter, the defcustom choices, the dispatch, and each
@@ -578,102 +576,6 @@ gallery, panel 13, iterated live."
                     :stroke (takuzu--metal dots 2)
                     :stroke-width (* r 0.05) :stroke-opacity 0.9
                     :stroke-dasharray (format "%.2f %.2f" (* seg 0.4) (* seg 0.6)))))))
-
-(defun takuzu--casino-spade-d (cx cy s)
-  "The card-spade outline centred at CX,CY with scale S (half-height).
-Two lobes swelling from the top point, curling to the centre cusp, and
-a flared stem at the base -- the classic playing-card spade."
-  (let ((k (lambda (dx dy) (format "%.2f %.2f" (+ cx (* s dx)) (+ cy (* s dy))))))
-    (concat
-     "M " (funcall k 0 -0.91)
-     " C " (funcall k 0.10 -0.46) " " (funcall k 0.62 -0.21) " " (funcall k 0.62 0.19)
-     " C " (funcall k 0.62 0.53) " " (funcall k 0.24 0.59) " " (funcall k 0.10 0.35)
-     " C " (funcall k 0.08 0.64) " " (funcall k 0.20 0.81) " " (funcall k 0.32 0.91)
-     " L " (funcall k -0.32 0.91)
-     " C " (funcall k -0.20 0.81) " " (funcall k -0.08 0.64) " " (funcall k -0.10 0.35)
-     " C " (funcall k -0.24 0.59) " " (funcall k -0.62 0.53) " " (funcall k -0.62 0.19)
-     " C " (funcall k -0.62 -0.21) " " (funcall k -0.10 -0.46) " " (funcall k 0 -0.91)
-     " Z")))
-
-(defun takuzu--draw-disc-casino (svg cx cy r val given)
-  "Draw the casino chip of VAL at CX,CY radius R on SVG.
-A red chip for 0, a dark navy chip for 1, eight cream edge spots riding
-the rim of both.  A FIXED chip carries the cream inlay centre bearing a
-spade in the chip's own colour -- red spade on the red chip, blue on
-the navy; a user chip keeps the full fill of its own colour -- no
-inlay, no spade, no centre dot."
-  (let* ((m (takuzu--coin-pair-metal 'casino val))
-         (cream "#e9dfc8")
-         (cream-deep "#9a8f74")
-         (ink (takuzu--metal m 3)))
-    (takuzu--ensure-metal svg m)
-    (svg-circle svg cx cy r :fill (format "url(#m-%s-fill)" m)
-                :stroke (takuzu--c :ink) :stroke-width 0.9 :stroke-opacity 0.85)
-    ;; the edge spots: a cream dashed ring riding the rim
-    (let* ((rr (* r 0.90))
-           (seg (/ (* 2 float-pi rr) 8)))
-      (svg-circle svg cx cy rr :fill "none"
-                  :stroke cream :stroke-width (* r 0.20)
-                  :stroke-dasharray (format "%.2f %.2f" (* seg 0.5) (* seg 0.5))))
-    (svg-circle svg cx cy (* r 0.78) :fill "none"
-                :stroke ink :stroke-width 0.9 :stroke-opacity 0.7)
-    (when (>= r 20)
-      (dolist (k '(0.68 0.62))
-        (svg-circle svg cx cy (* r k) :fill "none"
-                    :stroke ink :stroke-opacity 0.35 :stroke-width 0.7)))
-    ;; centre: cream inlay for the player, the chip's own full fill fixed
-    (if given
-        (progn
-          (svg-circle svg cx cy (* r 0.52) :fill cream
-                      :stroke cream-deep :stroke-width 1)
-          ;; the suit mark: a spade in the chip's own colour on the inlay
-          (takuzu--coin-path svg (takuzu--casino-spade-d cx cy (* r 0.48))
-                             'fill (takuzu--metal m 2)
-                             'stroke ink 'stroke-width 0.6))
-      (svg-circle svg cx cy (* r 0.52) :fill (takuzu--metal m 2)
-                  :stroke ink :stroke-width 0.8 :stroke-opacity 0.8))))
-
-(defun takuzu--collegiate-rim (svg cx cy r rim bw)
-  "Draw RIM metal's beveled band of width BW at CX,CY radius R on SVG.
-Three concentric rings -- glint at the outer edge, base in the middle,
-deep against the face -- so the rim brightens at the edge and darkens
-toward the centre.  At small board scale the sub-pixel rings blend into
-a smooth gradient."
-  (let ((t3 (/ bw 3.0)))
-    (svg-circle svg cx cy (- r (* t3 0.5)) :fill "none"
-                :stroke (takuzu--metal rim 0) :stroke-width t3)
-    (svg-circle svg cx cy (- r (* t3 1.5)) :fill "none"
-                :stroke (takuzu--metal rim 2) :stroke-width t3)
-    (svg-circle svg cx cy (- r (* t3 2.5)) :fill "none"
-                :stroke (takuzu--metal rim 3) :stroke-width t3)
-    ;; Berkeley alone catches a short upper-left highlight on its gold edge.
-    ;; It is a rim-only reflection, never a mark on the blue face.
-    (when (eq rim 'calgold)
-      (let* ((rr (- r (* bw 0.30)))
-             (opacity (if (<= r 16) 0.50 0.70))
-             (p1 (takuzu--coin-pt cx cy rr 300))
-             (p2 (takuzu--coin-pt cx cy rr 336)))
-        (takuzu--coin-path
-         svg (format "M %.2f %.2f A %.2f %.2f 0 0 1 %.2f %.2f"
-                     (car p1) (cdr p1) rr rr (car p2) (cdr p2))
-         :fill "none" :stroke "#fff7cf" :stroke-opacity opacity
-         :stroke-width (max (* bw 0.22) 0.75) :stroke-linecap "round")))))
-
-(defun takuzu--draw-disc-collegiate (svg cx cy r val _given)
-  "Draw the collegiate coin of VAL at CX,CY radius R on SVG.
-The schools' official colours, flat and matte in the wood grammar.
-Berkeley (0) is a Berkeley-Blue face with a California-Gold rim;
-Stanford (1) a Cardinal face with a Cool-Grey rim -- each school's two
-official colours, the face its primary and the rim its accent.  No
-centre dots, no chrysanthemum, no sheen.  The rim is a bevel of the
-accent -- glint at the outer edge darkening to deep at the face.  User
-and FIXED coins intentionally share the same wide rim, floored in
-pixels so it stays visible on every board size."
-  (let* ((face (takuzu--coin-pair-metal 'collegiate val))
-         (rim (if (eql val 0) 'calgold 'coolgrey)))
-    (svg-circle svg cx cy r :fill (takuzu--metal face 2)
-                :stroke (takuzu--c :ink) :stroke-width 0.8 :stroke-opacity 0.85)
-    (takuzu--collegiate-rim svg cx cy r rim (max (* r 0.19) 4.0))))
 
 (defconst takuzu--gems-layout
   [ruby sapphire nil emerald

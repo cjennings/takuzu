@@ -1306,53 +1306,13 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to the drum's head; order is stable."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value)))
               (car takuzu--coin-skins)))
-  (should (equal takuzu--coin-skins '(wood collegiate terra casino))))
-
-(ert-deftest test-takuzu-ui-casino-chips ()
-  "Normal: the casino skin deals a red chip for 0 and a dark navy chip
-for 1, cream edge spots on both.  A FIXED chip carries the cream inlay
-centre bearing the spade; a user chip keeps its own colour's full fill
--- no cream inlay, no spade, and no centre dot."
-  (let ((takuzu-coin-skin 'casino))
-    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
-          (f0 (svg-create 100 100)) (f1 (svg-create 100 100)))
-      (takuzu--draw-disc c0 50 50 33 0 nil)
-      (takuzu--draw-disc c1 50 50 33 1 nil)
-      (takuzu--draw-disc f0 50 50 33 0 t)
-      (takuzu--draw-disc f1 50 50 33 1 t)
-      (should (dom-by-id c0 "^m-chipred-fill$"))
-      (should (dom-by-id c1 "^m-berkeley-fill$"))
-      ;; edge spots: a cream dashed ring on every chip
-      (dolist (svg (list c0 c1 f0 f1))
-        (should (seq-find (lambda (n)
-                            (and (equal (dom-attr n 'stroke) "#e9dfc8")
-                                 (dom-attr n 'stroke-dasharray)))
-                          (dom-by-tag svg 'circle))))
-      ;; the cream inlay marks FIXED chips only; user stays full-colour
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'fill) "#e9dfc8"))
-                        (dom-by-tag f0 'circle)))
-      (should-not (seq-find (lambda (n)
-                              (equal (dom-attr n 'fill) "#e9dfc8"))
-                            (dom-by-tag c0 'circle)))
-      ;; the inlay carries a spade in the chip's own colour -- red chip
-      ;; red spade, navy chip blue spade; user chips carry no spade
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'fill)
-                                 (takuzu--metal 'chipred 2)))
-                        (dom-by-tag f0 'path)))
-      (should (seq-find (lambda (n)
-                          (equal (dom-attr n 'fill)
-                                 (takuzu--metal 'berkeley 2)))
-                        (dom-by-tag f1 'path)))
-      (should-not (dom-by-tag c0 'path))
-      (should-not (dom-by-tag c1 'path)))))
+  (should (equal takuzu--coin-skins '(wood terra))))
 
 (ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
   "Normal: r (refresh) turns the coin drum back to coinset 1."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (let ((takuzu-coin-skin 'casino))
+    (let ((takuzu-coin-skin 'terra))
       (takuzu-reset)
       (should (eq takuzu-coin-skin (car takuzu--coin-skins))))))
 
@@ -1425,12 +1385,12 @@ thicker and prominent on a FIXED coin."
   "Normal: the skin command walks the whole list and wraps back around."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (let ((takuzu-coin-skin 'collegiate))
+    (let ((takuzu-coin-skin 'wood))
       (takuzu-cycle-skin)
       (should (eq takuzu-coin-skin 'terra))
       (dotimes (_ (1- (length takuzu--coin-skins)))
         (takuzu-cycle-skin))
-      (should (eq takuzu-coin-skin 'collegiate)))))
+      (should (eq takuzu-coin-skin 'wood)))))
 
 (ert-deftest test-takuzu-ui-cycle-skin-back-walks-and-wraps ()
   "Normal/Boundary: W walks the drum backward and wraps past the head."
@@ -1438,13 +1398,11 @@ thicker and prominent on a FIXED coin."
     (test-takuzu-ui--setup-4)
     (should (eq (keymap-lookup takuzu-mode-map "w") 'takuzu-cycle-skin))
     (should (eq (keymap-lookup takuzu-mode-map "W") 'takuzu-cycle-skin-back))
-    (let ((takuzu-coin-skin 'collegiate))
+    (let ((takuzu-coin-skin 'wood))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'wood))
+      (should (eq takuzu-coin-skin 'terra))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'casino))
-      (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'terra)))))
+      (should (eq takuzu-coin-skin 'wood)))))
 
 (ert-deftest test-takuzu-ui-every-skin-has-a-drawer ()
   "Normal: every skin in the cycle list resolves to a draw function.
@@ -1473,116 +1431,6 @@ and at board scale, without error and with visible shapes."
             (takuzu--draw-disc svg 50 50 r 1 given)
             (should (> (length (dom-children svg)) before))))))))
 
-(ert-deftest test-takuzu-ui-collegiate-wears-college-colours ()
-  "Normal: the collegiate pair in the schools' official colours -- each
-its primary as the face and its accent as the rim: Berkeley Blue with a
-California-Gold rim, Cardinal with a Cool-Grey rim.  The rim is a bevel
-of its accent, glint at the outer edge darkening to deep at the face.
-No centre dots, no chrysanthemum, no sheen.  User and FIXED coins wear
-the same wide rim, floored in pixels so it survives every board size."
-  (let ((takuzu-coin-skin 'collegiate))
-    (let ((c0 (svg-create 100 100)) (c1 (svg-create 100 100))
-          (f0 (svg-create 100 100)) (f1 (svg-create 100 100)))
-      (takuzu--draw-disc c0 50 50 33 0 nil)
-      (takuzu--draw-disc c1 50 50 33 1 nil)
-      (takuzu--draw-disc f0 50 50 33 0 t)
-      (takuzu--draw-disc f1 50 50 33 1 t)
-      ;; flat matte faces in the official base tones -- no gradient fills
-      (dolist (svg (list c0 f0))
-        (should (seq-find (lambda (n)
-                            (equal (dom-attr n 'fill) (takuzu--metal 'calblue 2)))
-                          (dom-by-tag svg 'circle))))
-      (dolist (svg (list c1 f1))
-        (should (seq-find (lambda (n)
-                            (equal (dom-attr n 'fill) (takuzu--metal 'cardinal 2)))
-                          (dom-by-tag svg 'circle))))
-      (dolist (svg (list c0 c1 f0 f1))
-        (should-not (seq-find (lambda (n)
-                                (let ((s (dom-attr n 'fill)))
-                                  (and (stringp s) (string-prefix-p "url(#m-" s))))
-                              (dom-by-tag svg 'circle))))
-      ;; no centre dots, no chrysanthemum, no black hole. Berkeley alone
-      ;; gets one upper-left, rim-only glint; user and fixed share it.
-      (should (= (length (dom-by-tag c0 'path)) 1))
-      (should (= (length (dom-by-tag f0 'path)) 1))
-      (should-not (dom-by-tag c1 'path))
-      (should-not (dom-by-tag f1 'path))
-      (dolist (svg (list c0 f0))
-        (let ((glint (car (dom-by-tag svg 'path))))
-          (should (equal (dom-attr glint :stroke) "#fff7cf"))
-          (should (= (dom-attr glint :stroke-opacity) 0.70))
-          (should (string-match-p " A " (dom-attr glint 'd)))
-          (should (equal (dom-attr glint :fill) "none"))))
-      ;; At the 8x8-and-smaller coin radii, the same reflection recedes.
-      (let ((small-blue (svg-create 100 100)))
-        (takuzu--draw-disc small-blue 50 50 16 0 nil)
-        (should (= (dom-attr (car (dom-by-tag small-blue 'path)) :stroke-opacity)
-                   0.50)))
-      (dolist (svg (list c0 c1 f0 f1))
-        (should-not (seq-find (lambda (n)
-                                (member (dom-attr n 'fill)
-                                        (list "#fffffb" (takuzu--c :socket))))
-                              (dom-by-tag svg 'circle))))
-      ;; Berkeley's second inward rim ring uses the same relative darkness
-      ;; as Stanford's silver lip; #855c09 sits directly against blue.
-      (should (equal (takuzu--metal 'calgold 2) "#ab852e"))
-      (should (equal (takuzu--metal 'calgold 3) "#855c09"))
-      ;; the rim is a bevel of the accent -- California Gold on Berkeley,
-      ;; Cool Grey on Stanford: glint outer, deep inner (darkening toward
-      ;; the face), never a gradient. User and fixed are literal visual
-      ;; copies, with the same wide, pixel-floored construction.
-      (let* ((ring-of
-              (lambda (svg rim tone)
-                (seq-find (lambda (n)
-                            (equal (dom-attr n 'stroke) (takuzu--metal rim tone)))
-                          (dom-by-tag svg 'circle))))
-             (rim-extent
-              (lambda (svg rim)
-                (let ((rings (seq-filter
-                              (lambda (n)
-                                (member (dom-attr n 'stroke)
-                                        (list (takuzu--metal rim 0)
-                                              (takuzu--metal rim 2)
-                                              (takuzu--metal rim 3))))
-                              (dom-by-tag svg 'circle))))
-                  (- (apply #'max (mapcar (lambda (n)
-                                            (+ (dom-attr n 'r)
-                                               (/ (dom-attr n 'stroke-width) 2.0)))
-                                          rings))
-                     (apply #'min (mapcar (lambda (n)
-                                            (- (dom-attr n 'r)
-                                               (/ (dom-attr n 'stroke-width) 2.0)))
-                                          rings)))))))
-        (dolist (svg (list c0 c1 f0 f1))
-          (should-not (seq-find (lambda (n)
-                                  (let ((s (dom-attr n 'stroke)))
-                                    (and (stringp s) (string-prefix-p "url(#m-" s))))
-                                (dom-by-tag svg 'circle))))
-        (dolist (case (list (list c0 f0 'calgold) (list c1 f1 'coolgrey)))
-          (let ((u (nth 0 case)) (f (nth 1 case)) (rim (nth 2 case)))
-            ;; the bevel: glint sits outside deep, so the rim darkens inward
-            (dolist (svg (list u f))
-              (let ((g (funcall ring-of svg rim 0))
-                    (d (funcall ring-of svg rim 3)))
-                (should g)
-                (should d)
-                (should (> (dom-attr g 'r) (dom-attr d 'r)))))
-            (let ((uw (funcall rim-extent u rim))
-                  (fw (funcall rim-extent f rim)))
-              (should (>= uw (* 33 0.18)))
-              (should (= uw fw)))))
-        ;; user and fixed coins have identical SVG geometry for each colour
-        (should (equal (dom-by-tag c0 'circle) (dom-by-tag f0 'circle)))
-        (should (equal (dom-by-tag c1 'circle) (dom-by-tag f1 'circle)))
-        (should (equal (dom-by-tag c0 'path) (dom-by-tag f0 'path)))
-        ;; the pixel floor: a 12x12-scale rim never drops below 4px
-        (let ((tiny (svg-create 100 100)))
-          (takuzu--draw-disc tiny 50 50 10 0 nil)
-          (should (>= (funcall rim-extent tiny 'calgold) 4))))
-      ;; matte -- no sheen ellipses anywhere
-      (dolist (svg (list c0 c1 f0 f1))
-        (should (= (length (dom-by-tag svg 'ellipse)) 0))))))
-
 (ert-deftest test-takuzu-ui-draw-disc-dispatches-by-skin ()
   "Normal: each skin draws its signature shapes through the one entry point."
   (dolist (case '((terra . ((radialGradient . 0) (polygon . 0)))))
@@ -1595,7 +1443,6 @@ the same wide rim, floored in pixels so it survives every board size."
 (ert-deftest test-takuzu-ui-cursor-bezel-metal-matches-skin ()
   "Normal: the cursor ring is brass on the terra set, iron on every other set."
   (dolist (case '((terra . :cursor-bezel-hi)
-                  (casino . :cursor-iron-hi)
                   (wood . :cursor-iron-hi)))
     (let ((takuzu-coin-skin (car case))
           (svg (svg-create 100 100)))
@@ -1609,8 +1456,7 @@ the same wide rim, floored in pixels so it survives every board size."
   "Normal: the skin selector shows the tape-counter index and never a name."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (dolist (case '((wood . "01") (collegiate . "02") (terra . "03")
-                    (casino . "04")))
+    (dolist (case '((wood . "01") (terra . "02")))
       (let* ((takuzu-coin-skin (car case))
              (texts (mapcar #'dom-texts (dom-by-tag (takuzu--svg) 'text))))
         (should (member (cdr case) texts))

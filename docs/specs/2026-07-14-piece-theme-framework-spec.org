@@ -8,6 +8,7 @@
 :PROPERTIES:
 :ID:       1fca8bff-81d8-4e5d-b7af-88af5f280e52
 :END:
+- 2026-07-15 Wed @ 22:30:00 -0500 — removed casino and collegiate, leaving wood and terra as the committed skins. The raster themes (gestell, plain) supersede them as the direction.
 - 2026-07-15 Wed @ 17:45:00 -0500 — curated the live skin set to 4 keepers (wood, collegiate, terra, casino), removing 14 skins including the vector emblem across takuzu-ui.el, tests, and the HTML prototype. Reframed the gestell pilot as a raster PNG theme (not a port of the retired vector emblem), and folded in the pop findings: dark pieces opt into a glow, and photoreal pieces clash so the pilot art stays in the illustrated register.
 - 2026-07-15 Wed @ 16:53:14 -0500 — recorded the raster asset pipeline and the render requirement from a wood-theme spike: mask-to-shape (source art exports opaque, not transparent), one 256px master, bake the lighting, and the mandatory define-once + =<use>= rule (measured 4.2 MB → 260 KB, flat with coin count). Added the "chrome stays vector" rationale (all-raster is a dead end: live readouts are procedural).
 - 2026-07-15 Wed @ 09:40:53 -0500 — documented the raster-sprite-per-state escape hatch (available / when / how + worked example) and proved it: a throwaway cameo skin embedded portrait PNGs per value and rendered through the live game (Emacs 30.2 pgtk/librsvg), scaling to every board size. Spike reverted.
@@ -21,7 +22,7 @@ The piece-rendering side is already prototyped through the live coin work. The t
 
 - docs/prototypes/emblem-coinset-prototype.html — a retired vector study of the gestell coin. The gestell pilot is now built as a raster theme from PNG sprites: the aesthetic settled on the console's illustrated register, and photoreal pieces clash (see the pop finding), so this vector prototype is kept for reference only.
 - docs/prototypes/collegiate-prototype.html, docs/prototypes/jewel-coinset-prototype.html — live-baseline studies at the real board sizes.
-- docs/prototypes/takuzu-hifi.html — the full faceplate and the shipped coin skins (curated to four keepers 2026-07-15).
+- docs/prototypes/takuzu-hifi.html — the full faceplate and the shipped coin skins (curated to two keepers, wood and terra, 2026-07-15).
 
 * Metadata
 | Status   | draft                                     |
@@ -188,7 +189,7 @@ Consequences: Easier — v1 stays shippable and focused. Harder — gestell on t
 
 * Implementation phases
 
-1. Descriptor refactor. Widen the registry to the theme descriptor; migrate the 4 keeper skins (wood, collegiate, terra, casino) with background = current dark field + sockets, lighting = none, cursor = default. De-hardcode the terra cursor (=takuzu--draw-cursor-bezel=, the =(eq takuzu-coin-skin 'terra)= branch) onto the descriptor's cursor-metal. Tree stays green and pixel-identical — see acceptance criterion 1 for the characterization net.
+1. Descriptor refactor. Widen the registry to the theme descriptor; migrate the 2 keeper skins (wood, terra) with background = current dark field + sockets, lighting = none, cursor = default. De-hardcode the terra cursor (=takuzu--draw-cursor-bezel=, the =(eq takuzu-coin-skin 'terra)= branch) onto the descriptor's cursor-metal. Tree stays green and pixel-identical — see acceptance criterion 1 for the characterization net.
 2. Extraction boundary. Define the per-cell game→engine accessor, then separate the game-agnostic engine (descriptor, board compositor, SVG/metal/LOD helpers, cursor, timer hook) from takuzu rules into its own module(s) with a named API; takuzu requires it. The compositor is rewritten to read the accessor, not relocated verbatim; gated on the contract landing. No visible behaviour change.
 3. Background + lighting engine. Board compositor paints the theme background (substrate, socket included), then the declared lighting layer (shadow or glow) beneath each piece. Existing themes still declare dark + none, so no visible change.
 4. Animation hook. The existing refresh timer (=takuzu--refresh-tick=, ~0.5s at the default flash period) breathes any theme that declares a breathing piece by tweening the piece parameter on the redraw that already happens each tick; the portable artifact is the breath *curve*, not the prototype's CSS keyframes. Gated so non-breathing themes pay nothing.
@@ -201,7 +202,7 @@ Each phase leaves the tree working and tested before the next begins.
 
 * Acceptance criteria
 
-- The 4 keeper skins render pixel-identically after the descriptor migration and the extraction. The characterization net snapshots the *full board render* (not an isolated disc) over a fixed fixture containing an empty cell, a user coin, a given coin, the cursor cell, and a flagged (error) cell, at each =takuzu--cell-size= bucket (50/44/38/34), captured by serializing the SVG DOM to a string and comparing — so the cursor de-hardcode, the compositor extraction, and the assist error-highlight are covered, not just the untouched disc drawers.
+- The 2 keeper skins render pixel-identically after the descriptor migration and the extraction. The characterization net snapshots the *full board render* (not an isolated disc) over a fixed fixture containing an empty cell, a user coin, a given coin, the cursor cell, and a flagged (error) cell, at each =takuzu--cell-size= bucket (50/44/38/34), captured by serializing the SVG DOM to a string and comparing — so the cursor de-hardcode, the compositor extraction, and the assist error-highlight are covered, not just the untouched disc drawers.
 - No shared consumer (board, timer, cursor) contains a theme name; grep for skin symbols in those functions returns nothing, and the engine files contain no takuzu symbol — the boundary check.
 - A theme declaring a mid-tone background and a shadow renders a visible cast shadow under its pieces — which requires the background to repaint the socket wells so the shadow has tonal room; a theme declaring a dark background and a glow renders the glow. Both verified by rendering at the real board sizes.
 - gestell renders its raster sprites (the taijitu and the glowing industrial gear) cleanly at every board size, in the console's illustrated register, with the dark gear lifted by a glow; any given cue is baked into the sprite art.
