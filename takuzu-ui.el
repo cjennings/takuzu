@@ -308,8 +308,9 @@ omits it)."
 (defconst takuzu--coin-skin-registry
   '((wood    takuzu--draw-disc-wood    coal beech)
     (terra   takuzu--draw-disc-terra   nil  nil)
-    (gestell takuzu--draw-disc-gestell nil  nil)
-    (plain   takuzu--draw-disc-plain   nil  nil))
+    (gestell   takuzu--draw-disc-gestell   nil nil)
+    (plain     takuzu--draw-disc-plain     nil nil)
+    (collegiate takuzu--draw-disc-collegiate nil nil))
   "The coin-skin catalogue: (SKIN DRAWER METAL-FOR-0 METAL-FOR-1) rows.
 This one table is the whole configuration -- the cycle order, the
 selector counter, the defcustom choices, the dispatch, and each
@@ -555,6 +556,16 @@ raster themes carry no separate fixed-cell marking."
   (if (eql val 0)
       (takuzu--draw-sprite svg cx cy r "plain-0" "plain-blue.png")
     (takuzu--draw-sprite svg cx cy r "plain-1" "plain-red.png")))
+
+(defun takuzu--draw-disc-collegiate (svg cx cy r val given)
+  "Draw the collegiate raster coin of VAL at CX,CY radius R on SVG.
+Value 0 is the Cal coin, blue with a gold Campanile; value 1 the Stanford
+coin, cardinal with a silver Tree.  GIVEN is unused -- the raster themes
+carry no separate fixed-cell marking."
+  (ignore given)
+  (if (eql val 0)
+      (takuzu--draw-sprite svg cx cy r "col-0" "collegiate-cal.png")
+    (takuzu--draw-sprite svg cx cy r "col-1" "collegiate-stanford.png")))
 
 (defconst takuzu--runic-segments
   '((feoh  (0 -0.5 0 0.5) (0 -0.42 0.42 -0.16) (0 -0.08 0.42 0.18))

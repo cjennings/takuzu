@@ -1306,7 +1306,7 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to the drum's head; order is stable."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value)))
               (car takuzu--coin-skins)))
-  (should (equal takuzu--coin-skins '(wood terra gestell plain))))
+  (should (equal takuzu--coin-skins '(wood terra gestell plain collegiate))))
 
 (ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
   "Normal: r (refresh) turns the coin drum back to coinset 1."
@@ -1400,7 +1400,7 @@ thicker and prominent on a FIXED coin."
     (should (eq (keymap-lookup takuzu-mode-map "W") 'takuzu-cycle-skin-back))
     (let ((takuzu-coin-skin 'wood))
       (takuzu-cycle-skin-back)
-      (should (eq takuzu-coin-skin 'plain))
+      (should (eq takuzu-coin-skin 'collegiate))
       (dotimes (_ (1- (length takuzu--coin-skins)))
         (takuzu-cycle-skin-back))
       (should (eq takuzu-coin-skin 'wood)))))
@@ -1504,6 +1504,25 @@ each embedded once and referenced by a <use>; the two faces differ."
       (should img1)
       (should (equal (dom-attr (car (dom-by-tag v0 'use)) 'xlink:href) "#plain-0"))
       (should (equal (dom-attr (car (dom-by-tag v1 'use)) 'xlink:href) "#plain-1"))
+      (should-not (equal (dom-attr img0 'xlink:href)
+                         (dom-attr img1 'xlink:href))))))
+
+(ert-deftest test-takuzu-ui-collegiate-raster-faces ()
+  "Normal: collegiate draws value 0 as the Cal coin and value 1 as the
+Stanford coin, each embedded once and referenced by a <use>; the two
+school faces differ."
+  (let ((takuzu-coin-skin 'collegiate)
+        (v0 (svg-create 100 100)) (v1 (svg-create 100 100)))
+    (takuzu--draw-disc v0 50 50 33 0 nil)
+    (takuzu--draw-disc v1 50 50 33 1 nil)
+    (let ((img0 (car (dom-by-id v0 "^col-0$")))
+          (img1 (car (dom-by-id v1 "^col-1$"))))
+      (should img0)
+      (should img1)
+      (should (string-prefix-p "data:image/png;base64,"
+                               (dom-attr img0 'xlink:href)))
+      (should (equal (dom-attr (car (dom-by-tag v0 'use)) 'xlink:href) "#col-0"))
+      (should (equal (dom-attr (car (dom-by-tag v1 'use)) 'xlink:href) "#col-1"))
       (should-not (equal (dom-attr img0 'xlink:href)
                          (dom-attr img1 'xlink:href))))))
 
