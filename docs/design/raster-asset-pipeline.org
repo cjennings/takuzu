@@ -94,6 +94,17 @@ embed each unique image ONCE in a =<defs>= and reference it per cell with =<use>
 never inline the image per cell. See the spec subsection for the measured numbers
 and the =takuzu--ensure-coin-gradient= idiom it follows.
 
+* Where the masters live
+
+The high-resolution source masters (the 1254px art each sprite is keyed and
+downscaled from) live in =assets/sources/=, tracked, so regeneration and future
+release work always have them. The shipped 256px sprites are in =assets/=; the
+masters that produced them are named to match (=gestell-taijitu-master.png=,
+=plain-blue-master.png=, and so on). Pending themes not yet built keep their
+masters here too (freedom-control, pop). The project =inbox/= is gitignored
+scratch and is not a durable home; move incoming art into =assets/sources/= once
+it is chosen.
+
 * Net
 
 Give 256x256 RGBA PNGs, one per value (2 total, or 4 if givens get their own art),

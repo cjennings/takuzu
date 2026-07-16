@@ -1,0 +1,74 @@
+#+TITLE: Ranked Rivalry Themes and Symbols
+#+OPTIONS: toc:nil
+
+ | Theme                      | Symbol A              | Symbol B                | Notes                                           |
+ |----------------------------+-----------------------+-------------------------+-------------------------------------------------|
+ | Natural Wood Coins         | Beech/Light Wood      | Walnut/Dark Wood        |                                                 |
+ | Colored Game Coins         | Berkeley Blue + Gold  | Stanford Red and Grey   |                                                 |
+ | Celebration vs Catastrophe | Party Balloon         | Bomb with Fuse          |                                                 |
+ | Wealth vs Poverty          | Crown Jewel           | Bottle Cap              |                                                 |
+ | Nature vs Gestell          | Yin-Yang              | Industrial Gear         |                                                 |
+ | Sink vs Swim               | Life Preserver        | Bowling Ball            |                                                 |
+ | Reality vs Fantasy         | Earth                 | Snow Globe              |                                                 |
+ | Work vs Pleasure           | Pie Chart             | Actual Pie              | Pinwheel is a fallback if pie is too difficult. |
+ | NYC vs LA                  | Subway Token          | Freeway Cloverleaf      | A film reel is an alternate LA symbol.          |
+ | Solid vs Fragile           | Diamond               | Soap Bubble             | The permanence symbol may need replacement.     |
+ | Macro vs Micro             | Atom                  | Saturn                  |                                                 |
+ | Sacred vs Profane          | Cathedral Rose Window | Manhole Cover           |                                                 |
+ | Human vs Machine           | Human Eye             | Red AI Camera Eye       | reminiscent of HAL 9000                         |
+ | Chance vs Fate             | Roulette Wheel        | 8-Ball                  |                                                 |
+ | Growth vs Destruction      | Flower                | Hurricane Symbol        | The hurricane resembles a flower.               |
+ | Natural vs Market Value    | Sand Dollar           | Gold Coin               |                                                 |
+ | Tradition vs Modernity     | Wax Seal              | Capacitive Power Button |                                                 |
+ | Creation vs Destruction    | Acorn                 | Bomb                    |                                                 |
+ | Freedom vs Control         | Compass               | Combination Lock Dial   |                                                 |
+ | Individual vs Collective   | Fingerprint           | Honeycomb               |                                                 |
+ | High vs Popular Culture    | Cameo                 | Pop-Art Button          |                                                 |
+ | Cowboy vs Outlaw           | Sheriff Star          | Black Poker Chip        |                                                 |
+ | Cats vs Dogs               | Ball of Yarn          | Chewed Tennis Ball      |                                                 |
+ | Spy vs Spy                 | White Spy             | Black Spy               | on coins, givens have bomb and dagger           |
+
+| CJ Rank | AI Rank | Theme                      | Symbol A              | Symbol B                | Notes                                           |
+|---------+---------+----------------------------+-----------------------+-------------------------+-------------------------------------------------|
+|      00 |         | Natural Wood Coins         | Beech/Light Wood      | Walnut/Dark Wood        |                                                 |
+|      01 |         | Colored Game Coins         | Berkeley Blue + Gold  | Stanford Red and Grey   |                                                 |
+|      13 |       4 | Celebration vs Catastrophe | Party Balloon         | Bomb with Fuse          |                                                 |
+|      03 |      13 | Wealth vs Poverty          | Crown Jewel           | Bottle Cap              |                                                 |
+|      02 |       5 | Nature vs Gestell          | Yin-Yang              | Industrial Gear         |                                                 |
+|      16 |      21 | Reality vs Fantasy         | Earth                 | Snow Globe              |                                                 |
+|      06 |      34 | NYC vs LA                  | Subway Token          | Freeway Cloverleaf      | A film reel is an alternate LA symbol.          |
+|      04 |      11 | Work vs Pleasure           | Pie Chart             | Actual Pie              | Pinwheel is a fallback if pie is too difficult. |
+|      05 |      32 | Solid vs Fragile           | Diamond               | Soap Bubble             | The permanence symbol may need replacement.     |
+|      11 |       2 | Sacred vs Profane          | Cathedral Rose Window | Manhole Cover           |                                                 |
+|      14 |       9 | Human vs Machine           | Human Eye             | Red AI Camera Eye       |                                                 |
+|      10 |       3 | Sink vs Swim               | Life Preserver        | Bowling Ball            |                                                 |
+|      09 |      16 | Macro vs Micro             | Atom                  | Saturn                  |                                                 |
+|      12 |       1 | Chance vs Fate             | Roulette Wheel        | 8-Ball                  |                                                 |
+|      15 |      17 | Growth vs Destruction      | Flower                | Hurricane Symbol        | The hurricane resembles a flower.               |
+|      17 |      12 | Natural vs Market Value    | Sand Dollar           | Gold Coin               |                                                 |
+|      18 |       6 | Cats vs Dogs               | Ball of Yarn          | Chewed Tennis Ball      |                                                 |
+|      19 |       7 | Tradition vs Modernity     | Wax Seal              | Capacitive Power Button |                                                 |
+|      20 |       8 | Creation vs Destruction    | Acorn                 | Bomb                    |                                                 |
+|      22 |      14 | Freedom vs Control         | Compass               | Combination Lock Dial   |                                                 |
+|      23 |      15 | Individual vs Collective   | Fingerprint           | Honeycomb               |                                                 |
+|      24 |         | High vs Popular Culture    | Cameo                 | Pop-Art Button          |                                                 |
+|      07 |      33 | Cowboy vs Outlaw           | Sheriff Star          | Black Poker Chip        |                                                 |
+|      08 |      39 | Spy vs Spy                 | White Spy             | Black Spy               | on coins, givens have bomb and dagger           |
+
+
+| 18 |    | Sound vs Silence               | Speaker Cone                 | Ensō                              |                                                      |
+| 21 | 10 | Sherlock vs Moriarty           | Magnifying Glass             | Spider in Web                     |                                                      |
+| 19 |    | Rebellion vs Authority         | Protest Button               | State Seal                        |                                                      |
+| 20 |    | Analogue vs Digital            | Vinyl Record                 | Compact Disc                      |                                                      |
+| 22 |    | Water vs Lava                  | Droplets and Ripples         | Lava Rock                         | Previously called Water vs Fire.                     |
+| 23 |    | Objective vs Subjective        | Calipers Drawing a Circle    | Rorschach Inkblot                 | Both rendered as coin-like objects.                  |
+| 24 |    | Tortoise vs Hare               | Tortoise Shell               | Stopwatch                         |                                                      |
+| 25 |    | Peace vs War                   | Olive Wreath                 | Grenade with Pin                  | The pin remains visibly associated with the grenade. |
+| 27 |    | Mass Production vs Performance | Stamped Hubcap               | Racing Wheel                      | Generic version of Ford vs Ferrari.                  |
+| 28 |    | Edison vs Tesla                | Filament                     | Induction Coil                    |                                                      |
+| 29 |    | York vs Lancaster              | White Rose                   | Red Rose                          | Sculpted medieval badges.                            |
+| 30 |    | Captain Ahab vs Moby-Dick      | Ship's Steering Wheel        | Scrimshaw Disk                    |                                                      |
+| 31 |    | Dr. Jekyll vs Mr. Hyde         | Old Medicine Bottle          | Open, Spilled Bottle              |                                                      |
+| 35 |    | Napoleon vs Wellington         | Imperial Bee-and-Eagle Medal | Restrained British Campaign Medal |                                                      |
+| 36 |    | Leonardo vs Michelangelo       | Vitruvian Man                | Creation of Adam Hands            |                                                      |
+| 37 |    | Cal vs Stanford                | Campanile                    | Tree                              | Colored coins using school colors; rights-dependent. |
