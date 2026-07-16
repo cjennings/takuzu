@@ -1306,7 +1306,7 @@ with no games recorded it says so."
   "Normal: the skin defcustom defaults to the drum's head; order is stable."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value)))
               (car takuzu--coin-skins)))
-  (should (equal takuzu--coin-skins '(wood terra gestell plain collegiate))))
+  (should (equal takuzu--coin-skins '(wood terra gestell collegiate))))
 
 (ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
   "Normal: r (refresh) turns the coin drum back to coinset 1."
@@ -1465,7 +1465,7 @@ and at board scale, without error and with visible shapes."
         ;; the drum shows only the index -- no skin is named on the plate
         (should-not (member (upcase (symbol-name (car case))) texts))))))
 
-;; --- raster coin skins (gestell, plain) ---
+;; --- raster coin skins (gestell, collegiate) ---
 
 (ert-deftest test-takuzu-ui-gestell-raster-faces ()
   "Normal: gestell draws value 0 as the taijitu sprite and value 1 as the
@@ -1488,22 +1488,6 @@ gear -- each embedded once as an <image> in <defs> and referenced by a
       (should (equal (dom-attr use0 'xlink:href) "#gest-0"))
       (should (equal (dom-attr use1 'xlink:href) "#gest-1"))
       ;; value carries the face: the two sprites differ
-      (should-not (equal (dom-attr img0 'xlink:href)
-                         (dom-attr img1 'xlink:href))))))
-
-(ert-deftest test-takuzu-ui-plain-raster-faces ()
-  "Normal: plain draws value 0 as the blue coin and value 1 as the red,
-each embedded once and referenced by a <use>; the two faces differ."
-  (let ((takuzu-coin-skin 'plain)
-        (v0 (svg-create 100 100)) (v1 (svg-create 100 100)))
-    (takuzu--draw-disc v0 50 50 33 0 nil)
-    (takuzu--draw-disc v1 50 50 33 1 nil)
-    (let ((img0 (car (dom-by-id v0 "^plain-0$")))
-          (img1 (car (dom-by-id v1 "^plain-1$"))))
-      (should img0)
-      (should img1)
-      (should (equal (dom-attr (car (dom-by-tag v0 'use)) 'xlink:href) "#plain-0"))
-      (should (equal (dom-attr (car (dom-by-tag v1 'use)) 'xlink:href) "#plain-1"))
       (should-not (equal (dom-attr img0 'xlink:href)
                          (dom-attr img1 'xlink:href))))))
 
@@ -1540,7 +1524,7 @@ cell -- the define-once property that keeps a full board's SVG small."
 (ert-deftest test-takuzu-ui-raster-skins-ignore-given ()
   "Normal: the raster themes carry no separate fixed-cell marking, so a
 given cell and a placed cell of the same value render identically."
-  (dolist (skin '(gestell plain))
+  (dolist (skin '(gestell collegiate))
     (let ((takuzu-coin-skin skin)
           (placed (svg-create 100 100)) (given (svg-create 100 100)))
       (takuzu--draw-disc placed 50 50 33 0 nil)
