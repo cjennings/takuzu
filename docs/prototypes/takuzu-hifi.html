@@ -424,9 +424,9 @@ const EVENT_BREATH = 2.8;  // seconds per breathing cycle
 const EVENT_DUR = EVENT_BREATH; // one breath, then dark
 const INVALID_HOLD = 2.0;  // seconds INVALID holds full brightness
 const INVALID_FADE = 0.6;  // seconds INVALID takes to dim after the hold
-const FILL = 0.85;         // fraction of the window the faceplate fills
+const FILL = 0.95;         // fraction of the window the faceplate fills
 const CHAR_ASPECT = 0.62;  // monospace glyph width / font size
-const FLASH_PERIOD = 1.0;  // seconds per on/off cycle of the flashing New key
+const FLASH_PERIOD = 1.2;  // seconds per on/off cycle of all flashing (calm, unified)
 const SIZES = [4, 6, 8, 10, 12];
 const DIFFS = ["easy", "medium", "hard"];
 const DEFAULT_SIZE = 6;
@@ -462,6 +462,7 @@ const state = {
   status: "",
   event: null,
   eventTime: null,
+  fail: false,          // FAIL flag: board incompatible with the solution
   generating: null,   // {size, difficulty} while generating
   spinner: 0,
   armed: null,        // {size, difficulty} while waiting for the start key
@@ -553,7 +554,7 @@ function elapsed() {
 }
 
 const flashOnP = () => (Date.now() / 1000) % FLASH_PERIOD < 0.5 * FLASH_PERIOD;
-const refreshInterval = () => Math.max(0.2, Math.min(1.0, FLASH_PERIOD / 2));
+const refreshInterval = () => Math.max(0.15, Math.min(1.0, FLASH_PERIOD / 3));
 // pegs at 99:99 once the minutes outgrow their two tubes, until a new game
 const fmtTime = s => s > 5999 ? "99:99"
   : `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -580,6 +581,25 @@ function errorVector() {
     if (lineBadP(cols[cc], n, cols))
       for (let r = 0; r < n; r++) bad[r * n + cc] = true;
   return bad;
+}
+
+// Board is illegal when any row or column breaks a rule. Run regardless of the
+// assist flag; this drives the FAIL flag.
+function boardIllegal() {
+  const n = state.size;
+  const rows = E.allRows(state.board.cells, n);
+  const cols = E.allCols(state.board.cells, n);
+  for (let r = 0; r < n; r++) if (lineBadP(rows[r], n, rows)) return true;
+  for (let cc = 0; cc < n; cc++) if (lineBadP(cols[cc], n, cols)) return true;
+  return false;
+}
+
+// Re-evaluate FAIL after a board change. Assist on: tracks legality live.
+// Assist off: only clears here (it falls on a full-board CHECK), auto-resetting
+// the moment the board is legal again.
+function updateFail() {
+  if (state.assist) state.fail = boardIllegal();
+  else if (state.fail && !boardIllegal()) state.fail = false;
 }
 
 const emptyCount = () => state.board.cells.filter(v => v == null).length;
@@ -622,16 +642,41 @@ function drawScrew(svg, x, y) {
   line(svg, x - 2, y - 2, x + 2, y + 2, { stroke: c("screw-slot"), "stroke-width": 1 });
 }
 
+// A line carved into a surface: a dark groove with a lit lower lip catching the
+// light, drawn back-to-front so the groove sits over its highlight.
+function drawEngraved(svg, x, y, str, size, groove, lip) {
+  const o = fill => ({ "font-family": "monospace", "font-size": size, "text-anchor": "start", fill });
+  textEl(svg, x, y + 1, str, o(lip || "#938d7b"));   // lit lower lip
+  textEl(svg, x, y, str, o(groove || "#544e40"));     // the groove
+}
+
+// The title rides a nickel nameplate riveted to the console -- gold inlay for
+// TAKUZU, the aliases engraved, all on brushed nickel.
 function drawTitle(svg, x, y) {
-  textEl(svg, x, y + 31, "TAKUZU", {
-    "font-family": "monospace", "font-size": 30, fill: c("gold"),
-    "font-weight": "bold", "font-style": "italic", "text-anchor": "start",
+  const px = x - 10, py = y - 6, pw = 324, ph = 62;
+  svg.push('<defs><linearGradient id="nickel" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#7e828a"/><stop offset="0.5" stop-color="#696d74"/>'
+    + '<stop offset="1" stop-color="#55595f"/></linearGradient></defs>');
+  rect(svg, px, py, pw, ph, { rx: 5, fill: "url(#nickel)", stroke: "#34373c", "stroke-width": 1.5 });
+  line(svg, px + 3, py + 2, px + pw - 3, py + 2, { stroke: "#a6aab0", "stroke-width": 1, "stroke-opacity": 0.6 });
+  [[px + 9, py + 8], [px + pw - 9, py + 8], [px + 9, py + ph - 8], [px + pw - 9, py + ph - 8]].forEach(([rx, ry]) => {
+    circle(svg, rx, ry, 3, { fill: "#696d74", stroke: "#34373c", "stroke-width": 0.8 });
+    circle(svg, rx - 0.9, ry - 0.9, 1, { fill: "#b0b4ba" });
   });
-  txt(svg, x + 112, y + 31, "/", 30, c("gold-hi"), "start");
-  const ax = x + 134;
-  txt(svg, ax, y + 14, "BINAIRO", 10, c("dim"));
-  txt(svg, ax, y + 28, "TOHU WA-VOHU", 10, c("dim"));
-  txt(svg, ax, y + 42, "BINARY LOGIC", 10, c("dim"));
+  // TAKUZU: gold inlay, cap height grown to span the full three-line alias stack
+  const tak = fill => ({ "font-family": "monospace", "font-size": 48,
+    "font-weight": "bold", "font-style": "italic", "text-anchor": "start", fill });
+  textEl(svg, x, y + 40.5, "TAKUZU", tak("#241a08"));    // top shadow of the recess
+  textEl(svg, x, y + 43.5, "TAKUZU", tak(c("gold-hi")));  // bottom lit lip
+  textEl(svg, x, y + 42, "TAKUZU", tak(c("gold")));       // the gold inlay
+  // the divider slash is a gold inlay, matching TAKUZU: engraved and amber-filled
+  textEl(svg, x + 184, y + 40.5, "/", tak("#241a08"));    // top shadow of the recess
+  textEl(svg, x + 184, y + 43.5, "/", tak(c("gold-hi")));  // bottom lit lip
+  textEl(svg, x + 184, y + 42, "/", tak(c("gold")));       // the amber inlay
+  const ax = x + 220;
+  drawEngraved(svg, ax, y + 14, "BINAIRO", 10, "#131518", "#eceff3");
+  drawEngraved(svg, ax, y + 28, "TOHU WA-VOHU", 10, "#131518", "#eceff3");
+  drawEngraved(svg, ax, y + 42, "BINARY LOGIC", 10, "#131518", "#eceff3");
 }
 
 function drawFaceplateShell(svg, w, h, noTitle) {
@@ -1022,16 +1067,52 @@ function drawNixieTube(svg, x, y, w, h, ch, lit) {
 }
 
 // Engraved frame with the caption etched into a break in the top edge.
-function drawFrame(svg, x, y, w, h, label) {
+function drawFrame(svg, x, y, w, h, label, hotkey) {
   rect(svg, x, y, w, h, { rx: 6, fill: "none", stroke: c("wash"), "stroke-width": 1 });
   const cx = x + w / 2;
   const lw = label.length * 7 + 8;
   rect(svg, Math.round(cx - lw / 2), y - 6, Math.round(lw), 12, { fill: c("well") });
-  txt(svg, Math.round(cx), y + 3, label, 9, c("steel"), "middle");
+  if (hotkey) {
+    // mark the first letter as the hotkey (gold, underlined) so the caption
+    // itself tells the player which key selects it -- no legend entry needed
+    const cw = 9 * CHAR_ASPECT, sx = cx - (label.length * cw) / 2;
+    const g = fill => ({ "font-family": "monospace", "font-size": 9, "text-anchor": "start", "font-weight": "bold", fill });
+    textEl(svg, sx - 0.7, y + 2.3, label[0], g("#0e1013"));   // shadow, up-left (recess wall)
+    textEl(svg, sx + 0.7, y + 3.7, label[0], g("#eef1f4"));   // highlight, down-right (lit lip)
+    textEl(svg, sx, y + 3, label[0], g("#8f959d"));           // recessed silver face
+    textEl(svg, sx + cw, y + 3, label.slice(1), { "font-family": "monospace", "font-size": 9, fill: c("steel"), "text-anchor": "start" });
+  } else {
+    txt(svg, Math.round(cx), y + 3, label, 9, c("steel"), "middle");
+  }
 }
 
 // Two nixie tubes; a ghost 0 in the tens tube for single-digit sizes, and
 // up/down chevrons hinting the size is adjustable (the s key).
+// Slide-rule dial for SIZE: the even sizes 4..12 printed on a scale with minor
+// ticks between, and a red cursor hairline standing on the active numeral.
+function drawSlideRuleSize(svg, x, y, w, h, size) {
+  const vals = [4, 6, 8, 10, 12], pad = 12;
+  const x0 = x + pad, sw = w - 2 * pad;
+  const topY = y + 15, botY = y + h - 5;
+  const tickY = botY - 13, numY = botY - 3;
+  line(svg, x0, tickY, x0 + sw, tickY, { stroke: c("wash"), "stroke-width": 1 });
+  vals.forEach((v, i) => {
+    const px = Math.round(x0 + sw * i / 4), on = v === size;
+    line(svg, px, tickY, px, tickY + 6, { stroke: c("steel"), "stroke-width": on ? 1.6 : 1 });
+    txt(svg, px, numY, String(v), 7.5, on ? c("gold-hi") : c("steel"), "middle", on ? "bold" : null);
+    if (i < 4) {
+      const mx = Math.round(x0 + sw * (i + 0.5) / 4);
+      line(svg, mx, tickY, mx, tickY + 3.5, { stroke: c("steel"), "stroke-width": 0.7 });
+    }
+  });
+  const idx = vals.indexOf(size);
+  if (idx >= 0) {
+    const nx = Math.round(x0 + sw * idx / 4);
+    line(svg, nx, topY, nx, botY, { stroke: c("fail"), "stroke-width": 1.4 });
+    polygon(svg, [[nx - 4, topY], [nx + 4, topY], [nx, topY + 5]], { fill: c("fail") });
+  }
+}
+
 function drawNixieSize(svg, cx, y, size) {
   const tw = 16, th = 23, g = 4;
   const s = String(size).padStart(2, "0");
@@ -1208,24 +1289,42 @@ function lerpColor(a, b, k) {
   return "#" + [0, 1, 2].map(i => mix(i).toString(16).padStart(2, "0")).join("");
 }
 
-// Six momentary-event legends; the active one pulses like a warm lamp, then fades.
-function drawEventAnnunciator(svg, x, y, w, h) {
-  rect(svg, x, y, w, h, { rx: 10, fill: c("well"), stroke: c("panel-edge") });
-  const events = [["fixed", "FIXED"], ["hint", "HINT"], ["no-hint", "NO HINT"],
-                  ["invalid", "INVALID"], ["nothing", "NOTHING"], ["gen-fail", "GEN FAIL"]];
-  const n = events.length, pad = 12, gap = 4;
-  const cw = (w - 2 * pad - (n - 1) * gap) / n;
-  const chh = h - 16, cy = y + 8;
-  const k = eventIntensity();
-  events.forEach(([ev, lab], i) => {
-    const cx = x + pad + i * (cw + gap);
-    const lit = ev === state.event ? k : 0;
-    const bg = lerpColor(c("annunciator-off"), c("annunciator-lit"), lit);
-    const fg = lerpColor(c("dim"), c("annunciator-ink"), lit);
-    rect(svg, Math.round(cx), cy, Math.round(cw), Math.round(chh),
-      { rx: 3, fill: bg, stroke: c("annunciator-edge") });
-    txt(svg, Math.round(cx + cw / 2), Math.round(cy + chh / 2 + 3), lab, 8.5, fg, "middle", "bold");
-  });
+// FAIL flag: an avionics warning-flag window. A gold barber-pole slides in and
+// occludes the window while the board is incompatible with the solution, and
+// holds until the player fixes it. Not a lamp -- a flag; failure blocks the read.
+function drawFailFlag(svg, x, y, w, h) {
+  svg.push('<defs><pattern id="barber" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+    + `<rect width="12" height="12" fill="#17130c"/><rect width="6" height="12" fill="${c("gold")}"/></pattern></defs>`);
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  drawFrame(svg, x, y, w, h, "FAIL");
+  const ix = x + 12, iy = y + 20, iw = w - 24, ih = h - 30;
+  rect(svg, ix, iy, iw, ih, { rx: 3, fill: "#0a0908", stroke: c("tube-edge"), "stroke-width": 1.5 });
+  if (state.fail) rect(svg, ix + 2, iy + 2, iw - 4, ih - 4, { rx: 2, fill: "url(#barber)" });
+}
+
+// FAULT: an annunciator button labelled FAULT that pulses red once on a mis-key
+// (locked given, nothing to undo, no cell to hint) -- an event, not a condition.
+function drawFaultButton(svg, x, y, w, h) {
+  const k = state.event === "fault" ? eventIntensity() : 0;
+  const bg = lerpColor(c("annunciator-off"), c("fail"), k);
+  const fg = lerpColor(c("steel"), c("annunciator-ink"), k);
+  rect(svg, x, y, w, h, { rx: 6, fill: bg, stroke: c("annunciator-edge") });
+  txt(svg, x + Math.floor(w / 2), y + Math.floor(h / 2) + 4, "FAULT", 10, fg, "middle", "bold");
+}
+
+// ASSIST bat-handle toggle: a chrome aircraft lever, up for ON, down for OFF.
+// Drawn as a tile body; drawInstrument supplies the frame.
+function drawAssistToggle(svg, x, y, w, h) {
+  const on = state.assist, cx = x + Math.floor(w / 2), cy = y + Math.floor(h / 2) + 4;
+  txt(svg, cx, cy - 24, "ON", 7, on ? c("gold-hi") : c("dim"), "middle");
+  txt(svg, cx, cy + 30, "OFF", 7, on ? c("dim") : c("gold-hi"), "middle");
+  const nut = [];
+  for (let kk = 0; kk < 6; kk++) { const a = (kk * 60 + 30) * Math.PI / 180; nut.push([Math.round(cx + 14 * Math.cos(a)), Math.round(cy + 14 * Math.sin(a))]); }
+  polygon(svg, nut, { fill: "#4e4a42", stroke: "#2b2822" });
+  circle(svg, cx, cy, 8, { fill: "#14110e", stroke: "#000" });
+  const tipY = cy + (on ? -18 : 18);
+  line(svg, cx, cy, cx, tipY, { stroke: "#b8b4a8", "stroke-width": 5, "stroke-linecap": "round" });
+  ellipse(svg, cx, tipY, 6, 7.5, { fill: "#e8e5db", stroke: "#5e5a52", "stroke-width": 0.6 });
 }
 
 // --- legend ---
@@ -1290,48 +1389,175 @@ function drawLegend(svg, x, y, width) {
   const newItem = state.armed ? ["flashword", "NEW", flashOnP()] : ["word", "NEW"];
   drawEngrave(svg, x, y, width, "GAME");
   drawLegendLine(svg, x, y + 16, width, 10,
-    [newItem, ["word", "RESET"], ["word", "SIZE"], ["word", "LEVEL"],
-     ["word", "PROVE"], ["word", "INSTRUCTIONS"], ["word", "QUIT"]]);
+    [newItem, ["word", "RESET"], ["word", "PROVE"], ["word", "INSTRUCTIONS"]]);
   drawEngrave(svg, x, y + 36, width, "PLAY");
   drawLegendLine(svg, x, y + 52, width, 10,
     [["keyed", "SPC", "CYCLE"], ["word", "UNDO"], ["keyed", "?", "HINT"],
-     ["word", "CHECK"], ["litword", "ASSIST", state.assist]]);
+     ["word", "CHECK"]]);
 }
 
 // --- faceplate geometry ---
 
-const faceplateWidth = () => 2 * PPAD + Math.max(stripWidth(), 380);
+// The board is a big square with a minimal lip. Everything else lives in a
+// panel to its right: the title, the event annunciator, the GAME and PLAY
+// control legends, and beneath those the instruments -- which flow and wrap
+// like text instead of stacking in a fixed column.
+const LIP = 24;       // board inset: each corner screw (at 12) sits centered
+                      // between the game edge and the board, matching the
+                      // upper-right screw's clearance to the edge
+const RIGHT_W = 380;  // width of the right-hand panel
+const TILE_W = 116, TILE_GAP = 8, TILE_ROW = 92;   // flowed-instrument grid
 
-// At sizes 8+ the panel starts at the board's top; smaller boards start it
-// up in the title band so the instruments get more room.
-const panelTop = () => state.size >= 8 ? PPAD + TITLE_H : PPAD + 6;
+const INSTRUMENTS = ["SIZE", "LEVEL", "LEFT", "COIN", "STATE", "ASSIST", "TIME"];
+const INSTRUMENT_COLS = {};              // width in tile columns (default 1)
+const INSTRUMENT_ROWS = { SIZE: 2 };     // height in tile rows (default 1)
+const INSTRUMENT_H = { TIME: 44, SIZE: 46, LEVEL: 84, LEFT: 62, COIN: 56, STATE: 78, ASSIST: 78 };
 
-// The lower of the board and panel bottoms; small boards stretch the stage
-// to keep the panel at PANEL_MIN_H and centre the board in the extra room.
-const stageBottom = () => Math.max(
-  PPAD + TITLE_H + boardBlockSpan(state.size),
-  panelTop() + PANEL_MIN_H);
+// One framed instrument tile at X,Y of width W -- a drawPanel row made
+// self-contained so tiles can flow anywhere.
+// Interactive hit regions, rebuilt each draw. Each carries a click action or a
+// drag handler that the pointer layer dispatches to.
+let hits = [];
+function registerHit(x, y, w, h, opts) { hits.push(Object.assign({ x, y, w, h }, opts)); }
 
-const faceplateHeight = () =>
-  stageBottom() + 12 + EVENT_H + 14 + LEGEND_H + PPAD;
+// Vertical tape instrument for SIZE: a scrolling even-number scale behind a
+// FIXED amber index. The current size always sits at the centre index while
+// the neighbourhood above and below scrolls past. After the Ki-57 tachometer.
+function drawTapeSize(svg, x, y, w, h, size) {
+  const cx = x + Math.floor(w / 2);
+  const top = y + 18, bot = y + h - 12, midY = Math.round((top + bot) / 2);
+  const pxPU = 17;                          // pixels per size unit (evens 34px apart)
+  const winX = cx - 20, winW = 40, winY = top - 4, winH = (bot - top) + 8;
+  rect(svg, winX, winY, winW, winH, { rx: 5, fill: "#0a0908", stroke: c("tube-edge"), "stroke-width": 1.5 });
+  svg.push(`<defs><clipPath id="sizetape"><rect x="${winX}" y="${winY}" width="${winW}" height="${winH}"/></clipPath></defs>`);
+  svg.push('<g clip-path="url(#sizetape)">');
+  const lo = Math.floor(size - (midY - winY) / pxPU) - 1;
+  const hi = Math.ceil(size + (winY + winH - midY) / pxPU) + 1;
+  for (let v = lo; v <= hi; v++) {
+    const py = midY - (v - size) * pxPU;
+    if (v % 2 === 0 && v >= 0 && v <= 16) {
+      line(svg, cx - 15, py, cx - 7, py, { stroke: c("cream"), "stroke-width": 1.4 });
+      const on = v === size;
+      txt(svg, cx - 3, py + 4, String(v), on ? 13 : 10, on ? c("gold-hi") : c("cream"), "start", on ? "bold" : null);
+    } else if (v % 2 !== 0 && v >= 1 && v <= 15) {
+      line(svg, cx - 12, py, cx - 7, py, { stroke: c("steel"), "stroke-width": 0.8 });
+    }
+  }
+  svg.push("</g>");
+  // fixed amber index at the centre: a left-pointing arrow with a line across
+  line(svg, winX + 2, midY, cx + 15, midY, { stroke: c("amber"), "stroke-width": 1.6 });
+  polygon(svg, [[winX - 8, midY], [winX + 3, midY - 5], [winX + 3, midY + 5]], { fill: c("amber") });
+}
 
-// Mirror of takuzu--svg: the whole faceplate for the current state.
+function drawInstrument(svg, kind, x, y, w, h) {
+  h = h || INSTRUMENT_H[kind];
+  if (kind === "SIZE") { const nw = Math.min(w, 76); x += Math.floor((w - nw) / 2); w = nw; }
+  const cx = x + Math.floor(w / 2);
+  rect(svg, x, y, w, h, { rx: 8, fill: c("well"), stroke: c("panel-edge") });
+  drawFrame(svg, x, y, w, h, kind, kind === "SIZE" || kind === "LEVEL");
+  if (kind === "TIME") drawNixieTime(svg, cx, y + 10);
+  else if (kind === "SIZE") drawTapeSize(svg, x, y, w, h, state.size);
+  else if (kind === "LEVEL") drawRotaryLevel(svg, cx, y + 48);
+  else if (kind === "LEFT") drawNeedleGauge(svg, cx, y + 38, 28, fillPct(), emptyCount());
+  else if (kind === "COIN") drawSkinSelector(svg, cx, y);
+  else if (kind === "STATE") drawStateLamps(svg, x, y, w, h);
+  else if (kind === "ASSIST") drawAssistToggle(svg, x, y, w, h);
+  // interactivity: drag the SIZE tape, click the other controls
+  if (kind === "SIZE") registerHit(x, y, w, h, {
+    dragStart: () => ({ startSize: state.size }),
+    drag: (p, d) => {
+      let sz = Math.round((d.data.startSize + (p.y - d.startP.y) / 17) / 2) * 2;
+      sz = Math.max(4, Math.min(12, sz));
+      if (sz !== state.size) arm(sz, currentDifficulty());
+    },
+  });
+  else if (kind === "LEVEL") registerHit(x, y, w, h, { click: cycleLevel });
+  else if (kind === "COIN") registerHit(x, y, w, h, { click: cycleSkin });
+  else if (kind === "ASSIST") registerHit(x, y, w, h, { click: toggleAssist });
+}
+
+const tileCols = () => Math.max(1, Math.floor((RIGHT_W + TILE_GAP) / (TILE_W + TILE_GAP)));
+
+// Total height the right panel needs: title, annunciator, controls, then the
+// flowed instrument grid.
+const STATUS_H = 50;   // FAIL flag + FAULT button row
+
+// Place instruments in a wrapping masonry grid; a tile may span extra columns
+// or rows (SIZE is a tall two-row vertical tape).
+function instrumentLayout() {
+  const per = tileCols(), occ = [];
+  const free = (r, c, wc, hc) => {
+    if (c + wc > per) return false;
+    for (let rr = r; rr < r + hc; rr++) for (let cc = c; cc < c + wc; cc++)
+      if (occ[rr] && occ[rr][cc]) return false;
+    return true;
+  };
+  const mark = (r, c, wc, hc) => {
+    for (let rr = r; rr < r + hc; rr++) { occ[rr] = occ[rr] || []; for (let cc = c; cc < c + wc; cc++) occ[rr][cc] = true; }
+  };
+  const out = []; let rows = 0;
+  INSTRUMENTS.forEach(k => {
+    const wc = INSTRUMENT_COLS[k] || 1, hc = INSTRUMENT_ROWS[k] || 1;
+    for (let r = 0; r < 60; r++) {
+      let done = false;
+      for (let c = 0; c + wc <= per; c++) if (free(r, c, wc, hc)) {
+        mark(r, c, wc, hc); out.push({ k, r, c, wc, hc }); rows = Math.max(rows, r + hc); done = true; break;
+      }
+      if (done) break;
+    }
+  });
+  return { out, rows };
+}
+const instrumentRows = () => instrumentLayout().rows;
+function flowInstruments(svg, x0, y0) {
+  const { out, rows } = instrumentLayout();
+  out.forEach(({ k, r, c, wc, hc }) => {
+    const cx = x0 + c * (TILE_W + TILE_GAP), cy = y0 + r * TILE_ROW;
+    const tw = wc * TILE_W + (wc - 1) * TILE_GAP;
+    const th = hc > 1 ? hc * TILE_ROW - 18 : INSTRUMENT_H[k];
+    drawInstrument(svg, k, cx, cy, tw, th);
+  });
+  return y0 + rows * TILE_ROW;
+}
+
+const rightPanelHeight = () =>
+  TITLE_H + 6 + STATUS_H + 16 + instrumentRows() * TILE_ROW + 16 + LEGEND_H;
+
+// The board square is at least as tall as the right panel, so both fill the
+// same height with the board's lip minimal.
+const boardSquare = () => Math.max(boardBlockSpan(state.size), rightPanelHeight());
+const faceplateHeight = () => boardSquare() + 2 * LIP;
+const faceplateWidth = () => LIP + boardSquare() + STAGE_GAP + RIGHT_W + LIP;
+
 function svgFaceplate() {
-  const boardw = boardBlockSpan(state.size);
-  const w = faceplateWidth();
-  const stagey = PPAD + TITLE_H;
-  const bottom = stageBottom();
-  const boardy = stagey + Math.floor((bottom - stagey - boardw) / 2);
-  const h = faceplateHeight();
+  hits = [];
+  const nspan = boardBlockSpan(state.size);
+  const T = boardSquare();
+  const scale = T / nspan;
+  const w = faceplateWidth(), h = faceplateHeight();
   const svg = [];
-  drawFaceplateShell(svg, w, h);
-  drawBoard(svg, PPAD, boardy);
-  const px = PPAD + boardw + STAGE_GAP;
-  const ptop = panelTop();
-  drawPanel(svg, px, ptop, bottom - ptop);
-  const evy = bottom + 12;
-  drawEventAnnunciator(svg, PPAD, evy, stripWidth(), EVENT_H);
-  drawLegend(svg, PPAD, evy + EVENT_H + 14, w - 2 * PPAD);
+  drawFaceplateShell(svg, w, h, true);       // title moves into the right panel
+  // board: big square, minimal lip, cells scaled up to fill the square
+  svg.push(`<g transform="translate(${LIP},${LIP}) scale(${scale.toFixed(4)})">`);
+  drawBoard(svg, 0, 0);
+  svg.push("</g>");
+  // right panel: title, annunciator, control legends, then flowed instruments
+  const x0 = LIP + T + STAGE_GAP;
+  let y = LIP;
+  drawTitle(svg, x0, y + 4);
+  y += TITLE_H + 6;
+  // status row: FAIL flag (held) beside the FAULT button (pulse), each at half
+  // their former width so the pair sits in the left half of the panel.
+  const qW = Math.floor((RIGHT_W - 10) / 4);
+  drawFailFlag(svg, x0, y, qW, STATUS_H);
+  const fh = Math.round(STATUS_H / 2);
+  drawFaultButton(svg, x0 + qW + 10, y + Math.round((STATUS_H - fh) / 2), qW, fh);
+  y += STATUS_H + 16;
+  // instruments flow beneath the status row (SIZE spans two, TIME at the end)
+  y = flowInstruments(svg, x0, y);
+  y += 16;
+  // GAME / PLAY controls all the way at the bottom, under every instrument
+  drawLegend(svg, x0, y, RIGHT_W);
   return { w, h, body: svg.join("") };
 }
 
@@ -1600,7 +1826,7 @@ const currentGivenP = () => givenP(state.board, state.cursor[0], state.cursor[1]
 
 function setCurrent(val) {
   if (currentGivenP()) {
-    setStatus("That cell is a given -- it can't change.", "fixed");
+    setStatus("That cell is a given -- it can't change.", "fault");
   } else if (state.won || state.proven) {
     setStatus(MSG_FINISHED);
   } else {
@@ -1610,6 +1836,7 @@ function setCurrent(val) {
     state.board.cells[i] = val;
     setStatus("");
     checkWin();
+    updateFail();
   }
   redraw();
 }
@@ -1637,13 +1864,14 @@ function undo() {
   if (state.won || state.proven) {
     setStatus(MSG_FINISHED);
   } else if (state.history.length === 0) {
-    setStatus("Nothing to undo.", "nothing");
+    setStatus("Nothing to undo.", "fault");
   } else {
     const [i, prev] = state.history.pop();
     const n = state.size;
     state.board.cells[i] = prev;
     state.cursor = [Math.floor(i / n), i % n];
     setStatus("");
+    updateFail();
   }
   redraw();
 }
@@ -1658,7 +1886,7 @@ function hint() {
   } else {
     const found = E.nextHint(state.board.cells, state.size, state.solution);
     if (!found) {
-      setStatus("No empty cell left to hint.", "no-hint");
+      setStatus("No empty cell left to hint.", "fault");
     } else {
       state.cursor = [found[0], found[1]];
       setCurrent(found[2]);
@@ -1674,10 +1902,12 @@ function check() {
   if (!playingOnly()) return;
   checkWin();
   if (!state.won) {
-    if (E.boardFull(state.board.cells))
-      setStatus("The board is full but a rule is broken.", "invalid");
-    else
+    if (E.boardFull(state.board.cells)) {
+      state.fail = true;                    // full but wrong -> FAIL flag falls
+      setStatus("The board is full but a rule is broken.");
+    } else {
       setStatus(`Not finished -- ${emptyCount()} cells left.`);
+    }
   }
   redraw();
 }
@@ -1700,7 +1930,7 @@ function reset() {
   for (let r = 0; r < n; r++)
     for (let cc = 0; cc < n; cc++)
       if (!givenP(state.board, r, cc)) state.board.cells[r * n + cc] = null;
-  state.won = false; state.proven = false; state.history = [];
+  state.won = false; state.proven = false; state.history = []; state.fail = false;
   state.startTime = Date.now();
   state.coinSkin = COIN_SKINS[0];
   // the refresh tick cancels its timer at a win; a replay needs it back
@@ -1711,6 +1941,7 @@ function reset() {
 
 function toggleAssist() {
   state.assist = !state.assist;
+  updateFail();
   setStatus(state.assist ? "Assist on -- rule breaks highlight." : "Assist off.");
   redraw();
 }
@@ -1806,6 +2037,7 @@ function resetPlayState() {
 function beginPlay(result) {
   teardownTimers();
   resetPlayState();
+  state.fail = false;
   state.board = { size: result.size, cells: result.cells.slice(), givens: result.givens.slice() };
   state.solution = result.solution.slice();
   state.grade = result.grade;
@@ -1889,6 +2121,49 @@ document.addEventListener("keydown", e => {
     case "1": case "4": case "6": case "8": jumpSize(e.key); return;
   }
 });
+
+// --- pointer interactivity. The SVG is rebuilt each frame, so listeners live
+// on the persistent stage; each draw registers hit regions (see registerHit).
+// A pointerdown finds the region under the cursor and either starts its drag or
+// fires its click on release. Client coords are mapped into the SVG viewBox. ---
+function svgPoint(e) {
+  const svg = stageEl.firstElementChild;
+  if (!svg) return null;
+  const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  return { x: (e.clientX - r.left) * (vb.width / r.width),
+           y: (e.clientY - r.top) * (vb.height / r.height) };
+}
+function hitAt(p) {
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const b = hits[i];
+    if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return b;
+  }
+  return null;
+}
+let activeDrag = null;
+stageEl.addEventListener("pointerdown", e => {
+  if (state.help || state.generating) return;
+  const p = svgPoint(e); if (!p) return;
+  const hit = hitAt(p); if (!hit) return;
+  e.preventDefault();
+  stageEl.setPointerCapture(e.pointerId);
+  activeDrag = { hit, moved: false, startP: p, data: hit.dragStart ? hit.dragStart() : {} };
+});
+stageEl.addEventListener("pointermove", e => {
+  if (!activeDrag) return;
+  const p = svgPoint(e); if (!p) return;
+  activeDrag.moved = true;
+  if (activeDrag.hit.drag) activeDrag.hit.drag(p, activeDrag);
+});
+function endDrag(e) {
+  if (!activeDrag) return;
+  if (!activeDrag.moved && activeDrag.hit.click) activeDrag.hit.click();
+  try { stageEl.releasePointerCapture(e.pointerId); } catch (_) {}
+  activeDrag = null;
+}
+stageEl.addEventListener("pointerup", endDrag);
+stageEl.addEventListener("pointercancel", endDrag);
+stageEl.style.touchAction = "none";
 
 window.addEventListener("resize", redraw);
 
