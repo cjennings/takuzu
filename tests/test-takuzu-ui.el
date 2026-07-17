@@ -1544,15 +1544,15 @@ given cell and a placed cell of the same value render identically."
     (should-not (takuzu--skin-board skin 8))))
 
 (ert-deftest test-takuzu-ui-board-plate-vs-sockets-dispatch ()
-  "Normal: a skin with a board plate draws one plate image at board span;
-a skin without draws recessed sockets and no board image."
+  "Normal: a skin with a board plate draws one plate image at the plate block
+span; a skin without draws recessed sockets and no board image."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
-    (let ((takuzu-coin-skin 'gestell) (svg (svg-create 400 400)))
+    (let ((takuzu-coin-skin 'gestell) (svg (svg-create 600 600)))
       (takuzu--draw-board svg 0 0)
-      ;; exactly one board-span image (the plate); sprite images live in defs
+      ;; exactly one block-span image (the plate); sprite images live in defs
       (let ((plate (seq-filter (lambda (im)
-                                 (equal (dom-attr im 'width) (takuzu--board-span 4)))
+                                 (equal (dom-attr im 'width) (takuzu--board-block-span 4)))
                                (dom-by-tag svg 'image))))
         (should (= (length plate) 1))
         (should (string-match-p "^data:image/[a-z]+;base64,"

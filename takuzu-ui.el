@@ -141,6 +141,18 @@ The SVG is vector, so this just rasterizes larger; 1.0 is edge-to-edge.")
   "Pixel size of a cell on a board N cells wide."
   (cond ((<= n 6) 50) ((<= n 8) 44) ((<= n 10) 38) (t 34)))
 
+(defun takuzu--board-block-span (n)
+  "Pixel span the board block occupies for the current skin at size N.
+A themed plate is drawn larger than the plain board span: the plate is scaled
+so its recessed wells fall on the same grid the socket board's cells would, at
+the same cell pitch, which leaves its decorative lip riding in the extra span.
+The whole plate is the block, so the lip needs no room beyond it and the panel
+reflows around the larger block.  A socket skin uses the plain board span."
+  (let ((board (takuzu--skin-board takuzu-coin-skin n)))
+    (if board
+        (round (/ (+ (takuzu--cell-size n) takuzu--gap) (nth 2 board)))
+      (takuzu--board-span n))))
+
 ;; --- buffer-local state ---
 
 (defvar-local takuzu--board nil "The puzzle board.")
@@ -857,7 +869,10 @@ The plate is large, so it is read and encoded once and reused across redraws."
 (defun takuzu--draw-board-plate (svg x y file first pitch)
   "Draw the board as raster plate FILE at X,Y on SVG, pieces resting in its wells.
 FIRST and PITCH are the well-grid geometry as fractions of the board span."
-  (let* ((n takuzu--size) (span (takuzu--board-span n))
+  (let* ((n takuzu--size)
+         ;; scale the plate so its well pitch equals the socket board's cell
+         ;; pitch: the grid then fills the plain footprint and the lip overhangs
+         (span (round (/ (+ (takuzu--cell-size n) takuzu--gap) pitch)))
          (errs (takuzu--error-vector))
          (cellf (* pitch span)))
     (dom-append-child svg
@@ -1113,7 +1128,7 @@ Each item is (word WORD) -- word with its first letter gold-underlined -- or
 
 (defun takuzu--strip-width ()
   "Width of the strip under the board: the board plus the right panel."
-  (+ (takuzu--board-span takuzu--size) takuzu--stage-gap takuzu--panel-w))
+  (+ (takuzu--board-block-span takuzu--size) takuzu--stage-gap takuzu--panel-w))
 
 (defun takuzu--lerp-color (a b k)
   "Blend hex colours A and B by K in [0,1], returning a hex string."
@@ -1280,7 +1295,7 @@ get more room."
 A small board is shorter than the instrument stack, so the stage stretches
 to keep the panel at `takuzu--panel-min-h' and the board centres in the
 extra room."
-  (max (+ takuzu--ppad takuzu--title-h (takuzu--board-span takuzu--size))
+  (max (+ takuzu--ppad takuzu--title-h (takuzu--board-block-span takuzu--size))
        (+ (takuzu--panel-top) takuzu--panel-min-h)))
 
 (defun takuzu--faceplate-height ()
@@ -1290,7 +1305,7 @@ extra room."
 (defun takuzu--svg ()
   "Build the faceplate SVG for the current state."
   (let* ((n takuzu--size)
-         (boardw (takuzu--board-span n))
+         (boardw (takuzu--board-block-span n))
          (ppad takuzu--ppad)
          (w (takuzu--faceplate-width))
          (stagey (+ ppad takuzu--title-h))
@@ -1321,7 +1336,7 @@ extra room."
   "X of the vertical seam between the left (board) and right (panel) tiles.
 It falls in the middle of the board-to-panel gap, on flat plate, so the two
 tiles abut with no visible join."
-  (+ takuzu--ppad (takuzu--board-span takuzu--size) (/ takuzu--stage-gap 2)))
+  (+ takuzu--ppad (takuzu--board-block-span takuzu--size) (/ takuzu--stage-gap 2)))
 
 (defun takuzu--tile-split-y ()
   "Y of the horizontal seam between the top tiles and the bottom tile."
@@ -1332,7 +1347,7 @@ tiles abut with no visible join."
 Free of clock and lamp state, so its SVG is byte-stable between refreshes --
 Emacs serves it from the image cache and the board plate is not re-rasterised
 while the panel breathes."
-  (let* ((n takuzu--size) (boardw (takuzu--board-span n))
+  (let* ((n takuzu--size) (boardw (takuzu--board-block-span n))
          (leftw (takuzu--tile-seam)) (toph (takuzu--tile-split-y))
          (stagey (+ takuzu--ppad takuzu--title-h))
          (boardy (+ stagey (/ (- toph stagey boardw) 2)))
@@ -1348,7 +1363,7 @@ Carries the clock and the breathing STATE lamps, so it re-rasterises each
 refresh -- cheap, because it holds no board plate."
   (let* ((seam (takuzu--tile-seam)) (toph (takuzu--tile-split-y))
          (rightw (- (takuzu--faceplate-width) seam))
-         (px (+ takuzu--ppad (takuzu--board-span takuzu--size) takuzu--stage-gap))
+         (px (+ takuzu--ppad (takuzu--board-block-span takuzu--size) takuzu--stage-gap))
          (ptop (takuzu--panel-top))
          (svg (svg-create rightw toph)))
     (takuzu--draw-shell-slice svg seam 0)

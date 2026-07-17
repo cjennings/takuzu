@@ -435,6 +435,16 @@ const DEFAULT_DIFFICULTY = "easy";
 const cellSize = n => n <= 6 ? 50 : n <= 8 ? 44 : n <= 10 ? 38 : 34;
 const boardSpan = n => 2 * BPAD + n * cellSize(n) + (n - 1) * GAP;
 
+// The span the board block occupies for the current skin (mirror of
+// takuzu--board-block-span). A themed plate is drawn larger than the plain
+// board span so its recessed wells land on the socket grid at the same cell
+// pitch, its decorative lip riding in the extra span; a socket skin uses the
+// plain span.
+const boardBlockSpan = n => {
+  const b = skinBoard(state.coinSkin, n);
+  return b ? Math.round((cellSize(n) + GAP) / b[2]) : boardSpan(n);
+};
+
 // --- game state ---
 
 const state = {
@@ -943,7 +953,8 @@ function drawCursorBezel(svg, sx, sy, cell) {
 // Draw the board as a raster plate with pieces resting in its wells (mirror of
 // takuzu--draw-board-plate).  FIRST and PITCH place each well by fraction of span.
 function drawBoardPlate(svg, x, y, href, first, pitch) {
-  const n = state.size, span = boardSpan(n);
+  // scale the plate so its well pitch equals the socket board's cell pitch
+  const n = state.size, span = Math.round((cellSize(n) + GAP) / pitch);
   const errs = errorVector();
   const cellf = pitch * span;
   image(svg, x, y, span, span, href);
@@ -1272,7 +1283,7 @@ function drawEngrave(svg, x, y, width, label) {
     { stroke: c("wash"), "stroke-width": 1 });
 }
 
-const stripWidth = () => boardSpan(state.size) + STAGE_GAP + PANEL_W;
+const stripWidth = () => boardBlockSpan(state.size) + STAGE_GAP + PANEL_W;
 
 // GAME (session keys) on top, PLAY (solving keys) below; New flashes while armed.
 function drawLegend(svg, x, y, width) {
@@ -1298,7 +1309,7 @@ const panelTop = () => state.size >= 8 ? PPAD + TITLE_H : PPAD + 6;
 // The lower of the board and panel bottoms; small boards stretch the stage
 // to keep the panel at PANEL_MIN_H and centre the board in the extra room.
 const stageBottom = () => Math.max(
-  PPAD + TITLE_H + boardSpan(state.size),
+  PPAD + TITLE_H + boardBlockSpan(state.size),
   panelTop() + PANEL_MIN_H);
 
 const faceplateHeight = () =>
@@ -1306,7 +1317,7 @@ const faceplateHeight = () =>
 
 // Mirror of takuzu--svg: the whole faceplate for the current state.
 function svgFaceplate() {
-  const boardw = boardSpan(state.size);
+  const boardw = boardBlockSpan(state.size);
   const w = faceplateWidth();
   const stagey = PPAD + TITLE_H;
   const bottom = stageBottom();
