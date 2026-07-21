@@ -1,0 +1,100 @@
+TAKUZU — BOARD PLATE PNG REQUIREMENTS
+=====================================
+For generating the gestell theme's board images (the "board plate" the
+pieces drop into). One plate per board size. Drop finished files in this
+inbox/ directory.
+
+Reference: board.png (the lighter of the two you sent) is the approved
+look and becomes gestell-board-8.png. Match the other four to it.
+
+
+THE SET (five files)
+--------------------
+One plate per takuzu board size. The only thing that changes between them
+is the number of wells per side:
+
+  gestell-board-4.png    4 x 4  wells  (16 cells)
+  gestell-board-6.png    6 x 6  wells  (36 cells)
+  gestell-board-8.png    8 x 8  wells  (64 cells)   <- board.png, already done
+  gestell-board-10.png  10 x 10 wells  (100 cells)
+  gestell-board-12.png  12 x 12 wells  (144 cells)
+
+
+PNG FORMAT
+----------
+- Shape: square (1:1). The board is square at every size.
+- Size: high-res, square. What you've been getting (~1254 x 1254) is
+  perfect. Use the SAME pixel dimensions for all five.
+- Color: sRGB.
+- Opacity: OPAQUE. No transparency, no alpha channel needed. The dark
+  bronze frame sits mounted on the dark console and the corners blend in.
+  Do NOT try to make the background transparent — it isn't needed here,
+  and a flat opaque plate is exactly right. (Transparency only matters for
+  the PIECES, which are handled separately.)
+
+
+STYLE — keep the five a matched family
+--------------------------------------
+Same prompt each time; change only the well count. Every plate must share:
+- The same bronze / dark-metal material and patina.
+- The same beveled outer frame, same thickness proportion.
+- The same four corner screws.
+- The same recessed-well style (rounded-square wells with bronze edges).
+
+Aim for a similar frame width and a similar central grid area on every
+plate. Don't let the 4x4 end up with a giant frame and four huge wells
+while the 12x12 goes edge-to-edge. They should look like the same physical
+plate re-machined with a finer or coarser grid.
+
+
+THE ONE HARD REQUIREMENT — a regular grid
+-----------------------------------------
+The well grid must be REGULAR:
+- Evenly spaced wells, uniform pitch (equal gap between every well).
+- Symmetric margins on all four sides (grid centered on the plate).
+- Square cells (wells as tall as they are wide).
+- No warping, drift, or perspective — a flat, straight-on grid.
+
+This is what lets the engine drop each piece dead-center in its well by a
+simple formula. You do NOT need to hit exact pixel positions — I measure
+each plate's grid off the image and calibrate placement (that's how the
+8x8 lined up on the first try). I only need the grid itself to be even and
+straight.
+
+For reference, board.png measured out to: first well center ~14.5% in from
+the edge, wells spaced ~10% of the plate width apart, well opening a bit
+under one pitch wide. Your other sizes don't have to match those numbers —
+just be internally regular and symmetric.
+
+
+WATCH THE HIGH SIZES
+--------------------
+AI grids tend to drift at higher counts. A 6x6 usually comes out clean; a
+12x12 is more likely to come out slightly uneven. Before sending, eyeball
+the 10x10 and 12x12 for even spacing and straight rows/columns. If one
+comes out warped, send it anyway and flag it — I can measure each well
+individually as a fallback, or you regenerate.
+
+
+NAMING + DROP
+-------------
+- gestell-board-4.png, -6.png, -8.png, -10.png, -12.png
+- Drop them in this inbox/ directory.
+
+
+WHAT YOU DON'T HAVE TO WORRY ABOUT
+----------------------------------
+- Transparency: none needed on the plates (see above).
+- Exact piece placement: I measure and calibrate per plate.
+- Piece sprites: the taijitu and gear are handled separately by the
+  masking pipeline; you don't put pieces on the plate. The plate is just
+  the empty board.
+- Resizing to game scale: the engine scales each plate to fit; give me the
+  high-res master.
+
+
+WHEN THEY LAND
+--------------
+I measure each plate's grid, calibrate piece placement, and render all five
+in the full console so you can see the whole set at every size before we
+wire it into the game for real.
