@@ -554,8 +554,11 @@ to 12, and after that it toggles between the two; other digits map to nil."
     (should (null takuzu--armed))
     (should takuzu--start-time)))
 
-(ert-deftest test-takuzu-ui-new-rearms-when-playing ()
-  "Normal: New while playing arms a fresh game."
+(ert-deftest test-takuzu-ui-new-requests-start-when-playing ()
+  "Normal: New while playing re-arms AND requests the start in one press.
+With the next puzzle still generating, the fresh game holds the start
+request (`takuzu--pending-start') so play begins the moment it lands --
+the 2026-07-19 single-press decision."
   (test-takuzu-ui--arming
     (with-temp-buffer
       (takuzu-mode)
@@ -563,7 +566,8 @@ to 12, and after that it toggles between the two; other digits map to nil."
             takuzu--board (takuzu-make-board 4 test-takuzu-ui--solution-4))
       (takuzu-new)
       (with-current-buffer "*Takuzu*"
-        (should takuzu--armed)))))
+        (should takuzu--armed)
+        (should takuzu--pending-start)))))
 
 (ert-deftest test-takuzu-ui-new-waits-when-not-ready ()
   "Normal: New while armed but not yet generated shows the spinner and waits."
@@ -1323,6 +1327,60 @@ with no games recorded it says so."
   (should (eq (eval (car (get 'takuzu-coin-skin 'standard-value)))
               (car takuzu--coin-skins)))
   (should (equal takuzu--coin-skins '(wood terra collegiate gestell))))
+
+(ert-deftest test-takuzu-ui-new-starts-next-game-directly ()
+  "Integration: one press of n from a finished game begins the next game.
+
+Components integrated:
+- takuzu-new (entry point)
+- takuzu-ui-arm (real; its background generation is stubbed synchronous,
+  standing in for a pre-generated pending puzzle)
+- takuzu--begin-play (real)
+
+Validates the 2026-07-19 decision: n clears the board AND starts play in
+one press -- no intermediate press-n-to-begin stop between games."
+  (let (gamebuf)
+    (unwind-protect
+        (test-takuzu-ui--with-buffer
+          (test-takuzu-ui--setup-4)
+          (setq takuzu--won t)
+          (cl-letf (((symbol-function 'switch-to-buffer) #'ignore)
+                    ((symbol-function 'takuzu-generate-async)
+                     (lambda (size difficulty cb)
+                       (funcall cb (takuzu-generate size difficulty)) nil)))
+            (takuzu-new))
+          (setq gamebuf (get-buffer "*Takuzu*"))
+          (should gamebuf)
+          (with-current-buffer gamebuf
+            (should-not takuzu--armed)
+            (should takuzu--start-time)
+            (should-not takuzu--won)))
+      (when gamebuf
+        (with-current-buffer gamebuf (ignore-errors (takuzu--cleanup)))
+        (ignore-errors (kill-buffer gamebuf))))))
+
+(ert-deftest test-takuzu-ui-new-clears-echo-area ()
+  "Normal: hitting new clears any stale echo-area message (2026-07-19).
+The previous game's \"Solved in...\" echo must not outlive the press that
+starts the next game.  The echo area is the mocked boundary; a (message
+nil) call is the clear."
+  (let (gamebuf)
+    (unwind-protect
+        (test-takuzu-ui--with-buffer
+          (test-takuzu-ui--setup-4)
+          (setq takuzu--won t)
+          (let (cleared)
+            (cl-letf (((symbol-function 'switch-to-buffer) #'ignore)
+                      ((symbol-function 'takuzu-generate-async)
+                       (lambda (_size _difficulty _cb) nil))
+                      ((symbol-function 'message)
+                       (lambda (fmt &rest _) (when (null fmt) (setq cleared t)) nil)))
+              (takuzu-new))
+            (setq gamebuf (get-buffer "*Takuzu*"))
+            (should cleared)))
+      (when gamebuf
+        (with-current-buffer gamebuf (ignore-errors (takuzu--cleanup)))
+        (ignore-errors (kill-buffer gamebuf))))))
 
 (ert-deftest test-takuzu-ui-reset-keeps-coin-skin ()
   "Normal: r (reset) clears the board pieces but leaves the coin drum alone.

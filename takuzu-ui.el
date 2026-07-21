@@ -1938,22 +1938,32 @@ Shows the three rules over the console shell; any key returns to the game."
   (setq takuzu--help (not takuzu--help))
   (takuzu--redraw))
 
-(defun takuzu-new ()
-  "Start the armed puzzle, or arm a fresh game (blank board, flashing New)."
-  (interactive)
-  (cond
-   ((and takuzu--armed takuzu--pending)
-    (takuzu--begin-play (current-buffer) takuzu--pending))
-   (takuzu--armed
-    ;; not generated yet: show the spinner and start as soon as it arrives
+(defun takuzu--request-start ()
+  "Begin the armed game now, or begin the moment its generation lands.
+With the puzzle already pending, play starts at once; otherwise the
+spinner shows and `takuzu--on-generated' starts play on arrival."
+  (if takuzu--pending
+      (takuzu--begin-play (current-buffer) takuzu--pending)
     (setq takuzu--pending-start t takuzu--spinner 0
           takuzu--generating (list :size (plist-get takuzu--armed :size)
                                    :difficulty (plist-get takuzu--armed :difficulty)))
     (takuzu--stop-timer)
     (setq takuzu--spinner-timer
           (takuzu--run-buffer-timer 0 0.1 #'takuzu--spin (current-buffer)))
-    (takuzu--redraw))
-   (t (takuzu-ui-arm takuzu--size (takuzu--current-difficulty)))))
+    (takuzu--redraw)))
+
+(defun takuzu-new ()
+  "Start the next game in one press.
+An armed game (the initial entry) starts immediately.  From a running or
+finished game, the board clears and the next game begins as soon as its
+puzzle is ready -- no intermediate press-n-to-begin stop.  Any stale
+echo-area message is cleared."
+  (interactive)
+  (message nil)
+  (if takuzu--armed
+      (takuzu--request-start)
+    (with-current-buffer (takuzu-ui-arm takuzu--size (takuzu--current-difficulty))
+      (takuzu--request-start))))
 
 (defun takuzu-cycle-size ()
   "Cycle to the next board size and arm a fresh game at that size."
@@ -2112,7 +2122,8 @@ was already pressed, or hold the RESULT pending the start key."
 (defun takuzu-ui-arm (size difficulty)
   "Open the game buffer blank at SIZE, ready to start DIFFICULTY on the New key.
 The clock stays stopped and the New key flashes until the user starts; the
-puzzle pre-generates in the background so starting is instant."
+puzzle pre-generates in the background so starting is instant.  Return the
+game buffer."
   (let ((buf (get-buffer-create "*Takuzu*")))
     (with-current-buffer buf
       (takuzu-mode)
@@ -2130,7 +2141,8 @@ puzzle pre-generates in the background so starting is instant."
              size difficulty
              (lambda (result) (takuzu--on-generated buf result)))))
     (switch-to-buffer buf)
-    (takuzu--redraw buf)))
+    (takuzu--redraw buf)
+    buf))
 
 (provide 'takuzu-ui)
 ;;; takuzu-ui.el ends here

@@ -1963,19 +1963,27 @@ function help() {
 }
 
 // Start the armed puzzle, or arm a fresh game (blank board, flashing New).
-function newGame() {
-  if (state.armed && state.pending) {
+// Begin the armed game now, or begin the moment its generation lands.
+function requestStart() {
+  if (state.pending) {
     beginPlay(state.pending);
-  } else if (state.armed) {
-    // not generated yet: show the spinner and start as soon as it arrives
+  } else {
     state.pendingStart = true; state.spinner = 0;
     state.generating = { size: state.armed.size, difficulty: state.armed.difficulty };
     cancelTimer("refresh");
     timers.spinner = setInterval(() => { state.spinner++; redraw(); }, 100);
     redraw();
-  } else {
-    arm(state.size, currentDifficulty());
   }
+}
+
+// One press starts the next game.  An armed game (the initial entry) starts
+// immediately; from a running or finished game, the board clears and play
+// begins as soon as the fresh puzzle is ready -- no press-n-to-begin stop.
+// Any stale bottom-of-game message is cleared.
+function newGame() {
+  message("");
+  if (!state.armed) arm(state.size, currentDifficulty());
+  requestStart();
 }
 
 function cycleSize() {
