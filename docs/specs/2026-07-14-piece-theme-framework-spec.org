@@ -28,9 +28,13 @@ The piece-rendering side is already prototyped through the live coin work. The t
 | Status   | draft                                     |
 |----------+-------------------------------------------|
 | Owner    | Craig Jennings                            |
+|----------+-------------------------------------------|
 | Reviewer | (unassigned)                              |
+|----------+-------------------------------------------|
 | Date     | 2026-07-14                                |
+|----------+-------------------------------------------|
 | Related  | todo.org "Coin skins as a player setting" |
+|----------+-------------------------------------------|
 
 * Summary
 

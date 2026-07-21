@@ -293,6 +293,17 @@ specular arc on the top-left corner."
     (should takuzu--won)
     (should (string-match-p "Solved" takuzu--status))))
 
+(ert-deftest test-takuzu-ui-hint-on-last-cell-keeps-win-message ()
+  "Boundary: a hint that fills the final cell wins the game, and the status
+keeps the \"Solved in\" note -- the hint label must not overwrite it."
+  (test-takuzu-ui--with-buffer
+    (let ((cells (copy-sequence test-takuzu-ui--solution-4)))
+      (aset cells 5 nil)                  ; one editable blank
+      (test-takuzu-ui--setup-4 cells))
+    (takuzu-hint)
+    (should takuzu--won)
+    (should (string-match-p "Solved in" takuzu--status))))
+
 (ert-deftest test-takuzu-ui-check-unfinished ()
   "Normal: check on an unfinished board reports the cells left."
   (test-takuzu-ui--with-buffer
@@ -346,6 +357,25 @@ would sit frozen through the replayed game."
           takuzu--armed '(:size 4 :difficulty easy) takuzu--cursor '(0 . 0))
     (takuzu-cycle)
     (should (null (takuzu-board-ref takuzu--board 0 0)))))
+
+(ert-deftest test-takuzu-ui-playing-only-honest-while-start-requested ()
+  "Boundary: a board key pressed after n (start requested, still generating)
+says the puzzle is generating -- not \"Press n to begin\", which would ask
+for a press the player already made."
+  (test-takuzu-ui--with-buffer
+    (setq takuzu--size 4 takuzu--board (takuzu-make-board 4)
+          takuzu--armed '(:size 4 :difficulty easy)
+          takuzu--pending-start t
+          takuzu--generating '(:size 4 :difficulty easy)
+          takuzu--cursor '(0 . 0))
+    (let (said)
+      (cl-letf (((symbol-function 'message)
+                 (lambda (fmt &rest args) (when fmt (setq said (apply #'format fmt args))) nil)))
+        (takuzu-cycle))
+      (should (null (takuzu-board-ref takuzu--board 0 0)))
+      (should said)
+      (should (string-match-p "generating" said))
+      (should-not (string-match-p "Press n" said)))))
 
 (ert-deftest test-takuzu-ui-begin-play-starts-clock ()
   "Normal: begin-play installs the board and starts the clock."
@@ -1381,6 +1411,42 @@ nil) call is the clear."
       (when gamebuf
         (with-current-buffer gamebuf (ignore-errors (takuzu--cleanup)))
         (ignore-errors (kill-buffer gamebuf))))))
+
+(ert-deftest test-takuzu-ui-new-retries-failed-generation ()
+  "Error: n after a failed generation launches a fresh generation.
+The gen-fail status says \"press n to retry\", but the only generation
+launch lived in `takuzu-ui-arm' -- so the retry press armed the spinner
+against a dead process and waited forever.  n must relaunch."
+  (test-takuzu-ui--arming
+    (let ((calls 0) cb-holder)
+      (cl-letf (((symbol-function 'takuzu-generate-async)
+                 (lambda (_size _difficulty cb)
+                   (cl-incf calls) (setq cb-holder cb) nil)))
+        (takuzu-ui-arm 4 'easy)
+        (with-current-buffer "*Takuzu*"
+          (funcall cb-holder nil)          ; the child fails
+          (should (= calls 1))
+          (takuzu-new)                     ; retry press
+          (should (= calls 2))
+          (should takuzu--pending-start)
+          (funcall cb-holder (takuzu-generate 4 'easy))
+          (should-not takuzu--armed)       ; the retry landed and play began
+          (should takuzu--start-time))))))
+
+(ert-deftest test-takuzu-ui-request-start-no-duplicate-generation ()
+  "Boundary: n while the armed generation is still in flight launches
+nothing extra -- the relaunch guard fires only on a dead process."
+  (test-takuzu-ui--arming
+    (let ((calls 0))
+      (cl-letf (((symbol-function 'takuzu-generate-async)
+                 (lambda (_size _difficulty _cb) (cl-incf calls) 'live-proc))
+                ((symbol-function 'process-live-p)
+                 (lambda (p) (eq p 'live-proc))))
+        (takuzu-ui-arm 4 'easy)
+        (with-current-buffer "*Takuzu*"
+          (takuzu-new)
+          (should (= calls 1))
+          (should takuzu--pending-start))))))
 
 (ert-deftest test-takuzu-ui-reset-keeps-coin-skin ()
   "Normal: r (reset) clears the board pieces but leaves the coin drum alone.

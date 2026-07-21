@@ -528,6 +528,7 @@ const mBase = m => COIN_METAL[m][2], mDeep = m => COIN_METAL[m][3];
 const mFixedInk = m => c(COIN_LIGHT.has(m) ? "rim-iron" : "rim-silver");
 const timers = { refresh: null, event: null, spinner: null };
 let genToken = 0;
+let genLive = false; // a generation is in flight (mirror of takuzu--gen-process liveness)
 
 function cancelTimer(name) {
   if (timers[name] != null) { clearInterval(timers[name]); timers[name] = null; }
@@ -1807,6 +1808,9 @@ const currentDifficulty = () => state.difficulty || DEFAULT_DIFFICULTY;
 // and while the help overlay is up a game key just dismisses it.
 function playingOnly() {
   if (state.help) { closeHelp(); return false; }
+  // start already requested (n was pressed): the honest nudge is the
+  // generation wait, not a request for a press the player just made
+  if (state.pendingStart) { message("Still generating a puzzle…"); return false; }
   if (state.armed) { message("Press n to begin."); return false; }
   if (state.generating) { message("Still generating a puzzle…"); return false; }
   return true;
@@ -1890,9 +1894,13 @@ function hint() {
     } else {
       state.cursor = [found[0], found[1]];
       setCurrent(found[2]);
-      setStatus(found[3] === "forced" ? "Filled a forced cell."
-        : found[3] === "hypothesis" ? "Hypothesis hint: only one colour survives here."
-        : "No logic path found -- filled from the solution.", "hint");
+      // a hint that filled the last cell just won the game -- the
+      // "Solved in" note from the win check outranks the hint label
+      if (!state.won && !state.proven) {
+        setStatus(found[3] === "forced" ? "Filled a forced cell."
+          : found[3] === "hypothesis" ? "Hypothesis hint: only one colour survives here."
+          : "No logic path found -- filled from the solution.", "hint");
+      }
     }
   }
   redraw();
@@ -1963,13 +1971,16 @@ function help() {
 }
 
 // Start the armed puzzle, or arm a fresh game (blank board, flashing New).
-// Begin the armed game now, or begin the moment its generation lands.
+// Begin the armed game now, or begin the moment its generation lands.  A dead
+// generation (a prior gen-fail) can't deliver, so it relaunches here -- this
+// is what makes the "press n to retry" promise true.
 function requestStart() {
   if (state.pending) {
     beginPlay(state.pending);
   } else {
     state.pendingStart = true; state.spinner = 0;
     state.generating = { size: state.armed.size, difficulty: state.armed.difficulty };
+    if (!genLive) generateAsync(state.armed.size, state.armed.difficulty, onGenerated);
     cancelTimer("refresh");
     timers.spinner = setInterval(() => { state.spinner++; redraw(); }, 100);
     redraw();
@@ -2073,13 +2084,14 @@ function onGenerated(result) {
 // Time-sliced generation so the armed/generating faceplate stays live.
 function generateAsync(size, difficulty, cb) {
   const token = ++genToken;
+  genLive = true;
   let st = null;
   function step() {
-    if (token !== genToken) return; // superseded by a re-arm
+    if (token !== genToken) return; // superseded by a re-arm (which owns genLive now)
     try {
       if (st == null) st = E.makeCarve(size, difficulty);
-      if (E.carveStep(st, 30)) { cb(E.carveResult(st)); return; }
-    } catch (e) { cb(null); return; }
+      if (E.carveStep(st, 30)) { genLive = false; cb(E.carveResult(st)); return; }
+    } catch (e) { genLive = false; cb(null); return; }
     setTimeout(step, 0);
   }
   setTimeout(step, 0);

@@ -1682,7 +1682,7 @@ Kicks off the scale-easing timer when the displayed scale is off target."
              (insert (format "  %d. %s\n" n (string-join rule " "))))
     (insert "\n(c) Craig Jennings, 2026\nDedicated to Christine, with thanks for the inspiration.\n"))
    (takuzu--generating
-    (insert (format "Generating a %s %dx%d puzzle…\n"
+    (insert (format "Generating %s %dx%d puzzle…\n"
                     (plist-get takuzu--generating :difficulty)
                     takuzu--size takuzu--size)))
    (t
@@ -1761,6 +1761,9 @@ Guards board-dereferencing commands so a mid-generation keypress is inert.
 While the help overlay is up, a game key just dismisses it."
   (declare (indent 0))
   `(cond (takuzu--help (takuzu--close-help))
+         ;; start already requested (n was pressed): the honest nudge is the
+         ;; generation wait, not a request for a press the player just made
+         (takuzu--pending-start (message "Still generating a puzzle…"))
          (takuzu--armed (message "Press n to begin."))
          (takuzu--generating (message "Still generating a puzzle…"))
          (t ,@body)))
@@ -1847,12 +1850,15 @@ honestly at each tier."
           (takuzu--set-status "No empty cell left to hint." 'no-hint)
         (setq takuzu--cursor (cons (nth 0 found) (nth 1 found)))
         (takuzu--set-current (nth 2 found))
-        (takuzu--set-status
-         (pcase (nth 3 found)
-           ('forced "Filled a forced cell.")
-           ('hypothesis "Hypothesis hint: only one colour survives here.")
-           (_ "No logic path found -- filled from the solution."))
-         'hint))))
+        ;; a hint that filled the last cell just won the game -- the
+        ;; "Solved in" note from the win check outranks the hint label
+        (unless (or takuzu--won takuzu--proven)
+          (takuzu--set-status
+           (pcase (nth 3 found)
+             ('forced "Filled a forced cell.")
+             ('hypothesis "Hypothesis hint: only one colour survives here.")
+             (_ "No logic path found -- filled from the solution."))
+           'hint)))))
   (takuzu--redraw)))
 
 (defun takuzu-check ()
@@ -1941,12 +1947,21 @@ Shows the three rules over the console shell; any key returns to the game."
 (defun takuzu--request-start ()
   "Begin the armed game now, or begin the moment its generation lands.
 With the puzzle already pending, play starts at once; otherwise the
-spinner shows and `takuzu--on-generated' starts play on arrival."
+spinner shows and `takuzu--on-generated' starts play on arrival.  A dead
+generation (a prior gen-fail) can't deliver, so it relaunches here --
+this is what makes the \"press n to retry\" promise true."
   (if takuzu--pending
       (takuzu--begin-play (current-buffer) takuzu--pending)
     (setq takuzu--pending-start t takuzu--spinner 0
           takuzu--generating (list :size (plist-get takuzu--armed :size)
                                    :difficulty (plist-get takuzu--armed :difficulty)))
+    (unless (process-live-p takuzu--gen-process)
+      (let ((buf (current-buffer)))
+        (setq takuzu--gen-process
+              (takuzu-generate-async
+               (plist-get takuzu--armed :size)
+               (plist-get takuzu--armed :difficulty)
+               (lambda (result) (takuzu--on-generated buf result))))))
     (takuzu--stop-timer)
     (setq takuzu--spinner-timer
           (takuzu--run-buffer-timer 0 0.1 #'takuzu--spin (current-buffer)))
