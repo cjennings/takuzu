@@ -420,13 +420,11 @@ const TITLE_H = 78;        // title band height
 const LEGEND_H = 64;       // legend band height
 const EVENT_H = 30;        // event annunciator strip height
 const EVENT_TICK = 0.08;   // seconds between event-lamp pulse frames
-const EVENT_BREATH = 2.8;  // seconds per breathing cycle
-const EVENT_DUR = EVENT_BREATH; // one breath, then dark
 const INVALID_HOLD = 2.0;  // seconds INVALID holds full brightness
 const INVALID_FADE = 0.6;  // seconds INVALID takes to dim after the hold
 const FILL = 0.95;         // fraction of the window the faceplate fills
 const CHAR_ASPECT = 0.62;  // monospace glyph width / font size
-const FLASH_PERIOD = 1.2;  // seconds per on/off cycle of all flashing (calm, unified)
+const FLASH_PERIOD = 2.0;  // seconds per cycle of every pulsing indicator: 1s on, 1s off; event breath + pulse duration derive from it
 const SIZES = [4, 6, 8, 10, 12];
 const DIFFS = ["easy", "medium", "hard"];
 const DEFAULT_SIZE = 6;
@@ -554,7 +552,7 @@ function elapsed() {
 }
 
 const flashOnP = () => (Date.now() / 1000) % FLASH_PERIOD < 0.5 * FLASH_PERIOD;
-const refreshInterval = () => Math.max(0.15, Math.min(1.0, FLASH_PERIOD / 3));
+const refreshInterval = () => Math.max(0.1, Math.min(0.15, FLASH_PERIOD / 2));
 // pegs at 99:99 once the minutes outgrow their two tubes, until a new game
 const fmtTime = s => s > 5999 ? "99:99"
   : `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -1265,8 +1263,10 @@ function drawStateLamps(svg, x, y, w, h) {
 }
 
 // Seconds the current event lamp stays lit before the pulse timer clears it.
+// A pulsing event lives for one breathing cycle of FLASH_PERIOD, so the lamp
+// fades out at a cycle boundary instead of snapping off mid-breath.
 function eventDuration() {
-  return state.event === "invalid" ? INVALID_HOLD + INVALID_FADE : EVENT_DUR;
+  return state.event === "invalid" ? INVALID_HOLD + INVALID_FADE : FLASH_PERIOD;
 }
 
 // Pulse intensity 0..1 of the current event.  Most events breathe slowly over
@@ -1280,7 +1280,7 @@ function eventIntensity() {
     if (e < INVALID_HOLD + INVALID_FADE) return 1.0 - (e - INVALID_HOLD) / INVALID_FADE;
     return 0;
   }
-  return 0.5 * (1 - Math.cos(2 * Math.PI * e / EVENT_BREATH));
+  return 0.5 * (1 - Math.cos(2 * Math.PI * e / FLASH_PERIOD));
 }
 
 function lerpColor(a, b, k) {

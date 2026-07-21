@@ -14,7 +14,9 @@
   (should (memq takuzu-default-size takuzu-sizes))
   (should (cl-every #'cl-evenp takuzu-sizes))
   (should (memq takuzu-default-difficulty '(easy medium hard)))
-  (should (numberp takuzu-flash-period)))
+  (should (numberp takuzu-flash-period))
+  ;; one second on, one second off -- the 2026-07-19 pulse-pace decision
+  (should (= takuzu-flash-period 2.0)))
 
 (ert-deftest test-takuzu-read-size ()
   "Normal: read-size returns the chosen size as a number."

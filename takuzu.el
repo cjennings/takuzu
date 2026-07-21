@@ -45,11 +45,12 @@
   :type '(choice (const easy) (const medium) (const hard))
   :group 'takuzu)
 
-(defcustom takuzu-flash-period 1.0
-  "Seconds for one on/off cycle of the slow flashing indicators.
-Governs the status LED (win/reveal) and the flashing New prompt.  Increase for
-slower flashing, decrease for faster; takes effect on the next game (or redraw
-for the LED).  The clock-ring start/stop cue is a separate quick double-flash."
+(defcustom takuzu-flash-period 2.0
+  "Seconds for one on/off cycle of every pulsing indicator.
+The single pace knob for the panel: the flashing legend words, the SOLVING
+lamp's breath, and the event-lamp pulses all derive their cycle from it, so
+the default gives one second lit, one second dark, everywhere.  Increase for
+slower pulsing, decrease for faster; takes effect on the next redraw."
   :type 'number
   :group 'takuzu)
 

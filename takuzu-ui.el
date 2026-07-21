@@ -115,15 +115,10 @@ boards stretch the stage to keep it.")
 (defconst takuzu--legend-h 64 "Legend (control rows) band height.")
 (defconst takuzu--event-h 30 "Height of the event annunciator strip below the board.")
 (defconst takuzu--event-tick 0.08 "Seconds between event-lamp pulse frames.")
-(defconst takuzu--event-breath 2.8 "Seconds per breathing cycle of a pulsing event lamp.")
 (defconst takuzu--invalid-hold 2.0
   "Seconds the INVALID lamp holds full brightness before dimming.")
 (defconst takuzu--invalid-fade 0.6
   "Seconds the INVALID lamp takes to dim after its hold window.")
-(defconst takuzu--event-dur takuzu--event-breath
-  "Seconds an event lamp pulses before it goes dark.
-A single breathing cycle: the lamp breathes once and fades out rather than
-snapping off mid-breath.")
 (defconst takuzu--fill 0.85
   "Fraction of the window the faceplate is scaled to fill.
 The SVG is vector, so this just rasterizes larger; 1.0 is edge-to-edge.")
@@ -217,9 +212,6 @@ missed cleanup path would otherwise leak the repeating timer forever."
   "Non-nil during the lit half of the current flash cycle (`takuzu-flash-period')."
   (< (mod (float-time) takuzu-flash-period) (* 0.5 takuzu-flash-period)))
 
-(defconst takuzu--breath-period 2.6
-  "Seconds per SOLVING-lamp breathing cycle.")
-
 (defconst takuzu--breath-floor 0.35
   "Dimmest the SOLVING lamp breathes to, in [0,1].
 The lamp swells back from this rather than going fully dark, so it reads as
@@ -227,10 +219,10 @@ a slow breath rather than a blink.")
 
 (defun takuzu--solving-intensity ()
   "Breathing brightness 0..1 for the SOLVING lamp.
-A slow cosine over `takuzu--breath-period', riding wall-clock time so the
+A slow cosine over `takuzu-flash-period', riding wall-clock time so the
 swell is smooth and independent of the once-a-second game clock.  It ranges
 from `takuzu--breath-floor' to 1.0 -- the lamp never fully darkens."
-  (let ((k (* 0.5 (- 1 (cos (/ (* 2 float-pi (float-time)) takuzu--breath-period))))))
+  (let ((k (* 0.5 (- 1 (cos (/ (* 2 float-pi (float-time)) takuzu-flash-period))))))
     (+ takuzu--breath-floor (* (- 1 takuzu--breath-floor) k))))
 
 (defun takuzu--refresh-interval ()
@@ -1139,10 +1131,12 @@ Each item is (word WORD) -- word with its first letter gold-underlined -- or
             (max 0 (min 255 (round (+ (chan a 2) (* k (- (chan b 2) (chan a 2))))))))))
 
 (defun takuzu--event-duration ()
-  "Seconds the current event lamp stays lit before the pulse timer clears it."
+  "Seconds the current event lamp stays lit before the pulse timer clears it.
+A pulsing event lives for one breathing cycle of `takuzu-flash-period', so
+the lamp fades out at a cycle boundary instead of snapping off mid-breath."
   (if (eq takuzu--event 'invalid)
       (+ takuzu--invalid-hold takuzu--invalid-fade)
-    takuzu--event-dur))
+    takuzu-flash-period))
 
 (defun takuzu--event-intensity ()
   "Pulse intensity 0..1 of the current event.
@@ -1156,7 +1150,7 @@ full brightness for `takuzu--invalid-hold' seconds and then dims over
                 ((< e (+ takuzu--invalid-hold takuzu--invalid-fade))
                  (- 1.0 (/ (- e takuzu--invalid-hold) takuzu--invalid-fade)))
                 (t 0))
-        (* 0.5 (- 1 (cos (/ (* 2 float-pi e) takuzu--event-breath))))))))
+        (* 0.5 (- 1 (cos (/ (* 2 float-pi e) takuzu-flash-period))))))))
 
 (defun takuzu--draw-event-annunciator (svg x y w h)
   "Draw the EVENT annunciator strip on SVG at X,Y size W,H.

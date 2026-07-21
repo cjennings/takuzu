@@ -686,7 +686,7 @@ Otherwise the lamp snaps off near peak brightness instead of fading out."
     (let ((t0 (current-time)))
       (setq takuzu--event-time t0)
       (cl-letf (((symbol-function 'current-time)
-                 (lambda () (time-add t0 (seconds-to-time takuzu--event-dur)))))
+                 (lambda () (time-add t0 (seconds-to-time takuzu-flash-period)))))
         (should (< (takuzu--event-intensity) 0.05))))))
 
 (ert-deftest test-takuzu-ui-set-status-echoes-unmapped ()
@@ -1023,7 +1023,7 @@ instruments overprint each other unless the stage grows to fit them."
     (takuzu--event-pulse (current-buffer))
     (should (eq takuzu--event 'invalid))
     (setq takuzu--event-time
-          (time-subtract (current-time) (seconds-to-time (+ takuzu--event-dur 1))))
+          (time-subtract (current-time) (seconds-to-time (+ (takuzu--event-duration) 1))))
     (takuzu--event-pulse (current-buffer))
     (should-not takuzu--event)
     (should-not takuzu--event-time)))
@@ -1038,8 +1038,28 @@ instruments overprint each other unless the stage grows to fit them."
       (cl-letf (((symbol-function 'current-time) (lambda () t0)))
         (should (< (takuzu--event-intensity) 0.01)))
       (cl-letf (((symbol-function 'current-time)
-                 (lambda () (time-add t0 (seconds-to-time 1.4)))))
+                 (lambda () (time-add t0 (seconds-to-time (/ takuzu-flash-period 2.0))))))
         (should (> (takuzu--event-intensity) 0.99))))))
+
+(ert-deftest test-takuzu-ui-pulse-periods-share-one-knob ()
+  "Normal: every pulse interval derives from `takuzu-flash-period'.
+The 2026-07-19 sync decision: the SOLVING breath, the event-lamp breath, and
+the event pulse duration all follow the one knob, so retuning it retunes the
+whole panel.  Verified by rebinding the knob and watching each cycle move."
+  (with-temp-buffer
+    (let ((takuzu-flash-period 4.0))
+      ;; SOLVING breath peaks at half the (rebound) period
+      (cl-letf (((symbol-function 'float-time) (lambda (&optional _) 2.0)))
+        (should (< (abs (- (takuzu--solving-intensity) 1.0)) 1e-6)))
+      ;; event breath peaks at half the (rebound) period
+      (let ((t0 (current-time)))
+        (setq takuzu--event 'hint takuzu--event-time t0)
+        (cl-letf (((symbol-function 'current-time)
+                   (lambda () (time-add t0 (seconds-to-time 2.0)))))
+          (should (> (takuzu--event-intensity) 0.99)))
+        ;; a non-INVALID event pulses for exactly one cycle of the knob
+        (should (= (takuzu--event-duration) takuzu-flash-period))
+        (setq takuzu--event nil takuzu--event-time nil)))))
 
 ;; --- instrument draw helpers (headless DOM builds) ---
 
@@ -1175,7 +1195,7 @@ events get, so the pulse timer must not cut it short."
     ;; event mid-breath, so the active lamp is near peak brightness
     (setq takuzu--event 'invalid
           takuzu--event-time (time-subtract (current-time)
-                                            (seconds-to-time (/ takuzu--event-breath 2))))
+                                            (seconds-to-time (/ takuzu-flash-period 2))))
     (let ((svg (svg-create 600 60)))
       (takuzu--draw-event-annunciator svg 10 10 (takuzu--strip-width) takuzu--event-h)
       ;; strip background + six legend cells; the lit cell's fill stands out
@@ -1599,7 +1619,7 @@ zero once the game ends and SOLVED takes over."
     (cl-letf (((symbol-function 'float-time) (lambda (&optional _) 0.0)))
       (should (= (takuzu--solving-intensity) takuzu--breath-floor)))
     (cl-letf (((symbol-function 'float-time)
-               (lambda (&optional _) (/ takuzu--breath-period 2.0))))
+               (lambda (&optional _) (/ takuzu-flash-period 2.0))))
       (should (< (abs (- (takuzu--solving-intensity) 1.0)) 1e-6)))
     ;; sampled across a cycle, the lamp stays within [floor, 1] -- always lit
     (dolist (now '(0.0 0.4 0.9 1.3 2.0 2.6))
@@ -1641,7 +1661,7 @@ tile from its image cache and re-rasterises only the cheap right tile."
         (cl-letf (((symbol-function 'float-time) (lambda (&optional _) 0.4)))
           (setq l0 (dump (takuzu--svg-left)) r0 (dump (takuzu--svg-right))))
         (cl-letf (((symbol-function 'float-time)
-                   (lambda (&optional _) (/ takuzu--breath-period 2.0))))
+                   (lambda (&optional _) (/ takuzu-flash-period 2.0))))
           (setq l1 (dump (takuzu--svg-left)) r1 (dump (takuzu--svg-right))))
         (should (string= l0 l1))
         (should-not (string= r0 r1))))))
