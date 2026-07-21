@@ -359,8 +359,8 @@ metals are nil.")
 (defcustom takuzu-coin-skin (caar takuzu--coin-skin-registry)
   "The coin skin drawn on the board.
 Defaults to coinset 1 -- the head of `takuzu--coin-skin-registry'; w and
-W turn the COIN thumbwheel forward and back, and r (refresh) returns the
-drum to coinset 1."
+W turn the COIN thumbwheel forward and back.  Nothing else moves the
+drum: a board reset leaves the chosen skin alone."
   :type (cons 'choice (mapcar (lambda (row) (list 'const (car row)))
                               takuzu--coin-skin-registry))
   :group 'takuzu)
@@ -1906,7 +1906,9 @@ honestly at each tier."
   (message "%s" (takuzu--stats-summary)))
 
 (defun takuzu-reset ()
-  "Clear every non-given cell and return the coin drum to coinset 1."
+  "Clear every non-given cell.
+Only the board pieces reset -- the coin drum stays on the player's
+chosen skin."
   (interactive)
   (takuzu--playing-only
   (let ((n takuzu--size))
@@ -1915,8 +1917,7 @@ honestly at each tier."
         (unless (takuzu-board-given-p takuzu--board r c)
           (takuzu-board-set takuzu--board r c nil))))
     (setq takuzu--won nil takuzu--proven nil takuzu--history nil
-          takuzu--start-time (current-time)
-          takuzu-coin-skin (car takuzu--coin-skins))
+          takuzu--start-time (current-time))
     ;; the refresh tick cancels its timer at a win; a replay needs it back
     (unless (timerp takuzu--timer)
       (takuzu--start-refresh-timer (current-buffer)))

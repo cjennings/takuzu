@@ -1932,7 +1932,7 @@ function reset() {
       if (!givenP(state.board, r, cc)) state.board.cells[r * n + cc] = null;
   state.won = false; state.proven = false; state.history = []; state.fail = false;
   state.startTime = Date.now();
-  state.coinSkin = COIN_SKINS[0];
+  // only the board pieces reset -- the coin drum stays on the chosen skin
   // the refresh tick cancels its timer at a win; a replay needs it back
   if (timers.refresh == null) startRefreshTimer();
   setStatus("");

@@ -1324,13 +1324,15 @@ with no games recorded it says so."
               (car takuzu--coin-skins)))
   (should (equal takuzu--coin-skins '(wood terra collegiate gestell))))
 
-(ert-deftest test-takuzu-ui-reset-returns-drum-to-head ()
-  "Normal: r (refresh) turns the coin drum back to coinset 1."
+(ert-deftest test-takuzu-ui-reset-keeps-coin-skin ()
+  "Normal: r (reset) clears the board pieces but leaves the coin drum alone.
+The 2026-07-19 decision: reset touches only the game board, never the
+player's chosen skin (reversing the earlier refresh-to-coinset-1 behavior)."
   (test-takuzu-ui--with-buffer
     (test-takuzu-ui--setup-4)
     (let ((takuzu-coin-skin 'terra))
       (takuzu-reset)
-      (should (eq takuzu-coin-skin (car takuzu--coin-skins))))))
+      (should (eq takuzu-coin-skin 'terra)))))
 
 (ert-deftest test-takuzu-ui-wood-lip-marks-fixed ()
   "Normal: every wood coin is a flat matte one-tone disc -- all coal
